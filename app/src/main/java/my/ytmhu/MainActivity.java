@@ -88,6 +88,8 @@ public final class MainActivity extends Activity {
     private int generation;
     private String account = "";
     private String accountError = "";
+    private String accountErrorCode = "";
+    private boolean retryAccount;
     private String page = "Home";
     private Browse.Search searchType = Browse.Search.Songs;
     private String collectionId = "";
@@ -585,6 +587,8 @@ public final class MainActivity extends Activity {
             signInDialog = GoogleSignIn.show(this, this::verifyAccount);
         } catch (RuntimeException unavailable) {
             accountError = "Android System WebView could not be opened.";
+            accountErrorCode = "WEBVIEW_UNAVAILABLE";
+            retryAccount = false;
             navigate("Account");
             GoogleSignIn.openSeparately(this);
         }
@@ -594,26 +598,29 @@ public final class MainActivity extends Activity {
         if (refreshingAccount) return;
         refreshingAccount = true;
         accountError = "";
+        accountErrorCode = "";
+        retryAccount = false;
+        if ("Account".equals(page)) loadPage();
         String cookies = GoogleSignIn.cookies();
         network.execute(() -> {
             String name = "";
-            String error = "";
+            MusicApi.AccountFailure error = null;
             try {
                 api.setSession(cookies);
                 name = api.accountName();
-            } catch (MusicApi.SessionExpired expired) {
+            } catch (MusicApi.AccountFailure failure) {
+                error = failure;
                 api.setSession("");
-                error = "Your YouTube Music session expired. Open Sign in to connect again.";
-            } catch (Exception failure) {
-                error = "YouTube could not verify your sign-in. Try signing in again.";
             }
             String verified = name;
-            String detail = error;
+            MusicApi.AccountFailure detail = error;
             runOnUiThread(() -> {
                 if (isDestroyed()) return;
                 refreshingAccount = false;
                 account = verified;
-                accountError = detail;
+                accountError = detail == null ? "" : detail.getMessage();
+                accountErrorCode = detail == null ? "" : detail.code;
+                retryAccount = detail != null && !detail.signedOut;
                 if (account.isEmpty()) {
                     settingsTab = "Account";
                     navigate("Account");
@@ -673,6 +680,8 @@ public final class MainActivity extends Activity {
             refreshingAccount = false;
             account = "";
             accountError = "";
+            accountErrorCode = "";
+            retryAccount = false;
             sidebarPlaylists.removeAllViews();
             if (playback != null) playback.stopForSignOut();
             navigate("Home");
@@ -783,6 +792,8 @@ public final class MainActivity extends Activity {
             }
             @Override public boolean checkingAccount() { return refreshingAccount; }
             @Override public boolean signedIn() { return !account.isEmpty(); }
+            @Override public boolean accountVerificationFailed() { return !accountErrorCode.isEmpty(); }
+            @Override public boolean canRetryAccount() { return retryAccount; }
             @Override public String connectionLabel() {
                 String user = ListenBrainz.account(prefs);
                 return user.isEmpty() ? "Send played tracks to ListenBrainz after connecting." : "Connected as " + user;
@@ -828,6 +839,13 @@ public final class MainActivity extends Activity {
         }
         switch (action) {
             case "account": if (account.isEmpty()) openAccount(); else signOut(); break;
+            case "account-retry": verifyAccount(); break;
+            case "account-diagnostic":
+                if (!accountErrorCode.isEmpty()) {
+                    GoogleSignIn.copyDiagnostic(this, Uri.parse(MusicApi.MUSIC), "account verification failed", accountErrorCode);
+                    toast("Login diagnostic copied");
+                }
+                break;
             case "cache": artwork.clear(); toast("Artwork cache cleared."); break;
             case "network": testConnection(); break;
             case "notifications":

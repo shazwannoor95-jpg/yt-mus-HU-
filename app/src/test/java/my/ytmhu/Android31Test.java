@@ -31,6 +31,7 @@ import org.robolectric.annotation.Config;
 
 import java.util.Collections;
 import java.util.Map;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @RunWith(RobolectricTestRunner.class)
@@ -100,9 +101,13 @@ public final class Android31Test {
             CookieManager.getInstance().setCookie(MusicApi.MUSIC + "/", "SAPISID=test_session; Secure");
             web.getWebViewClient().onPageFinished(web, "https://music.youtube.com.evil.example/");
             assertTrue(first.isShowing());
-            web.getWebViewClient().onPageFinished(web, MusicApi.MUSIC + "/");
+            String selected = MusicApi.MUSIC + "/?authuser=2";
+            web.loadUrl(selected);
+            web.getWebViewClient().onPageFinished(web, selected);
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
             assertFalse(first.isShowing());
             assertEquals(1, verified.get());
+            assertEquals(Integer.valueOf(2), GoogleSignIn.selection(GoogleSignIn.cookies()).index);
 
             Dialog reopened = GoogleSignIn.show(controller.get(), verified::incrementAndGet);
             assertTrue(MusicApi.hasSession(GoogleSignIn.cookies()));
@@ -110,6 +115,44 @@ public final class Android31Test {
             GoogleSignIn.signOut(() -> {});
             shadowOf(Looper.getMainLooper()).idle();
             assertFalse(MusicApi.hasSession(GoogleSignIn.cookies()));
+            assertEquals(WebSession.EMPTY, GoogleSignIn.selection("SAPISID=test_session"));
+            assertEquals(1, verified.get());
+        }
+    }
+
+    @Test public void cancellingWhileWebViewReadsContextDoesNotCompleteSignIn() {
+        try (ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class).setup()) {
+            AtomicInteger verified = new AtomicInteger();
+            Dialog dialog = GoogleSignIn.show(controller.get(), verified::incrementAndGet);
+            WebView web = findWebView(dialog.getWindow().getDecorView());
+            String selected = MusicApi.MUSIC + "/?authuser=1";
+            CookieManager.getInstance().setCookie(MusicApi.MUSIC + "/", "SAPISID=test_session; Secure");
+            web.loadUrl(selected);
+            web.getWebViewClient().onPageFinished(web, selected);
+            dialog.cancel();
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
+            assertEquals(0, verified.get());
+        }
+    }
+
+    @Test public void webViewSuppliesTheSelectedAccountAndChannel() {
+        try (ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class).setup()) {
+            AtomicInteger verified = new AtomicInteger();
+            Dialog dialog = GoogleSignIn.show(controller.get(), verified::incrementAndGet);
+            WebView web = findWebView(dialog.getWindow().getDecorView());
+            String selected = MusicApi.MUSIC + "/?authuser=1";
+            CookieManager.getInstance().setCookie(MusicApi.MUSIC + "/", "SAPISID=test_session; Secure");
+            web.loadUrl(selected);
+            web.getWebViewClient().onPageFinished(web, selected);
+            assertTrue(shadowOf(web).getLastEvaluatedJavascript().contains("SESSION_INDEX"));
+            assertFalse(shadowOf(web).getLastEvaluatedJavascript().contains("document.cookie"));
+            shadowOf(web).getLastEvaluatedJavascriptCallback().onReceiveValue(
+                    "{\"index\":2,\"sync\":\"test-channel||test-user\",\"visitor\":\"visitor\",\"version\":\"1.20261101.00.00\"}");
+            WebSession context = GoogleSignIn.selection(GoogleSignIn.cookies());
+            assertEquals(Integer.valueOf(2), context.index);
+            assertEquals("test-channel", context.pageId);
+            assertEquals(WebSession.EMPTY, GoogleSignIn.selection("SAPISID=different_session"));
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
             assertEquals(1, verified.get());
         }
     }

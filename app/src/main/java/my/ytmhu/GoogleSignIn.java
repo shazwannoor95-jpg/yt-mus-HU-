@@ -14,6 +14,8 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.Window;
 import android.view.WindowManager;
@@ -41,8 +43,17 @@ final class GoogleSignIn {
     private static final String YOUTUBE_RETURN = "?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F";
     private static final String GOOGLE_LOGIN = "https://accounts.google.com/ServiceLogin" + YOUTUBE_RETURN;
     private static final String ACCOUNT_CHOOSER = "https://accounts.google.com/AccountChooser" + YOUTUBE_RETURN;
+    // Read only YouTube Music's request context, with no native JavaScript bridge.
+    private static final String MUSIC_CONTEXT = "(function(){function read(k){"
+            + "var v=window.ytcfg&&typeof window.ytcfg.get==='function'?window.ytcfg.get(k):undefined;"
+            + "if(v==null&&window.yt&&window.yt.config_)v=window.yt.config_[k];"
+            + "return typeof v==='number'||typeof v==='string'?String(v):'';}"
+            + "return {index:read('SESSION_INDEX'),sync:read('DATASYNC_ID')||read('datasyncId'),"
+            + "visitor:read('VISITOR_DATA'),version:read('INNERTUBE_CLIENT_VERSION')};})()";
 
     private static boolean signingOut;
+    private static String selectionCookies = "";
+    private static WebSession selection = WebSession.EMPTY;
 
     private GoogleSignIn() {}
 
@@ -57,6 +68,8 @@ final class GoogleSignIn {
 
     static synchronized void signOut(Runnable done) {
         signingOut = true;
+        selectionCookies = "";
+        selection = WebSession.EMPTY;
         CookieManager jar = CookieManager.getInstance();
         jar.removeAllCookies(removed -> {
             synchronized (GoogleSignIn.class) {
@@ -65,6 +78,16 @@ final class GoogleSignIn {
             }
             done.run();
         });
+    }
+
+    static synchronized WebSession selection(String cookies) {
+        return !signingOut && selectionCookies.equals(cookies) ? selection : WebSession.EMPTY;
+    }
+
+    private static synchronized void rememberSelection(String cookies, WebSession context) {
+        if (signingOut) return;
+        selectionCookies = cookies;
+        selection = context;
     }
 
     static synchronized String updateCookies(String previous, HttpsURLConnection connection) {
@@ -80,7 +103,9 @@ final class GoogleSignIn {
         }
         if (!changed) return null;
         jar.flush();
-        return cookies();
+        String refreshed = cookies();
+        if (selectionCookies.equals(previous)) selectionCookies = refreshed;
+        return refreshed;
     }
 
     private static final Pattern HTTPS_ORIGIN = Pattern.compile(
@@ -238,7 +263,7 @@ final class GoogleSignIn {
                 + "\nResult: " + result + "\nDetail: " + detail;
     }
 
-    private static void copyDiagnostic(Activity activity, Uri navigation, String result, String detail) {
+    static void copyDiagnostic(Activity activity, Uri navigation, String result, String detail) {
         ClipboardManager clipboard = activity.getSystemService(ClipboardManager.class);
         clipboard.setPrimaryClip(ClipData.newPlainText("YTM login diagnostic", diagnostic(
                 Build.VERSION.RELEASE, Build.VERSION.SDK_INT, webViewVersion(), browserAvailability(activity),
@@ -306,8 +331,10 @@ final class GoogleSignIn {
         // Google and YouTube are separate sites in this dedicated sign-in WebView.
         jar.setAcceptThirdPartyCookies(web, true);
         web.setWebViewClient(new WebViewClient() {
+            private final Handler main = new Handler(Looper.getMainLooper());
             private boolean interrupted;
             private String mainPage = GOOGLE_LOGIN;
+            private int pageRevision;
 
             private void clearMessage() {
                 interrupted = false;
@@ -355,6 +382,7 @@ final class GoogleSignIn {
             }
 
             @Override public void onPageStarted(WebView view, String location, Bitmap icon) {
+                ++pageRevision;
                 if (location == null || isBlankNavigation(location)) return;
                 if (trustedLoginPage(location)) {
                     mainPage = location;
@@ -400,12 +428,25 @@ final class GoogleSignIn {
             }
 
             @Override public void onPageFinished(WebView view, String url) {
-                if (!interrupted && dialog.isShowing() && isMusicReturn(url)
-                        && MusicApi.hasSession(cookies())) {
+                if (interrupted || !dialog.isShowing() || !isMusicReturn(url) || !url.equals(view.getUrl())
+                        || !MusicApi.hasSession(cookies())) return;
+                int revision = ++pageRevision;
+                String hint = Uri.parse(url).getQueryParameter("authuser");
+                java.util.function.Consumer<String> complete = context -> {
+                    if (interrupted || revision != pageRevision || !dialog.isShowing() || !url.equals(view.getUrl())) return;
+                    String session = cookies();
+                    if (!MusicApi.hasSession(session)) return;
+                    rememberSelection(session, WebSession.fromWebView(context, hint));
                     jar.flush();
                     dialog.dismiss();
                     verify.run();
-                }
+                };
+                Runnable fallback = () -> complete.accept(null);
+                main.postDelayed(fallback, 1500);
+                view.evaluateJavascript(MUSIC_CONTEXT, context -> {
+                    main.removeCallbacks(fallback);
+                    complete.accept(context);
+                });
             }
         });
         panel.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));

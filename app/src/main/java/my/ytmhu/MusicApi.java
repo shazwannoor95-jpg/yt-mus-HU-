@@ -2,6 +2,7 @@
 package my.ytmhu;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
@@ -9,6 +10,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Locale;
@@ -20,6 +23,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLException;
 
 /** Android port of the anonymous search and player paths in ytm-rs. */
 final class MusicApi {
@@ -32,14 +36,15 @@ final class MusicApi {
     private String visitor = "";
     private long nextRefresh;
     private String cookies = "";
-    private int sessionIndex;
-    private String pageId = "";
+    private WebSession selection = WebSession.EMPTY;
+    private WebSession webSession = WebSession.EMPTY;
 
     void setSession(String cookies) {
-        if (this.cookies.equals(cookies)) return;
+        WebSession selected = hasSession(cookies) ? GoogleSignIn.selection(cookies) : WebSession.EMPTY;
+        if (this.cookies.equals(cookies) && selection == selected) return;
         this.cookies = cookies;
-        sessionIndex = 0;
-        pageId = "";
+        selection = selected;
+        webSession = selected;
         visitor = "";
         nextRefresh = 0;
     }
@@ -76,19 +81,64 @@ final class MusicApi {
         return String.join(" ", parts);
     }
 
-    String accountName() throws Exception {
-        if (!hasSession(cookies)) throw new SessionExpired();
-        JSONObject account;
-        try {
-            account = web("account/account_menu", new JSONObject());
-        } catch (HttpStatus failure) {
-            if (failure.status == 401) throw new SessionExpired();
-            throw failure;
+    String accountName() throws AccountFailure {
+        if (!hasSession(cookies)) throw AccountFailure.signedOut("SESSION_MISSING");
+        nextRefresh = 0;
+        return verifyAccount(this::web);
+    }
+
+    interface AccountRequest {
+        JSONObject send(String endpoint, JSONObject body) throws Exception;
+    }
+
+    static String verifyAccount(AccountRequest request) throws AccountFailure {
+        JSONObject menu = accountRequest(request, "account/account_menu", new JSONObject(), "ACCOUNT_MENU");
+        SessionState menuState = sessionState(menu);
+        if (menuState == SessionState.SIGNED_OUT) throw AccountFailure.signedOut("ACCOUNT_MENU_SIGNED_OUT");
+        JSONObject header = find(menu, "activeAccountHeaderRenderer", 0);
+        if (header != null) {
+            String name = displayText(header.optJSONObject("accountName")).trim();
+            return name.isEmpty() ? "YouTube account" : name;
         }
-        JSONObject header = find(account, "activeAccountHeaderRenderer", 0);
-        if (header == null) throw new IOException("YouTube could not verify this account.");
-        String name = displayText(header.optJSONObject("accountName"));
-        return name.isEmpty() ? "YouTube account" : name;
+        if (menuState == SessionState.SIGNED_IN) return "YouTube account";
+
+        JSONObject homeRequest = new JSONObject(java.util.Collections.singletonMap("browseId", "FEmusic_home"));
+        JSONObject home = accountRequest(request, "browse", homeRequest, "ACCOUNT_BROWSE");
+        switch (sessionState(home)) {
+            case SIGNED_IN: return "YouTube account";
+            case SIGNED_OUT: throw AccountFailure.signedOut("ACCOUNT_BROWSE_SIGNED_OUT");
+            default: throw new AccountFailure("ACCOUNT_RESPONSE_UNRECOGNIZED",
+                    "YouTube Music did not confirm this account. Try checking again or choose an account.");
+        }
+    }
+
+    private static JSONObject accountRequest(AccountRequest request, String endpoint, JSONObject body, String stage)
+            throws AccountFailure {
+        try {
+            return request.send(endpoint, body);
+        } catch (HttpStatus failure) {
+            String code = stage + "_HTTP_" + failure.status;
+            if (failure.status == 401) throw AccountFailure.signedOut(code);
+            if (failure.status == 403) {
+                throw new AccountFailure(code, "YouTube Music refused the account check (HTTP 403).");
+            }
+            if (failure.status == 429) {
+                throw new AccountFailure(code, "YouTube Music is limiting requests. Try checking again later.");
+            }
+            throw new AccountFailure(code, "YouTube Music could not check the account (HTTP " + failure.status + ").");
+        } catch (SSLException failure) {
+            throw new AccountFailure(stage + "_TLS", "Could not establish a secure connection to YouTube Music.");
+        } catch (SocketTimeoutException failure) {
+            throw new AccountFailure(stage + "_TIMEOUT", "The YouTube Music account check timed out. Try checking again.");
+        } catch (UnknownHostException failure) {
+            throw new AccountFailure(stage + "_DNS", "Could not find YouTube Music. Check your connection.");
+        } catch (JSONException failure) {
+            throw new AccountFailure(stage + "_INVALID_RESPONSE", "YouTube Music returned an unreadable account response.");
+        } catch (IOException failure) {
+            throw new AccountFailure(stage + "_NETWORK", "Could not connect to YouTube Music. Try checking again.");
+        } catch (Exception failure) {
+            throw new AccountFailure(stage + "_CLIENT", "YouTube Music account check could not finish.");
+        }
     }
 
     JSONObject browse(JSONObject body) throws Exception {
@@ -100,9 +150,9 @@ final class MusicApi {
         JSONObject client = client("WEB_REMIX", version)
                 .put("platform", "DESKTOP").put("originalUrl", MUSIC);
         JSONObject context = context(client).getJSONObject("context");
-        if (settings != null && settings.flag("restricted", false)) {
-            context.put("user", new JSONObject().put("enableSafetyMode", true).put("lockedSafetyMode", false));
-        }
+        JSONObject user = new JSONObject().put("lockedSafetyMode", false);
+        if (settings != null && settings.flag("restricted", false)) user.put("enableSafetyMode", true);
+        context.put("user", user);
         body.put("context", context);
         return post(MUSIC, endpoint, body, WEB_UA, "67", version);
     }
@@ -247,16 +297,28 @@ final class MusicApi {
     private static void checkWrite(JSONObject result) throws IOException {
         String status = result.optString("status");
         if (!status.isEmpty() && !status.contains("SUCCEEDED")) throw new IOException("YouTube rejected the change.");
-        JSONArray tracking = array(child(result, "responseContext"), "serviceTrackingParams");
+        if (sessionState(result) == SessionState.SIGNED_OUT) throw new IOException("YouTube ended the account session.");
+    }
+
+    private enum SessionState { UNKNOWN, SIGNED_IN, SIGNED_OUT }
+
+    private static SessionState sessionState(JSONObject result) {
+        JSONObject context = child(result, "responseContext");
+        Object loggedOut = child(context, "mainAppWebResponseContext").opt("loggedOut");
+        if (Boolean.TRUE.equals(loggedOut)) return SessionState.SIGNED_OUT;
+        boolean signedIn = Boolean.FALSE.equals(loggedOut);
+        JSONArray tracking = array(context, "serviceTrackingParams");
         for (int i = 0; i < tracking.length(); i++) {
             JSONArray params = array(item(tracking, i), "params");
             for (int j = 0; j < params.length(); j++) {
                 JSONObject param = item(params, j);
-                if ("logged_in".equals(param.optString("key")) && "0".equals(param.optString("value"))) {
-                    throw new IOException("YouTube ended the account session.");
-                }
+                if (!"logged_in".equals(param.optString("key"))) continue;
+                String value = param.optString("value");
+                if ("0".equals(value)) return SessionState.SIGNED_OUT;
+                if ("1".equals(value)) signedIn = true;
             }
         }
+        return signedIn ? SessionState.SIGNED_IN : SessionState.UNKNOWN;
     }
 
     static final class AudioSource {
@@ -446,26 +508,24 @@ final class MusicApi {
     private void refreshVisitor() {
         long now = System.currentTimeMillis();
         if (now < nextRefresh) return;
+        if (nextRefresh == 0 && selection.hasRequestContext()) {
+            visitor = selection.visitor;
+            version = selection.version;
+            nextRefresh = now + 60 * 60_000L;
+            return;
+        }
         nextRefresh = now + 60_000;
+        if (!selection.visitor.isEmpty()) visitor = selection.visitor;
+        if (!selection.version.isEmpty()) version = selection.version;
         try {
-            String page = landingPage(MUSIC + "/");
-            String index = field(page, "SESSION_INDEX");
-            if (index.matches("[0-9]{1,6}")) sessionIndex = Integer.parseInt(index);
-            String[] account = field(page, "datasyncId").split("\\|\\|", -1);
-            if (account.length == 2 && !account[1].isEmpty()) pageId = account[0];
-            String freshVersion = field(page, "INNERTUBE_CLIENT_VERSION");
-            if (!freshVersion.isEmpty()) version = freshVersion;
-            String freshVisitor = field(page, "VISITOR_DATA");
-            if (!freshVisitor.isEmpty()) visitor = freshVisitor;
+            String page = landingPage(MUSIC + "/" + (selection.index == null ? "" : "?authuser=" + selection.index));
+            webSession = selection.fillFrom(WebSession.fromLandingPage(page));
+            if (!webSession.version.isEmpty()) version = webSession.version;
+            if (!webSession.visitor.isEmpty()) visitor = webSession.visitor;
             nextRefresh = now + 24 * 60 * 60_000L;
         } catch (IOException ignored) {
             // Use the last known client information while the landing page is unavailable.
         }
-    }
-
-    private static String field(String page, String name) {
-        Matcher match = Pattern.compile("\"" + name + "\"\\s*:\\s*\"([^\"]+)\"").matcher(page);
-        return match.find() ? match.group(1) : "";
     }
 
     private JSONObject post(String origin, String endpoint, JSONObject body, String agent,
@@ -485,8 +545,10 @@ final class MusicApi {
                 if (hasSession(cookies)) {
                     connection.setRequestProperty("Cookie", cookies);
                     connection.setRequestProperty("Authorization", authorization());
-                    connection.setRequestProperty("X-Goog-AuthUser", Integer.toString(sessionIndex));
-                    if (!pageId.isEmpty()) connection.setRequestProperty("X-Goog-PageId", pageId);
+                    connection.setRequestProperty("X-Goog-AuthUser", webSession.index == null ? "0" : webSession.index.toString());
+                    if (webSession.pageId != null && !webSession.pageId.isEmpty()) {
+                        connection.setRequestProperty("X-Goog-PageId", webSession.pageId);
+                    }
                 } else {
                     connection.setRequestProperty("Cookie", CONSENT);
                 }
@@ -541,9 +603,24 @@ final class MusicApi {
         return connection;
     }
 
-    static final class SessionExpired extends IOException {}
+    static final class AccountFailure extends IOException {
+        final String code;
+        final boolean signedOut;
 
-    private static final class HttpStatus extends IOException {
+        AccountFailure(String code, String message) { this(code, message, false); }
+
+        private AccountFailure(String code, String message, boolean signedOut) {
+            super(message);
+            this.code = code;
+            this.signedOut = signedOut;
+        }
+
+        static AccountFailure signedOut(String code) {
+            return new AccountFailure(code, "YouTube Music did not accept this session. Sign in again or choose another account.", true);
+        }
+    }
+
+    static final class HttpStatus extends IOException {
         final int status;
 
         HttpStatus(int status) {

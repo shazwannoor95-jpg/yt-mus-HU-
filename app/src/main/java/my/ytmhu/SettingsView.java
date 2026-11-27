@@ -31,6 +31,8 @@ final class SettingsView extends LinearLayout {
         String accountDescription();
         boolean checkingAccount();
         boolean signedIn();
+        boolean accountVerificationFailed();
+        boolean canRetryAccount();
         String connectionLabel();
         void run(String action);
         void tabChanged(String selected);
@@ -154,6 +156,12 @@ final class SettingsView extends LinearLayout {
     private void defineControls() {
         action("Account", "Account", host.accountLabel(), host.accountDescription(),
                 host.checkingAccount() ? null : host.signedIn() ? "Sign out" : "Sign in with Google", "account");
+        if (host.accountVerificationFailed()) {
+            if (host.canRetryAccount()) {
+                action("Account", "Account", "Check current session", "", "Retry", "account-retry");
+            }
+            action("Account", "Account", "Sign-in diagnostics", "", "Copy diagnostic", "account-diagnostic");
+        }
 
         toggle("Playback", "Playback", "Autoplay", "Play similar songs when the queue ends.", "autoplay", false);
         toggle("Playback", "Playback", "Hide explicit songs", "Hide songs marked E in supported lists and future queues.", "hideExplicit", false);
@@ -230,7 +238,7 @@ final class SettingsView extends LinearLayout {
 
         action("About", "Updates", "Check now", "Check GitHub for a newer Android APK. Updates are installed through Android.", "Check", "updates");
         action("About", "Updates", "What’s new in " + BuildVersion.VERSION,
-                "Redesigned mini player, sharper Now Playing artwork, and support for Google Malaysia sign-in pages.", null, "");
+                "Improved YouTube Music account verification, retry and sign-in diagnostics.", null, "");
         action("About", "About", "YTM Head Unit " + BuildVersion.VERSION, "Android port of parts of ytm-rs. Android API 27 and newer.", null, "");
         action("About", "About", "Lyrics", "LRCLIB and YouTube Music.", null, "");
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");

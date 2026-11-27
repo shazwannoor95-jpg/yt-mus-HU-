@@ -1,4 +1,18 @@
-# Google sign-in in YTM Head Unit 0.4.4
+# Google sign-in in YTM Head Unit
+
+## Account verification in 0.4.5
+
+The screenshot showing “YouTube could not verify your sign-in” came from the account check after the WebView returned. That message covered request errors and missing account headers, so the exact cause on the head unit is unknown. The Android source also exposed two session parsing gaps. It expected a quoted `SESSION_INDEX` and only recognized the lowercase `datasyncId` spelling.
+
+YTM now carries the selected account context from the current YouTube Music page. It reads only four configuration fields from the first-party page, with a bounded wait and a fallback to the page's account index or YouTube Music's landing-page configuration. The context is tied to the existing app session in memory and cleared on sign-out. No external browser session is accessed.
+
+The account check uses the existing account menu. If the menu lacks an account header, it accepts an explicit signed-in status or checks for that status on the signed-in Home request. A signed-out response, HTTP rejection or response without positive sign-in evidence cannot mark the account verified.
+
+Settings › Account now distinguishes HTTP refusal, expired or rejected sessions, timeouts, DNS and TLS failures, and unrecognized responses. It can retry a recoverable check with the current session. Its **Copy diagnostic** action includes a fixed verification code and excludes response bodies, account identifiers and session data.
+
+The implementation was compared with upstream `ytm-rs` signed-in request context and account response detection, and Metrolist's WebView context handoff. REA and Craft Anything inspected the Windows installer and compared the Android packages. [ytm-rs account verification](https://github.com/grapedjuice/ytm-rs/blob/99d404b9d78d0edb72361eb8c5c465ae6af57979/src/ytmapi.rs) · [Metrolist login screen](https://github.com/MetrolistGroup/Metrolist/blob/main/androidApp/src/main/kotlin/com/metrolist/android/ui/screens/LoginScreen.kt)
+
+Gradle built 0.4.5 and all 17 tests passed, including 15 API 31 fixture tests. The release uses the v0.4.4 signing certificate and contains identical resources and assets. The workspace proxy blocked the Google and YouTube Music endpoints, so live account verification still needs a device test.
 
 ## What failed in 0.4.3
 
@@ -32,7 +46,7 @@ The implementation is original Java. No third-party login source was copied.
 
 With JDK 17, Gradle 8.11.1, Android SDK 35 and Build Tools 35, run `gradle :app:testDebugUnitTest :app:assembleDebug`. Gradle writes the APK to `app/build/outputs/apk/debug/app-debug.apk`. When present, the existing `build/debug.keystore` is used so the APK can update the previous test build.
 
-The Gradle build and all nine tests passed. Seven Robolectric tests ran with API 31 fixtures and two JVM tests checked the hostname policy. Coverage includes redirect handling, account chooser navigation, cancellation, the app cookie store across dialog recreation, sanitized diagnostics, queue and Now Playing controls, artwork sizing and the compact landscape mini player. `apksigner` verified the package for API 27 and confirmed its certificate matches 0.4.3.
+The Gradle tests cover redirect handling, selected-account context, cancellation, the app session across dialog recreation, account response fixtures, sanitized diagnostics, queue and Now Playing controls, artwork sizing and the compact landscape mini player. The Android fixture tests run at API 31. APK signature verification runs with API 27 as the minimum.
 
 REA and Craft Anything inspected the supplied Windows installer and the Android APKs. The Windows file is an Inno Setup wrapper, so the upstream Rust source provided the mini-player, artwork sizing and login behavior for comparison. APK archive comparison and byte checks confirmed the upstream theme, font and artwork assets were preserved. The Android frosted effect uses a blurred album sample and a tint gradient. It renders inside the Android app with the mini player.
 

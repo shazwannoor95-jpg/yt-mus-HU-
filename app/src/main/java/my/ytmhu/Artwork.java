@@ -99,6 +99,8 @@ final class Artwork {
         }
     }
 
+    void clear() { cache.evictAll(); }
+
     void close() {
         closed = true;
         downloads.shutdownNow();

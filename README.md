@@ -7,6 +7,11 @@ from the same upstream revision.
 
 ## Android preview
 
+Settings includes Account, Playback, Lyrics, Appearance, Connections, General,
+Keyboard shortcuts and About. Controls save on this device. See the
+[settings parity audit](docs/settings-parity.md) for the Android behavior and
+the remaining desktop controls.
+
 - Home and Explore show YouTube Music shelves and artwork. Home mood chips
   reload the feed, and search supports songs, albums, artists and playlists.
 - Settings › Account opens Google's sign-in page in Android System WebView.

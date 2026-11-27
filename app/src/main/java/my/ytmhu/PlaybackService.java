@@ -30,7 +30,13 @@ public final class PlaybackService extends Service {
     private static final int NOTIFICATION = 1;
     private final Binder binder = new LocalBinder();
     private final ExecutorService network = Executors.newSingleThreadExecutor();
-    private final MusicApi api = new MusicApi();
+    private MusicApi api;
+    private AppSettings prefs;
+    private PlaybackTuning tuning;
+    private ListenReporter reporter;
+    private double loudness;
+    private int fade;
+    private boolean fading;
     private List<MusicApi.Track> queue = new ArrayList<>();
     private int index = -1;
     private int generation;
@@ -62,13 +68,17 @@ public final class PlaybackService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        prefs = new AppSettings(this);
+        api = new MusicApi(prefs);
+        tuning = new PlaybackTuning(prefs);
+        reporter = new ListenReporter(prefs);
         attributes = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build();
         audio = getSystemService(AudioManager.class);
         focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(attributes).setWillPauseWhenDucked(true)
                 .setOnAudioFocusChangeListener(change -> {
-                    if (change < 0 && state == PlaybackState.STATE_PLAYING) pause();
+                    if (change < 0 && state == PlaybackState.STATE_PLAYING) pauseNow();
                 }).build();
         getSystemService(NotificationManager.class).createNotificationChannel(
                 new NotificationChannel(CHANNEL, "Muzik", NotificationManager.IMPORTANCE_LOW));
@@ -104,8 +114,13 @@ public final class PlaybackService extends Service {
     }
 
     void play(List<MusicApi.Track> tracks, int selected) {
+        if (selected < 0 || selected >= tracks.size()) return;
+        MusicApi.Track chosen = tracks.get(selected);
+        if (prefs.flag("hideExplicit", false) && chosen.explicit) return;
         originalQueue = new ArrayList<>(tracks);
-        queue = new ArrayList<>(tracks);
+        if (prefs.flag("hideExplicit", false)) originalQueue.removeIf(song -> song.explicit);
+        queue = new ArrayList<>(originalQueue);
+        selected = queue.indexOf(chosen);
         if (shuffle) {
             MusicApi.Track first = queue.remove(selected);
             Collections.shuffle(queue);
@@ -121,11 +136,13 @@ public final class PlaybackService extends Service {
     MusicApi.Track currentTrack() { return index >= 0 ? queue.get(index) : null; }
 
     void playAt(int position) {
-        if (position >= 0 && position < queue.size()) select(position);
+        if (position >= 0 && position < queue.size()
+                && (!prefs.flag("hideExplicit", false) || !queue.get(position).explicit)) select(position);
     }
 
     void enqueue(MusicApi.Track track, boolean next) {
-        MusicApi.Track entry = new MusicApi.Track(track.id, track.title, track.artist, track.artwork, track.artistId);
+        if (prefs.flag("hideExplicit", false) && track.explicit) return;
+        MusicApi.Track entry = new MusicApi.Track(track.id, track.title, track.artist, track.artwork, track.artistId, track.explicit);
         int at = next && index >= 0 ? index + 1 : queue.size();
         queue.add(at, entry);
         int original = next && index >= 0 ? originalQueue.indexOf(queue.get(index)) + 1 : originalQueue.size();
@@ -151,9 +168,8 @@ public final class PlaybackService extends Service {
     }
 
     void skip(int delta) {
-        int next = index + delta;
-        if (!canSkip(delta)) return;
-        select((next + queue.size()) % queue.size());
+        int next = adjacent(delta);
+        if (next >= 0) select(next);
     }
 
     void toggle() {
@@ -165,9 +181,28 @@ public final class PlaybackService extends Service {
     boolean requiresSignIn() { return signInRequired; }
     boolean playing() { return state == PlaybackState.STATE_PLAYING; }
     boolean canPlay() { return !queue.isEmpty() && state != PlaybackState.STATE_BUFFERING; }
-    boolean canSkip(int delta) {
-        return index >= 0 && queue.size() > 1 && (repeat || (index + delta >= 0 && index + delta < queue.size()));
+    boolean canSkip(int delta) { return adjacent(delta) >= 0; }
+
+    private int adjacent(int delta) {
+        if (index < 0 || queue.size() < 2) return -1;
+        for (int i = 1; i < queue.size(); i++) {
+            int candidate = index + i * delta;
+            if (!repeat && (candidate < 0 || candidate >= queue.size())) return -1;
+            candidate = Math.floorMod(candidate, queue.size());
+            if (!prefs.flag("hideExplicit", false) || !queue.get(candidate).explicit) return candidate;
+        }
+        return -1;
     }
+
+    void settingsChanged() {
+        if (prepared) {
+            tuning.applyVolume(player, loudness, 1f);
+            tuning.applyEqualizer(player);
+            if (playing()) tuning.applySpeed(player);
+        }
+        publish(state, message);
+    }
+
     String title() { return index < 0 ? "Now playing" : queue.get(index).title; }
     String status() { return message; }
     boolean isShuffle() { return shuffle; }
@@ -208,6 +243,7 @@ public final class PlaybackService extends Service {
     }
 
     private void select(int selected) {
+        reporter.reset();
         index = selected;
         signInRequired = false;
         int current = ++generation;
@@ -260,7 +296,8 @@ public final class PlaybackService extends Service {
         next.setOnCompletionListener(done -> {
             if (done != player || generation != current) return;
             if (canSkip(1)) skip(1);
-            else if (repeat) select(index);
+            else if (repeat && (!prefs.flag("hideExplicit", false) || !queue.get(index).explicit)) select(index);
+            else if (prefs.flag("autoplay", false)) continueWithRadio(current);
             else stopPlayback();
         });
         next.setOnErrorListener((broken, what, extra) -> {
@@ -272,12 +309,37 @@ public final class PlaybackService extends Service {
         });
         try {
             MusicApi.AudioSource audioSource = urls.get(source);
+            loudness = audioSource.loudness;
             next.setDataSource(this, android.net.Uri.parse(audioSource.url),
                     Collections.singletonMap("User-Agent", audioSource.agent));
             next.prepareAsync();
         } catch (Exception error) {
             prepare(urls, source + 1, current);
         }
+    }
+
+    private void continueWithRadio(int current) {
+        MusicApi.Track seed = currentTrack();
+        reporter.pause();
+        releasePlayer();
+        publish(PlaybackState.STATE_BUFFERING, "Loading autoplay…");
+        String cookies = GoogleSignIn.cookies();
+        request = network.submit(() -> {
+            List<MusicApi.Track> similar;
+            try {
+                api.setSession(cookies);
+                similar = api.radio(seed);
+                similar.removeIf(song -> song.id.equals(seed.id) || (prefs.flag("hideExplicit", false) && song.explicit));
+            } catch (Exception unavailable) {
+                similar = Collections.emptyList();
+            }
+            List<MusicApi.Track> ready = similar;
+            main.post(() -> {
+                if (destroyed || current != generation) return;
+                if (ready.isEmpty() || !prefs.flag("autoplay", false)) stopPlayback();
+                else play(ready, 0);
+            });
+        });
     }
 
     private void resume() {
@@ -296,12 +358,37 @@ public final class PlaybackService extends Service {
             publish(PlaybackState.STATE_PAUSED, "Another app is using audio.");
             return;
         }
+        tuning.applyVolume(player, loudness, 1f);
+        tuning.applyEqualizer(player);
+        tuning.applySpeed(player);
         player.start();
+        reporter.play(currentTrack(), duration());
         publish(PlaybackState.STATE_PLAYING, queue.get(index).artist);
     }
 
     private void pause() {
+        if (!playing() || !prepared || fading) return;
+        if (!prefs.flag("fadePause", false)) {
+            pauseNow();
+            return;
+        }
+        fading = true;
+        int token = ++fade;
+        for (int i = 1; i <= 5; i++) {
+            final int step = i;
+            main.postDelayed(() -> {
+                if (!fading || fade != token || player == null || !prepared) return;
+                tuning.applyVolume(player, loudness, 1f - step / 5f);
+                if (step == 5) pauseNow();
+            }, step * 40L);
+        }
+    }
+
+    private void pauseNow() {
+        fading = false;
+        ++fade;
         if (!playing() || !prepared) return;
+        reporter.pause();
         player.pause();
         audio.abandonAudioFocusRequest(focus);
         publish(PlaybackState.STATE_PAUSED, queue.get(index).artist);
@@ -317,6 +404,7 @@ public final class PlaybackService extends Service {
     }
 
     private void stopPlayback() {
+        reporter.reset();
         ++generation;
         if (request != null) request.cancel(true);
         releasePlayer();
@@ -337,7 +425,7 @@ public final class PlaybackService extends Service {
         if (canSkip(-1)) actions |= PlaybackState.ACTION_SKIP_TO_PREVIOUS;
         if (canSkip(1)) actions |= PlaybackState.ACTION_SKIP_TO_NEXT;
         session.setPlaybackState(new PlaybackState.Builder().setActions(actions)
-                .setState(state, prepared ? player.getCurrentPosition() : 0, playing() ? 1f : 0f).build());
+                .setState(state, prepared ? player.getCurrentPosition() : 0, playing() ? prefs.speed() : 0f).build());
         if (foreground) promote();
         if (changed != null) changed.run();
     }
@@ -361,6 +449,10 @@ public final class PlaybackService extends Service {
     }
 
     private void releasePlayer() {
+        fading = false;
+        ++fade;
+        reporter.pause();
+        tuning.release();
         prepared = false;
         if (player != null) player.release();
         player = null;
@@ -370,6 +462,7 @@ public final class PlaybackService extends Service {
         destroyed = true;
         network.shutdownNow();
         releasePlayer();
+        reporter.close();
         audio.abandonAudioFocusRequest(focus);
         session.release();
         super.onDestroy();

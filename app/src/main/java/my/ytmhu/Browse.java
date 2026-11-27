@@ -76,6 +76,10 @@ final class Browse {
     }
 
     static List<Shelf> shelves(JSONObject page) {
+        return shelves(page, false);
+    }
+
+    static List<Shelf> shelves(JSONObject page, boolean hideExplicit) {
         List<Shelf> out = new ArrayList<>();
         JSONObject sections = find(page, "sectionListRenderer", 0);
         if (sections == null) sections = find(page, "sectionListContinuation", 0);
@@ -96,7 +100,7 @@ final class Browse {
             List<Card> cards = new ArrayList<>();
             for (int j = 0; j < contents.length() && cards.size() < 40; j++) {
                 Card card = card(item(contents, j));
-                if (card != null) cards.add(card);
+                if (card != null && !(hideExplicit && card.track != null && card.track.explicit)) cards.add(card);
             }
             if (!cards.isEmpty()) out.add(new Shelf(title, cards));
         }
@@ -129,7 +133,8 @@ final class Browse {
         if (title.isEmpty()) return null;
         if (id.matches("[A-Za-z0-9_-]{11}")) {
             return new Card(title, subtitle, art, "", new MusicApi.Track(id, title, subtitle, art,
-                    child(child(item(array(child(tile, "subtitle"), "runs"), 0), "navigationEndpoint"), "browseEndpoint").optString("browseId")));
+                    child(child(item(array(child(tile, "subtitle"), "runs"), 0), "navigationEndpoint"), "browseEndpoint").optString("browseId"),
+                    MusicApi.explicit(tile)));
         }
         String browseId = child(nav, "browseEndpoint").optString("browseId");
         if (browseId.isEmpty()) {

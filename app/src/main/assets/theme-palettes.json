@@ -1,0 +1,287 @@
+[
+  {
+    "id": "ad-nextgen",
+    "name": "AppleTify",
+    "creators": [
+      "a-dogann"
+    ],
+    "source": "Better Lyrics: a-dogann/-ADNEXTGEN-THEME 1.0.1",
+    "accent": "#fa243c",
+    "solid": "#000000",
+    "mode": "solid"
+  },
+  {
+    "id": "apple-music-v3",
+    "name": "Apple Music Refine",
+    "creators": [
+      "ankit008-mishra"
+    ],
+    "source": "Better Lyrics: ankit008-mishra/apple-music-v3 1.1.8",
+    "solid": "#000000",
+    "mode": "static"
+  },
+  {
+    "id": "apple-music",
+    "name": "Apple Music",
+    "creators": [
+      "tposejank"
+    ],
+    "source": "Better Lyrics: tposejank/blyrics-am-theme 1.0.3",
+    "accent": "#fa586a",
+    "solid": "#000000",
+    "mode": "solid"
+  },
+  {
+    "id": "burn",
+    "name": "Burn",
+    "creators": [
+      "semicolonhope"
+    ],
+    "source": "Better Lyrics: ramansg/Burn-BlyricsTheme 0.3.5",
+    "accent": "#ffffff",
+    "mode": "solid"
+  },
+  {
+    "id": "clarity-theme",
+    "name": "Clarity",
+    "creators": [
+      "Al Farrizi"
+    ],
+    "source": "Better Lyrics: AlFarrizi-Studio/Clarity-Theme 1.0.5",
+    "accent": "#1db954"
+  },
+  {
+    "id": "classic",
+    "name": "Classic",
+    "creators": [
+      "ytm-rs"
+    ],
+    "source": "ytm-rs",
+    "accent": "#ff3048",
+    "solid": "#0c0a0e",
+    "mode": "accent"
+  },
+  {
+    "id": "colorful-vocals",
+    "name": "Colorful Vocals",
+    "creators": [
+      "adaliea"
+    ],
+    "source": "Better Lyrics: adaliea/blyrics-colorful-vocals 1.0.0"
+  },
+  {
+    "id": "darky",
+    "name": "Darky",
+    "creators": [
+      "ankit008-mishra"
+    ],
+    "source": "Better Lyrics: ankit008-mishra/Darky 1.1.5",
+    "accent": "#fa586a",
+    "solid": "#000000",
+    "mode": "solid"
+  },
+  {
+    "id": "dynamic-background",
+    "name": "Dynamic Background",
+    "creators": [
+      "chengggit"
+    ],
+    "source": "Better Lyrics: chengggit/YouTube-Music-Dynamic-Theme 4.0.0",
+    "accent": "#ffffff",
+    "mode": "same"
+  },
+  {
+    "id": "eblp",
+    "name": "Even Better Lyrics Plus",
+    "creators": [
+      "boidushya",
+      "noah"
+    ],
+    "source": "Better Lyrics: better-lyrics/theme-eblp 1.0.7"
+  },
+  {
+    "id": "expressive",
+    "name": "Expressive",
+    "creators": [
+      "decipher3114"
+    ],
+    "source": "Better Lyrics: decipher3114/better-lyrics-expressive 1.3.4"
+  },
+  {
+    "id": "fluent",
+    "name": "Fluent",
+    "creators": [
+      "ytm-rs"
+    ],
+    "source": "WinUI 3 Fluent design (Microsoft)",
+    "accent": "system",
+    "solid": "#202020",
+    "mode": "solid"
+  },
+  {
+    "id": "glassy-blur",
+    "name": "Glassy Blur",
+    "creators": [
+      "ankit008-mishra"
+    ],
+    "source": "Better Lyrics: ankit008-mishra/Glassyblur 1.1.2",
+    "accent": "#ffffff",
+    "mode": "static"
+  },
+  {
+    "id": "lucid",
+    "name": "Lucid",
+    "creators": [
+      "drago-oo"
+    ],
+    "source": "Better Lyrics: drago-oo/lucid-theme 1.3.0",
+    "accent": "#ffffff",
+    "mode": "same"
+  },
+  {
+    "id": "lyric-glow",
+    "name": "Lyric Glow",
+    "creators": [
+      "MatiuxXcd"
+    ],
+    "source": "Better Lyrics: LMatiuxXcd/lyric-glow 1.4.1",
+    "accent": "#67d9ff",
+    "solid": "#09090b"
+  },
+  {
+    "id": "material3",
+    "name": "Material 3",
+    "creators": [
+      "adidotzip"
+    ],
+    "source": "Better Lyrics: adidotzip/Material3 1.2.0",
+    "accent": "#ffb4a9",
+    "solid": "#1a1110"
+  },
+  {
+    "id": "minimal",
+    "name": "Minimal",
+    "creators": [
+      "semicolonhope"
+    ],
+    "source": "Better Lyrics: ramansg/Minimal 3.0.5",
+    "accent": "#ffffff",
+    "mode": "solid"
+  },
+  {
+    "id": "minimalism-music",
+    "name": "Minimalism Music",
+    "creators": [
+      "notacoderlols"
+    ],
+    "source": "Better Lyrics: notacoderlols/Minimalisic-Music 1.0.0"
+  },
+  {
+    "id": "modern-player",
+    "name": "ModernPlayer",
+    "creators": [
+      "snw-mint"
+    ],
+    "source": "Better Lyrics: snw-mint/better-lyrics-modern-player 1.0.1"
+  },
+  {
+    "id": "opacity-based-karaoke",
+    "name": "Opacity Based Karaoke",
+    "creators": [
+      "semicolonhope"
+    ],
+    "source": "Better Lyrics: ramansg/Max-Performance-BlyricsTheme 3.1.29",
+    "accent": "#ffffff",
+    "mode": "solid"
+  },
+  {
+    "id": "recover-theme",
+    "name": "reCover",
+    "creators": [
+      "mukeenanyafiq"
+    ],
+    "source": "Better Lyrics: mukeenanyafiq/recover-theme 1.3.8",
+    "mode": "solid"
+  },
+  {
+    "id": "spicy-for-ytm",
+    "name": "Spicy for YouTube Music",
+    "creators": [
+      "olafix52"
+    ],
+    "source": "Better Lyrics: olafix52/spicy-for-youtube-music 1.5.0",
+    "accent": "#ffffff",
+    "mode": "same"
+  },
+  {
+    "id": "spinning-record",
+    "name": "Spinning Record",
+    "creators": [
+      "Xtremerspro"
+    ],
+    "source": "Better Lyrics: Xtremerspro/spinning-record 1.0.0"
+  },
+  {
+    "id": "spotifont",
+    "name": "Spotifont",
+    "creators": [
+      "mukeenanyafiq"
+    ],
+    "source": "Better Lyrics: mukeenanyafiq/spotifont-theme 1.0.0"
+  },
+  {
+    "id": "spotlight",
+    "name": "Spotlight",
+    "creators": [
+      "boidushya"
+    ],
+    "source": "Better Lyrics: better-lyrics/theme-spotlight 1.0.0"
+  },
+  {
+    "id": "sustain",
+    "name": "Sustain",
+    "creators": [
+      "boidushya"
+    ],
+    "source": "Better Lyrics: better-lyrics/theme-sustain 1.0.31",
+    "mode": "solid"
+  },
+  {
+    "id": "thejosueps-equal-tweaks-id",
+    "name": "EqualTweaks",
+    "creators": [
+      "thejosuep"
+    ],
+    "source": "Better Lyrics: TheJosuep/better-lyrics-equal-tweaks-theme 1.2.0"
+  },
+  {
+    "id": "wolfthee-theme-bytm",
+    "name": "Better-YTM",
+    "creators": [
+      "WolftheE"
+    ],
+    "source": "Better Lyrics: WolftheE/better-ytm 5.0.0",
+    "accent": "#ffffff",
+    "solid": "#030303",
+    "mode": "solid"
+  },
+  {
+    "id": "youtube-tv-theme",
+    "name": "YouTube TV",
+    "creators": [
+      "mukeenanyafiq"
+    ],
+    "source": "Better Lyrics: mukeenanyafiq/youtube-tv-theme 1.1.1"
+  },
+  {
+    "id": "ytm-rs",
+    "name": "ytm-rs",
+    "creators": [
+      "ytm-rs"
+    ],
+    "source": "ytm-rs",
+    "accent": "cover",
+    "solid": "#0c0a0e",
+    "mode": "same"
+  }
+]

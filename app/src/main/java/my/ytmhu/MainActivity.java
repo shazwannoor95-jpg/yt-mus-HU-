@@ -10,6 +10,8 @@ import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.Configuration;
+import android.provider.Settings;
 import android.content.ServiceConnection;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -23,6 +25,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -33,6 +36,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.text.InputType;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -50,13 +54,15 @@ public final class MainActivity extends Activity {
     private static final int SAVE_AUDIO = 21;
     private static final int INK = 0xfff4eef4;
     private static final int MUTED = 0xffc6b8cc;
-    private static final int PANEL = 0xff211721;
-    private static final int CONTROL = 0xff392c39;
-    private static final int ACCENT = 0xfff83b61;
+    private AppSettings prefs;
+    private Appearance appearance;
 
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final MusicApi api = new MusicApi();
+    private MusicApi api;
+    private FrameLayout paneContent;
+    private SettingsView settingsView;
+    private String settingsTab = "Account";
     private final Artwork artwork = new Artwork();
     private PlaybackService playback;
     private MusicApi.Track pendingDownload;
@@ -105,10 +111,22 @@ public final class MainActivity extends Activity {
         }
     };
 
+    @Override protected void attachBaseContext(Context base) {
+        AppSettings saved = new AppSettings(base);
+        Configuration config = new Configuration(base.getResources().getConfiguration());
+        config.fontScale *= saved.number("zoom", 100) / 100f;
+        super.attachBaseContext(base.createConfigurationContext(config));
+    }
+
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
+        prefs = new AppSettings(this);
+        appearance = new Appearance(this, prefs);
+        api = new MusicApi(prefs);
+        page = prefs.text("openOn", "Home");
+        if (savedState != null) settingsTab = savedState.getString("settingsTab", "Account");
         LinearLayout root = column();
-        root.setBackgroundColor(0xff120c16);
+        root.setBackgroundColor(appearance.window);
         root.setFocusableInTouchMode(true);
         setContentView(root);
 
@@ -117,14 +135,15 @@ public final class MainActivity extends Activity {
         LinearLayout body = new LinearLayout(this);
         browser = body;
         stage.addView(body, new FrameLayout.LayoutParams(-1, -1));
-        expanded = new NowPlayingView(this, artwork, this::showSongMenu, this::closePlayer);
+        expanded = new NowPlayingView(this, prefs, appearance, artwork, this::showSongMenu, this::closePlayer);
         expanded.setVisibility(View.GONE);
         stage.addView(expanded, new FrameLayout.LayoutParams(-1, -1));
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         LinearLayout side = column();
         side.setPadding(dp(10), dp(12), dp(10), dp(8));
-        side.setBackgroundColor(0xff1b111d);
-        body.addView(side, new LinearLayout.LayoutParams(dp(166), -1));
+        side.setBackgroundColor(appearance.sidebar);
+        boolean collapsed = prefs.flag("collapseSidebar", false);
+        body.addView(side, new LinearLayout.LayoutParams(dp(collapsed ? 62 : 166), -1));
 
         LinearLayout brand = new LinearLayout(this);
         brand.setGravity(Gravity.CENTER_VERTICAL);
@@ -133,8 +152,8 @@ public final class MainActivity extends Activity {
         icon.setImageResource(getApplicationInfo().icon);
         brand.addView(icon, new LinearLayout.LayoutParams(dp(26), dp(26)));
         TextView wordmark = label("Music", 23, INK);
-        wordmark.setTypeface(null, Typeface.BOLD);
-        brand.addView(wordmark);
+        wordmark.setTypeface(appearance.font, Typeface.BOLD);
+        if (!collapsed) brand.addView(wordmark);
         side.addView(brand, new LinearLayout.LayoutParams(-1, dp(52)));
         home = navigation(side, "Home", () -> navigate("Home"));
         explore = navigation(side, "Explore", () -> navigate("Explore"));
@@ -145,11 +164,18 @@ public final class MainActivity extends Activity {
         saved.addView(sidebarPlaylists);
         side.addView(saved, new LinearLayout.LayoutParams(-1, 0, 1));
         settings = navigation(side, "Settings", () -> navigate("Account"));
+        if (collapsed) {
+            for (Button control : new Button[]{home, explore, library, sideAccount, settings}) {
+                control.setGravity(Gravity.CENTER);
+                control.setPadding(0, 0, 0, 0);
+            }
+            sidebarPlaylists.setVisibility(View.GONE);
+        }
 
         LinearLayout mainPane = column();
         mainPane.setPadding(dp(18), dp(8), dp(16), dp(4));
-        mainPane.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{0xff281520, 0xff21101b, 0xff100d17}));
+        mainPane.setBackground(Appearance.background(prefs, GradientDrawable.Orientation.TL_BR,
+                appearance.start, appearance.solid ? appearance.start : appearance.end));
         body.addView(mainPane, new LinearLayout.LayoutParams(0, -1, 1));
 
         LinearLayout searchBar = new LinearLayout(this);
@@ -157,9 +183,10 @@ public final class MainActivity extends Activity {
         query = new EditText(this);
         query.setSingleLine();
         query.setTextSize(17);
+        query.setTypeface(appearance.font);
         query.setHint("Search songs, albums, artists");
         query.setPadding(dp(16), 0, dp(12), 0);
-        query.setBackground(shape(CONTROL, 22));
+        query.setBackground(shape(appearance.control, 22));
         query.setImeOptions(EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         query.setOnEditorActionListener((view, action, event) -> {
             if (action != EditorInfo.IME_ACTION_SEARCH) return false;
@@ -172,12 +199,14 @@ public final class MainActivity extends Activity {
         searchBar.addView(accountButton, spacedWidth(106, 44));
         mainPane.addView(searchBar, new LinearLayout.LayoutParams(-1, dp(54)));
 
+        paneContent = new FrameLayout(this);
+        mainPane.addView(paneContent, new LinearLayout.LayoutParams(-1, 0, 1));
         scroll = new ScrollView(this);
         scroll.setFillViewport(false);
         results = column();
         results.setPadding(0, dp(8), 0, dp(12));
         scroll.addView(results);
-        mainPane.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        paneContent.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
 
         root.addView(playerBar(), new LinearLayout.LayoutParams(-1, dp(74)));
         root.requestFocus();
@@ -193,7 +222,10 @@ public final class MainActivity extends Activity {
                     song.getString("artist"), "", "");
         }
         if (MusicApi.hasSession(GoogleSignIn.cookies())) verifyAccount();
-        else loadPage();
+        else {
+            if (savedState == null && "Library".equals(page)) page = "Home";
+            loadPage();
+        }
     }
 
     private LinearLayout playerBar() {
@@ -266,6 +298,7 @@ public final class MainActivity extends Activity {
         state.putString("collectionId", collectionId);
         state.putString("mood", mood);
         state.putString("searchType", searchType.name());
+        state.putString("settingsTab", settingsTab);
         if (pendingDownload != null) {
             Bundle song = new Bundle();
             song.putString("id", pendingDownload.id);
@@ -301,6 +334,7 @@ public final class MainActivity extends Activity {
 
     private void openAccount() {
         if (!account.isEmpty() || refreshingAccount) {
+            settingsTab = "Account";
             navigate("Account");
             return;
         }
@@ -334,7 +368,10 @@ public final class MainActivity extends Activity {
                 refreshingAccount = false;
                 account = verified;
                 accountError = detail;
-                if (account.isEmpty()) navigate("Account");
+                if (account.isEmpty()) {
+                    settingsTab = "Account";
+                    navigate("Account");
+                }
                 else {
                     loadPage();
                     loadSidebarPlaylists();
@@ -387,8 +424,13 @@ public final class MainActivity extends Activity {
         showNavigation();
         results.removeAllViews();
         scroll.scrollTo(0, 0);
+        if (settingsView != null) {
+            paneContent.removeView(settingsView);
+            settingsView = null;
+        }
+        scroll.setVisibility("Account".equals(page) ? View.GONE : View.VISIBLE);
         if ("Account".equals(page)) {
-            showAccount();
+            showSettings();
             return;
         }
         if ("Library".equals(page) && account.isEmpty()) {
@@ -412,7 +454,7 @@ public final class MainActivity extends Activity {
                         List<MusicApi.Track> tracks = api.search(input);
                         runOnUiThread(() -> { if (generation == current) showTracks(tracks); });
                     } else {
-                        List<Browse.Shelf> shelves = Browse.shelves(api.search(input, type.params));
+                        List<Browse.Shelf> shelves = Browse.shelves(api.search(input, type.params), prefs.flag("hideExplicit", false));
                         runOnUiThread(() -> {
                             if (generation != current) return;
                             showBrowse(shelves, new ArrayList<>());
@@ -430,7 +472,7 @@ public final class MainActivity extends Activity {
                         if (!selectedMood.isEmpty()) request.put("params", selectedMood);
                 }
                 JSONObject data = api.browse(request);
-                List<Browse.Shelf> shelves = Browse.shelves(data);
+                List<Browse.Shelf> shelves = Browse.shelves(data, prefs.flag("hideExplicit", false));
                 List<Browse.Mood> moods = "Home".equals(active) ? Browse.moods(data) : new ArrayList<>();
                 runOnUiThread(() -> { if (generation == current) showBrowse(shelves, moods); });
             } catch (Exception error) {
@@ -450,28 +492,187 @@ public final class MainActivity extends Activity {
         library.setSelected("Library".equals(page));
         settings.setSelected("Account".equals(page));
         String name = account.isEmpty() ? "Sign in" : account;
-        sideAccount.setText(name);
         accountButton.setText(name);
+        if (prefs.flag("collapseSidebar", false)) {
+            iconNav(home, "⌂", "Home");
+            iconNav(explore, "◈", "Explore");
+            iconNav(library, "▤", "Library");
+            iconNav(settings, "⚙", "Settings");
+            iconNav(sideAccount, "◉", name);
+        } else {
+            sideAccount.setText(name);
+        }
     }
 
-    private void showAccount() {
-        heading("Settings");
-        heading("Account");
-        LinearLayout panel = column();
-        panel.setPadding(dp(14), dp(8), dp(14), dp(8));
-        panel.setBackground(shape(PANEL, 13));
-        results.addView(panel);
-        if (refreshingAccount) {
-            panel.addView(label("Checking account…", 16, MUTED));
-        } else if (!account.isEmpty()) {
-            panel.addView(label(account, 19, INK));
-            panel.addView(label("Signed in with Google", 15, MUTED));
-            panel.addView(button("Sign out", this::signOut), new LinearLayout.LayoutParams(dp(135), dp(46)));
-        } else {
-            String text = accountError.isEmpty() ? "Sign in to see your home feed and playlists." : accountError;
-            panel.addView(label(text, 15, MUTED));
-            panel.addView(button("Sign in with Google", this::openAccount), new LinearLayout.LayoutParams(dp(215), dp(46)));
+    private void iconNav(Button button, String icon, String label) {
+        button.setText(icon);
+        button.setTextSize(20);
+        button.setContentDescription(label);
+    }
+
+    private void showSettings() {
+        settingsView = new SettingsView(this, prefs, new SettingsView.Host() {
+            @Override public String accountLabel() { return account.isEmpty() ? "Google account" : account; }
+            @Override public String accountDescription() {
+                if (refreshingAccount) return "Checking account…";
+                if (!account.isEmpty()) return "Signed in with Google.";
+                return accountError.isEmpty() ? "Sign in to see your home feed and playlists." : accountError;
+            }
+            @Override public boolean checkingAccount() { return refreshingAccount; }
+            @Override public boolean signedIn() { return !account.isEmpty(); }
+            @Override public String connectionLabel() {
+                String user = ListenBrainz.account(prefs);
+                return user.isEmpty() ? "Send played tracks to ListenBrainz after connecting." : "Connected as " + user;
+            }
+            @Override public void run(String action) { settingsAction(action); }
+            @Override public void tabChanged(String selected) { settingsTab = selected; }
+            @Override public void changed(String key) { settingsChanged(key); }
+        }, settingsTab, INK, MUTED, appearance.surface, accent(), appearance);
+        paneContent.addView(settingsView, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    private void settingsChanged(String key) {
+        switch (key) {
+            case "theme": case "accent": case "accentControls": case "font": case "zoom":
+            case "flat": case "brightness": case "collapseSidebar": case "coverColors":
+                recreate();
+                return;
+            case "lrclib": case "ytLyrics": case "lyricsFirst":
+                expanded.invalidateLyrics();
+                break;
+            case "balance": case "normalization": case "equalizer": case "speed": case "speedEnabled": case "keepPitch": case "eqPreset":
+                if (playback != null) playback.settingsChanged();
+                break;
+            default:
+                if (key.startsWith("eqBand") && playback != null) playback.settingsChanged();
+                else renderPlayer();
         }
+    }
+
+    private void settingsAction(String action) {
+        switch (action) {
+            case "account": if (account.isEmpty()) openAccount(); else signOut(); break;
+            case "audio": showAudio(); break;
+            case "cache": artwork.clear(); toast("Artwork cache cleared."); break;
+            case "network": testConnection(); break;
+            case "notifications":
+                startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
+                break;
+            case "listenbrainz": manageListenBrainz(); break;
+            case "updates": checkUpdate(); break;
+            case "source": openLink(BuildVersion.REPO); break;
+            case "upstream": openLink(BuildVersion.UPSTREAM); break;
+        }
+    }
+
+    private int accent() { return prefs.flag("accentControls", true) ? appearance.accent : INK; }
+
+    private void openLink(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (android.content.ActivityNotFoundException unavailable) {
+            toast("No app is available to open this link.");
+        }
+    }
+
+    private void testConnection() {
+        network.execute(() -> {
+            boolean connected;
+            try { connected = api.connectionWorks(); }
+            catch (Exception unavailable) { connected = false; }
+            boolean result = connected;
+            runOnUiThread(() -> {
+                if (!isDestroyed()) toast(result ? "YouTube Music responded." : "YouTube Music could not be reached.");
+            });
+        });
+    }
+
+    @SuppressWarnings("deprecation")
+    private void checkUpdate() {
+        network.execute(() -> {
+            try {
+                String[] update = AndroidUpdates.check(getPackageManager().getPackageInfo(getPackageName(), 0).versionCode);
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    if (update == null) toast("You’re on the latest Android build.");
+                    else new AlertDialog.Builder(this).setTitle("YTM Head Unit " + update[0])
+                            .setMessage("Download the APK and install it through Android.")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Download APK", (dialog, which) -> openLink(update[1])).show();
+                });
+            } catch (Exception unavailable) {
+                runOnUiThread(() -> { if (!isDestroyed()) toast("GitHub update check could not complete."); });
+            }
+        });
+    }
+
+    private void manageListenBrainz() {
+        String user = ListenBrainz.account(prefs);
+        if (!user.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("ListenBrainz").setMessage("Connected as " + user)
+                    .setNegativeButton("Cancel", null).setPositiveButton("Disconnect", (dialog, button) -> {
+                        ListenBrainz.disconnect(prefs);
+                        loadPage();
+                    }).show();
+            return;
+        }
+        EditText input = new EditText(this);
+        input.setHint("User token");
+        input.setSingleLine();
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        AlertDialog connect = new AlertDialog.Builder(this).setTitle("Connect ListenBrainz")
+                .setView(input).setNegativeButton("Cancel", null)
+                .setNeutralButton("Get token", (dialog, button) -> openLink("https://listenbrainz.org/settings/"))
+                .setPositiveButton("Connect", null).create();
+        java.util.concurrent.atomic.AtomicBoolean active = new java.util.concurrent.atomic.AtomicBoolean(true);
+        connect.setOnDismissListener(dialog -> active.set(false));
+        connect.setOnShowListener(dialog -> connect.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
+            String token = input.getText().toString().trim();
+            if (token.isEmpty()) { input.setError("Enter your user token."); return; }
+            button.setEnabled(false);
+            input.setEnabled(false);
+            network.execute(() -> {
+                try {
+                    String name = ListenBrainz.connect(prefs, token, active::get);
+                    runOnUiThread(() -> {
+                        if (isDestroyed()) return;
+                        connect.dismiss();
+                        toast("Connected as " + name);
+                        if ("Account".equals(page)) loadPage();
+                    });
+                } catch (Exception unavailable) {
+                    runOnUiThread(() -> {
+                        if (!connect.isShowing() || isDestroyed()) return;
+                        input.setEnabled(true);
+                        button.setEnabled(true);
+                        input.setError("Could not validate or store this token.");
+                    });
+                }
+            });
+        }));
+        connect.show();
+    }
+
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            int key = event.getKeyCode();
+            if (key == KeyEvent.KEYCODE_ESCAPE) { onBackPressed(); return true; }
+            if (key == KeyEvent.KEYCODE_F && event.isCtrlPressed()) {
+                closePlayer();
+                query.requestFocus();
+                getSystemService(InputMethodManager.class).showSoftInput(query, InputMethodManager.SHOW_IMPLICIT);
+                return true;
+            }
+            if (playback != null && !(getCurrentFocus() instanceof EditText)) {
+                if (key == KeyEvent.KEYCODE_SPACE) { playback.toggle(); return true; }
+                if (event.isCtrlPressed() && (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+                    playback.skip(key == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1);
+                    return true;
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void showTracks(List<MusicApi.Track> tracks) {
@@ -498,7 +699,7 @@ public final class MainActivity extends Activity {
                 searchType = type;
                 loadPage();
             });
-            if (type == searchType) chip.setTextColor(ACCENT);
+            if (type == searchType) chip.setTextColor(accent());
             filters.addView(chip, spacedWidth(-2, 42));
         }
     }
@@ -534,7 +735,7 @@ public final class MainActivity extends Activity {
             Browse.Card card = shelf.cards.get(index);
             LinearLayout tile = column();
             tile.setPadding(dp(4), dp(4), dp(4), dp(8));
-            tile.setBackground(shape(PANEL, 8));
+            tile.setBackground(shape(appearance.surface, 8));
             tile.setContentDescription(card.title);
             tile.setFocusable(true);
             tile.setOnClickListener(view -> {
@@ -595,7 +796,7 @@ public final class MainActivity extends Activity {
     private ImageView cover(String url) {
         ImageView view = new ImageView(this);
         view.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        view.setBackground(shape(CONTROL, 6));
+        view.setBackground(shape(appearance.control, 6));
         view.setClipToOutline(true);
         artwork.load(view, url);
         return view;
@@ -627,11 +828,15 @@ public final class MainActivity extends Activity {
         body.setPadding(dp(16), dp(8), dp(16), dp(8));
         SeekBar volume = new SeekBar(this);
         volume.setContentDescription("Media volume");
-        volume.setMax(audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
-        volume.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));
+        int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        int current = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+        boolean log = prefs.flag("logVolume", false);
+        volume.setMax(log ? 100 : max);
+        volume.setProgress(log && max > 0 ? (int) Math.round(100 * Math.sqrt((double) current / max)) : current);
         volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) {
-                if (user && !audio.isVolumeFixed()) audio.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0);
+                int level = log ? (int) Math.round(max * Math.pow(progress / 100.0, 2)) : progress;
+                if (user && !audio.isVolumeFixed()) audio.setStreamVolume(AudioManager.STREAM_MUSIC, level, 0);
             }
             @Override public void onStartTrackingTouch(SeekBar bar) {}
             @Override public void onStopTrackingTouch(SeekBar bar) {}
@@ -830,8 +1035,8 @@ public final class MainActivity extends Activity {
         boolean playing = playback != null && playback.playing();
         play.setText(playing ? "Ⅱ" : "▶");
         play.setContentDescription(playing ? "Pause" : "Play");
-        shuffle.setTextColor(playback != null && playback.isShuffle() ? ACCENT : INK);
-        repeat.setTextColor(playback != null && playback.isRepeat() ? ACCENT : INK);
+        shuffle.setTextColor(playback != null && playback.isShuffle() ? accent() : INK);
+        repeat.setTextColor(playback != null && playback.isRepeat() ? accent() : INK);
         if (playback != null && playback.requiresSignIn() && account.isEmpty()) {
             playerStatus.setOnClickListener(view -> openAccount());
         } else {
@@ -845,6 +1050,7 @@ public final class MainActivity extends Activity {
         if (seeking || seek == null) return;
         int duration = playback == null ? 0 : playback.duration();
         seek.setEnabled(duration > 0);
+        if (seek.getThumb() != null) seek.getThumb().setAlpha(prefs.flag("seekKnob", true) || duration > 0 ? 255 : 0);
         seek.setMax(Math.max(1, duration));
         int position = playback == null ? 0 : playback.position();
         seek.setProgress(position);
@@ -860,8 +1066,8 @@ public final class MainActivity extends Activity {
         Button button = button(title, action);
         button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         android.graphics.drawable.StateListDrawable background = new android.graphics.drawable.StateListDrawable();
-        background.addState(new int[]{android.R.attr.state_selected}, shape(CONTROL, 9));
-        background.addState(new int[]{android.R.attr.state_pressed}, shape(CONTROL, 9));
+        background.addState(new int[]{android.R.attr.state_selected}, shape(appearance.control, 9));
+        background.addState(new int[]{android.R.attr.state_pressed}, shape(appearance.control, 9));
         background.addState(new int[]{}, shape(Color.TRANSPARENT, 9));
         button.setBackground(background);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(46));
@@ -885,20 +1091,21 @@ public final class MainActivity extends Activity {
         button.setAllCaps(false);
         button.setTextColor(INK);
         button.setTextSize(15);
+        button.setTypeface(appearance.font);
         button.setSingleLine();
         button.setEllipsize(TextUtils.TruncateAt.END);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
         button.setPadding(dp(10), 0, dp(10), 0);
         button.setBackground(new android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(0x40ffffff), shape(CONTROL, 12), null));
+                android.content.res.ColorStateList.valueOf(0x40ffffff), shape(appearance.control, 12), null));
         button.setOnClickListener(view -> action.run());
         return button;
     }
 
     private void heading(String title) {
         TextView text = label(title, 22, INK);
-        text.setTypeface(null, Typeface.BOLD);
+        text.setTypeface(appearance.font, Typeface.BOLD);
         text.setPadding(dp(4), dp(9), 0, dp(9));
         results.addView(text);
     }
@@ -907,6 +1114,7 @@ public final class MainActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(text);
         view.setTextSize(sp);
+        view.setTypeface(appearance.font);
         view.setTextColor(color);
         view.setMaxLines(1);
         view.setEllipsize(TextUtils.TruncateAt.END);

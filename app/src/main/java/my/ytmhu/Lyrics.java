@@ -39,42 +39,53 @@ final class Lyrics {
         this.source = source;
     }
 
-    static Lyrics load(MusicApi.Track track, int duration) throws Exception {
-        Lyrics plainFallback = null;
-        Exception providerFailure = null;
-        try {
-            String query = "track_name=" + URLEncoder.encode(track.title, "UTF-8")
-                    + "&artist_name=" + URLEncoder.encode(track.artist, "UTF-8");
-            HttpsURLConnection connection = (HttpsURLConnection) URI.create("https://lrclib.net/api/search?" + query)
-                    .toURL().openConnection();
+    static Lyrics load(MusicApi.Track track, int duration, AppSettings prefs) throws Exception {
+        boolean lrclib = prefs.flag("lrclib", true);
+        boolean youtube = prefs.flag("ytLyrics", true);
+        boolean youtubeFirst = "youtube".equals(prefs.text("lyricsFirst", "lrclib"));
+        if (!lrclib && !youtube) return new Lyrics(Collections.emptyList(), "", "");
+        boolean failed = false;
+        for (boolean yt : new boolean[]{youtubeFirst, !youtubeFirst}) {
+            if (yt ? !youtube : !lrclib) continue;
             try {
-                connection.setConnectTimeout(5000);
-                connection.setReadTimeout(6500);
-                connection.setInstanceFollowRedirects(false);
-                connection.setRequestProperty("User-Agent", "YTM Head Unit/0.3.0");
-                JSONArray results = new JSONArray(MusicApi.read(connection));
-                JSONObject match = bestMatch(results, track.title, track.artist, duration);
-                if (match != null) {
-                    List<Line> lines = parse(match.optString("syncedLyrics", ""));
-                    String plain = match.isNull("plainLyrics") ? "" : match.optString("plainLyrics");
-                    if (!lines.isEmpty()) return new Lyrics(lines, plain, "LRCLIB");
-                    if (!plain.isEmpty()) plainFallback = new Lyrics(lines, plain, "LRCLIB");
+                Lyrics result;
+                if (yt) {
+                    String plain = new MusicApi(prefs).plainLyrics(track.id);
+                    result = new Lyrics(Collections.emptyList(), plain, "YouTube Music");
+                } else {
+                    result = lrclib(track, duration);
                 }
-            } finally {
-                connection.disconnect();
+                if (result != null && (!result.lines.isEmpty() || !result.plain.isEmpty())) return result;
+            } catch (Exception unavailable) {
+                failed = true;
             }
-        } catch (Exception unavailable) {
-            providerFailure = unavailable;
         }
-        if (plainFallback != null) return plainFallback;
-        String plain;
+        if (failed) throw new IOException("A lyrics source could not be reached.");
+        return new Lyrics(Collections.emptyList(), "", "");
+    }
+
+    private static Lyrics lrclib(MusicApi.Track track, int duration) throws Exception {
+        String query = "track_name=" + URLEncoder.encode(track.title, "UTF-8")
+                + "&artist_name=" + URLEncoder.encode(track.artist, "UTF-8");
+        HttpsURLConnection connection = (HttpsURLConnection) URI.create("https://lrclib.net/api/search?" + query)
+                .toURL().openConnection();
         try {
-            plain = new MusicApi().plainLyrics(track.id);
-        } catch (Exception unavailable) {
-            if (providerFailure != null) throw new IOException("Lyrics sources could not be reached.");
-            throw unavailable;
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(6500);
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestProperty("User-Agent", "YTM Head Unit/" + BuildVersion.VERSION);
+            JSONArray results = new JSONArray(MusicApi.read(connection));
+            JSONObject match = bestMatch(results, track.title, track.artist, duration);
+            if (match != null) {
+                List<Line> lines = parse(match.optString("syncedLyrics", ""));
+                String plain = match.isNull("plainLyrics") ? "" : match.optString("plainLyrics");
+                if (!lines.isEmpty()) return new Lyrics(lines, plain, "LRCLIB");
+                if (!plain.isEmpty()) return new Lyrics(lines, plain, "LRCLIB");
+            }
+        } finally {
+            connection.disconnect();
         }
-        return new Lyrics(Collections.emptyList(), plain, "YouTube Music");
+        return null;
     }
 
     static JSONObject bestMatch(JSONArray options, String title, String artist, int duration) {

@@ -93,7 +93,11 @@ final class MusicApi {
         refreshVisitor();
         JSONObject client = client("WEB_REMIX", version)
                 .put("platform", "DESKTOP").put("originalUrl", MUSIC);
-        body.put("context", context(client).getJSONObject("context"));
+        JSONObject context = context(client).getJSONObject("context");
+        if (settings != null && settings.flag("restricted", false)) {
+            context.put("user", new JSONObject().put("enableSafetyMode", true).put("lockedSafetyMode", false));
+        }
+        body.put("context", context);
         return post(MUSIC, endpoint, body, WEB_UA, "67", version);
     }
 
@@ -127,6 +131,25 @@ final class MusicApi {
         return value.toString();
     }
 
+    private final AppSettings settings;
+
+    MusicApi() { this(null); }
+
+    MusicApi(AppSettings settings) {
+        this.settings = settings;
+    }
+
+    boolean connectionWorks() throws IOException {
+        HttpsURLConnection connection = open(MUSIC + "/", WEB_UA);
+        try {
+            connection.setInstanceFollowRedirects(false);
+            int response = connection.getResponseCode();
+            return response >= 200 && response < 400;
+        } finally {
+            connection.disconnect();
+        }
+    }
+
     static final class SignInRequired extends IOException {
         private static final long serialVersionUID = 1L;
 
@@ -137,18 +160,26 @@ final class MusicApi {
 
     static final class Track {
         final String id, title, artist, artwork, artistId;
+        final boolean explicit;
 
         Track(String id, String title, String artist, String artwork, String artistId) {
+            this(id, title, artist, artwork, artistId, false);
+        }
+
+        Track(String id, String title, String artist, String artwork, String artistId, boolean explicit) {
             this.id = id;
             this.title = title;
             this.artist = artist;
             this.artwork = artwork;
             this.artistId = artistId;
+            this.explicit = explicit;
         }
     }
 
     List<Track> search(String query) throws Exception {
-        return parseSearch(search(query, "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D"));
+        List<Track> songs = parseSearch(search(query, "EgWKAQIIAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D"));
+        if (settings != null && settings.flag("hideExplicit", false)) songs.removeIf(song -> song.explicit);
+        return songs;
     }
 
     JSONObject search(String query, String filter) throws Exception {
@@ -189,7 +220,7 @@ final class MusicApi {
             JSONObject artist = item(array(child(song, "shortBylineText"), "runs"), 0);
             String artistId = child(child(artist, "navigationEndpoint"), "browseEndpoint").optString("browseId");
             tracks.putIfAbsent(id, new Track(id, title, artist.optString("text"),
-                    Browse.thumbnail(song.optJSONObject("thumbnail")), artistId));
+                    Browse.thumbnail(song.optJSONObject("thumbnail")), artistId, explicit(song)));
         }
         return new ArrayList<>(tracks.values());
     }
@@ -225,11 +256,13 @@ final class MusicApi {
     static final class AudioSource {
         final String url, agent;
         final long bytes;
+        final double loudness;
 
-        AudioSource(String url, String agent, long bytes) {
+        AudioSource(String url, String agent, long bytes, double loudness) {
             this.url = url;
             this.agent = agent;
             this.bytes = bytes;
+            this.loudness = loudness;
         }
     }
 
@@ -268,7 +301,7 @@ final class MusicApi {
         if (!"OK".equals(child(result, "playabilityStatus").optString("status"))) {
             return java.util.Collections.emptyList();
         }
-        return audioUrls(child(result, "streamingData"), WEB_UA, download);
+        return audioUrls(result, WEB_UA, download);
     }
 
     static int signatureTimestamp(String source) {
@@ -290,20 +323,24 @@ final class MusicApi {
             if ("LOGIN_REQUIRED".equals(status.optString("status"))) throw new SignInRequired(reason);
             throw new IOException(reason);
         }
-        List<AudioSource> urls = audioUrls(child(result, "streamingData"), PLAYER_UA, download);
+        List<AudioSource> urls = audioUrls(result, PLAYER_UA, download);
         if (urls.isEmpty()) throw new IOException(download ? "YouTube did not offer a downloadable AAC file."
                 : "No AAC audio stream is available.");
         return urls;
     }
 
-    private static List<AudioSource> audioUrls(JSONObject data, String agent, boolean download) {
+    private static List<AudioSource> audioUrls(JSONObject result, String agent, boolean download) {
+        JSONObject data = child(result, "streamingData");
+        JSONObject volume = child(child(result, "playerConfig"), "audioConfig");
+        double trackLoudness = volume.optDouble("trackAbsoluteLoudnessLkfs", volume.optDouble("perceptualLoudnessDb"))
+                - volume.optDouble("loudnessTargetLkfs", -14);
         List<AudioSource> urls = new ArrayList<>();
         String master = data.optString("hlsManifestUrl");
         if (!download && isHttps(master)) {
             try {
                 String playlist = get(master, agent, false);
                 String hls = audioPlaylist(master, playlist);
-                if (hls != null) urls.add(new AudioSource(hls, agent, 0));
+                if (hls != null) urls.add(new AudioSource(hls, agent, 0, trackLoudness));
             } catch (IOException ignored) {
                 // A progressive AAC stream can still be available.
             }
@@ -315,7 +352,7 @@ final class MusicApi {
                 String url = format.optString("url");
                 long bytes = format.optLong("contentLength");
                 if (format.optInt("itag") == itag && isHttps(url) && (!download || bytes > 0)) {
-                    urls.add(new AudioSource(url, agent, bytes));
+                    urls.add(new AudioSource(url, agent, bytes, format.optDouble("loudnessDb", trackLoudness)));
                 }
             }
         }
@@ -370,7 +407,18 @@ final class MusicApi {
         if (!id.matches("[A-Za-z0-9_-]{11}") || name.isEmpty()) return null;
         JSONObject artist = item(column(columns, 1), 0);
         String artistId = child(child(artist, "navigationEndpoint"), "browseEndpoint").optString("browseId");
-        return new Track(id, name, artist.optString("text").trim(), Browse.image(row.optJSONObject("thumbnail")), artistId);
+        return new Track(id, name, artist.optString("text").trim(), Browse.image(row.optJSONObject("thumbnail")),
+                artistId, explicit(row));
+    }
+
+    static boolean explicit(JSONObject row) {
+        JSONArray badges = array(row, "badges");
+        if (badges.length() == 0) badges = array(row, "subtitleBadges");
+        for (int i = 0; i < badges.length(); i++) {
+            JSONObject badge = child(item(badges, i), "musicInlineBadgeRenderer");
+            if ("MUSIC_EXPLICIT_BADGE".equals(child(badge, "icon").optString("iconType"))) return true;
+        }
+        return false;
     }
 
     private static JSONArray column(JSONArray columns, int index) {
@@ -379,7 +427,8 @@ final class MusicApi {
 
     private JSONObject client(String name, String clientVersion) throws Exception {
         return new JSONObject().put("clientName", name).put("clientVersion", clientVersion)
-                .put("hl", "en").put("gl", "MY").put("visitorData", visitor);
+                .put("hl", settings == null ? "en" : settings.language())
+                .put("gl", settings == null ? "MY" : settings.country()).put("visitorData", visitor);
     }
 
     private static JSONObject context(JSONObject client) throws Exception {

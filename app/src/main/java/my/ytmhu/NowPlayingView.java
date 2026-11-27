@@ -28,6 +28,8 @@ final class NowPlayingView extends LinearLayout {
     private static final int FOREGROUND = 0xfff5eef5;
     private static final int MUTED = 0xffc6b8c6;
     private final Artwork artwork;
+    private final AppSettings prefs;
+    private final Appearance appearance;
     private final SongMenu menu;
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final TextView title, artist;
@@ -41,18 +43,21 @@ final class NowPlayingView extends LinearLayout {
     private boolean lyricsMode;
     private Lyrics lyrics;
     private Future<?> lyricsTask;
+    private int lyricsGeneration;
     private int activeLine = -1;
     private boolean closed;
     private List<MusicApi.Track> lastQueue = Collections.emptyList();
     private int lastIndex = -2;
 
-    NowPlayingView(Context context, Artwork artwork, SongMenu menu, Runnable close) {
+    NowPlayingView(Context context, AppSettings prefs, Appearance appearance, Artwork artwork, SongMenu menu, Runnable close) {
         super(context);
+        this.prefs = prefs;
+        this.appearance = appearance;
         this.artwork = artwork;
         this.menu = menu;
         setOrientation(HORIZONTAL);
         setPadding(dp(20), dp(14), dp(18), dp(8));
-        background(0xff352637);
+        background(appearance.start);
 
         LinearLayout left = column();
         cover = new ImageView(context);
@@ -60,7 +65,7 @@ final class NowPlayingView extends LinearLayout {
         cover.setContentDescription("Album artwork");
         left.addView(cover, new LayoutParams(-1, 0, 1));
         title = text("Now playing", 24, FOREGROUND);
-        title.setTypeface(null, Typeface.BOLD);
+        title.setTypeface(appearance.font, Typeface.BOLD);
         title.setMaxLines(2);
         left.addView(title);
         artist = text("", 16, MUTED);
@@ -94,19 +99,17 @@ final class NowPlayingView extends LinearLayout {
         this.playback = playback;
         MusicApi.Track current = playback == null ? null : playback.currentTrack();
         if (current != track) {
-            if (lyricsTask != null) lyricsTask.cancel(true);
-            lyricsTask = null;
+            invalidateLyrics();
             track = current;
-            lyrics = null;
             lastIndex = -2;
             cover.setTag(null);
             cover.setImageDrawable(null);
-            background(0xff352637);
+            background(appearance.start);
             title.setText(track == null ? "Now playing" : track.title);
             artist.setText(track == null ? "" : track.artist);
             if (track != null) {
                 artwork.load(cover, track.artwork, bitmap -> {
-                    if (track == current && !closed) {
+                    if (track == current && !closed && appearance.albumTint && prefs.flag("coverColors", true)) {
                         int tone = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() / 2);
                         background(Color.rgb(32 + Color.red(tone) / 3, 18 + Color.green(tone) / 3,
                                 24 + Color.blue(tone) / 3));
@@ -150,16 +153,17 @@ final class NowPlayingView extends LinearLayout {
     private void loadLyrics() {
         MusicApi.Track current = track;
         int duration = playback == null ? 0 : playback.duration();
+        int loading = ++lyricsGeneration;
         lyricsTask = network.submit(() -> {
             Lyrics result = null;
             try {
-                result = Lyrics.load(current, duration);
+                result = Lyrics.load(current, duration, prefs);
             } catch (Exception unavailable) {
                 // Keep an explicit retry for connection and provider errors.
             }
             Lyrics received = result;
             post(() -> {
-                if (track != current || closed) return;
+                if (track != current || loading != lyricsGeneration || closed) return;
                 lyricsTask = null;
                 lyrics = received;
                 if (!lyricsMode) return;
@@ -176,13 +180,13 @@ final class NowPlayingView extends LinearLayout {
 
     private void showLyricsResult() {
         if (lyrics.lines.isEmpty()) {
-            rows.addView(text(lyrics.plain.isEmpty() ? "No lyrics found." : lyrics.plain, 22, FOREGROUND));
+            rows.addView(lyricsLine(lyrics.plain.isEmpty() ? "No lyrics found." : lyrics.plain, FOREGROUND));
         } else {
             for (Lyrics.Line line : lyrics.lines) {
-                TextView view = text(line.text, 24, MUTED);
+                TextView view = lyricsLine(line.text, MUTED);
                 if (!line.text.isEmpty()) {
                     view.setOnClickListener(clicked -> {
-                        if (playback != null) playback.seekTo(line.millis);
+                        if (playback != null) playback.seekTo(line.millis + prefs.lyricOffset());
                     });
                 }
                 lines.add(view);
@@ -190,26 +194,28 @@ final class NowPlayingView extends LinearLayout {
             }
             tick(playback == null ? 0 : playback.position());
         }
-        rows.addView(text(lyrics.source, 13, MUTED));
+        if (!lyrics.source.isEmpty()) rows.addView(text(lyrics.source, 13, MUTED));
     }
 
     void tick(int position) {
         if (!lyricsMode || lyrics == null || lines.isEmpty()) return;
-        int index = lyrics.activeAt(position);
+        int index = lyrics.activeAt(position - prefs.lyricOffset());
         if (activeLine == index) return;
         if (activeLine >= 0) {
             TextView last = lines.get(activeLine);
             last.setTextColor(MUTED);
-            last.setTypeface(null, Typeface.NORMAL);
+            last.setTypeface(last.getTypeface(), "bold".equals(prefs.text("lyricsWeight", "theme")) ? Typeface.BOLD : Typeface.NORMAL);
         }
         activeLine = index;
         if (index >= 0) {
             TextView line = lines.get(index);
             line.setTextColor(Color.WHITE);
-            line.setTypeface(null, Typeface.BOLD);
+            line.setTypeface(line.getTypeface(), "regular".equals(prefs.text("lyricsWeight", "theme")) ? Typeface.NORMAL : Typeface.BOLD);
             scroll.post(() -> {
                 if (activeLine == index && lyricsMode && line.getParent() == rows) {
-                    scroll.smoothScrollTo(0, Math.max(0, line.getTop() - scroll.getHeight() / 3));
+                    int top = Math.max(0, line.getTop() - scroll.getHeight() / 3);
+                    if (prefs.flag("quickLyrics", false)) scroll.scrollTo(0, top);
+                    else scroll.smoothScrollTo(0, top);
                 }
             });
         } else {
@@ -254,13 +260,27 @@ final class NowPlayingView extends LinearLayout {
         }
     }
 
+    void invalidateLyrics() {
+        if (lyricsTask != null) lyricsTask.cancel(true);
+        ++lyricsGeneration;
+        lyricsTask = null;
+        lyrics = null;
+    }
+
     void close() {
         closed = true;
         network.shutdownNow();
     }
 
+    private TextView lyricsLine(String line, int color) {
+        TextView view = text(line, 24 * prefs.number("lyricsSize", 100) / 100, color);
+        if ("classic".equals(prefs.text("lyricsStyle", "theme"))) view.setGravity(Gravity.CENTER);
+        if ("bold".equals(prefs.text("lyricsWeight", "theme"))) view.setTypeface(view.getTypeface(), Typeface.BOLD);
+        return view;
+    }
+
     private void background(int tone) {
-        setBackground(new GradientDrawable(GradientDrawable.Orientation.TR_BL, new int[]{tone, 0xff18101e}));
+        setBackground(Appearance.background(prefs, GradientDrawable.Orientation.TR_BL, tone, appearance.solid ? tone : appearance.end));
     }
 
     private LinearLayout column() {
@@ -281,6 +301,7 @@ final class NowPlayingView extends LinearLayout {
         TextView text = new TextView(getContext());
         text.setText(label);
         text.setTextSize(size);
+        text.setTypeface(appearance.font);
         text.setTextColor(color);
         text.setPadding(dp(8), dp(4), dp(6), dp(4));
         return text;

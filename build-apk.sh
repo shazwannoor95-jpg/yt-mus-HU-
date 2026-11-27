@@ -20,7 +20,7 @@ else
 fi
 
 "$build_tools/aapt2" compile --dir app/src/main/res -o "$temp/resources.zip"
-"$build_tools/aapt2" link -I "$android_jar" --manifest app/src/main/AndroidManifest.xml \
+"$build_tools/aapt2" link -I "$android_jar" --manifest app/src/main/AndroidManifest.xml -A app/src/main/assets \
     -o "$temp/unsigned.apk" "$temp/resources.zip"
 mapfile -d '' classes < <(find "$temp/classes" -name '*.class' -print0)
 "$build_tools/d8" --min-api 27 --lib "$android_jar" --output "$temp/dex" "${classes[@]}"

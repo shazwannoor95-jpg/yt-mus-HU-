@@ -50,6 +50,7 @@ final class SettingsView extends LinearLayout {
     private final ScrollView scroller;
     private String tab, filter = "";
     private Button equalizerPreset;
+    private View themeAnchor, iconAnchor;
 
     private static final class Entry {
         final String tab, section, title, detail;
@@ -281,17 +282,38 @@ final class SettingsView extends LinearLayout {
     private void render() {
         contents.removeAllViews();
         scroller.scrollTo(0, 0);
+        themeAnchor = null;
+        iconAnchor = null;
+        if (filter.isEmpty() && "Appearance".equals(tab)) {
+            LinearLayout shortcuts = new LinearLayout(getContext());
+            Button themes = button("Themes");
+            themes.setOnClickListener(view -> jumpTo(themeAnchor));
+            Button icons = button("App icon");
+            icons.setOnClickListener(view -> jumpTo(iconAnchor));
+            addGalleryTile(shortcuts, themes);
+            addGalleryTile(shortcuts, icons);
+            contents.addView(shortcuts, new LayoutParams(-1, -2));
+        }
         String last = "";
         for (Entry entry : entries) {
             String fullText = (entry.tab + " " + entry.section + " " + entry.title + " " + entry.detail).toLowerCase(Locale.ROOT);
             if (filter.isEmpty() ? !tab.equals(entry.tab) : !fullText.contains(filter)) continue;
             String group = filter.isEmpty() || entry.tab.equals(entry.section)
                     ? entry.section : entry.tab + " · " + entry.section;
-            if (!group.equals(last)) contents.addView(label(group, 18, ink, true));
+            if (!group.equals(last)) {
+                View heading = label(group, 18, ink, true);
+                contents.addView(heading);
+                if ("Appearance".equals(entry.tab) && "Themes".equals(entry.section)) themeAnchor = heading;
+                if ("Appearance".equals(entry.tab) && "App icon".equals(entry.section)) iconAnchor = heading;
+            }
             entry.build.run();
             last = group;
         }
         if (last.isEmpty()) contents.addView(label("No settings match.", 16, muted, false));
+    }
+
+    private void jumpTo(View section) {
+        if (section != null) scroller.smoothScrollTo(0, section.getTop());
     }
 
     private void toggle(String tab, String group, String title, String detail, String key, boolean fallback) {

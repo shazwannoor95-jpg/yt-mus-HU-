@@ -348,6 +348,7 @@ public final class MainActivity extends Activity {
         }
         playbackTime = label("0:00 / –:––", 11, MUTED);
         playbackTime.setFontFeatureSettings("tnum");
+        if (viewport.fontScale > 1.35f) playbackTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12);
         playbackTime.setGravity(Gravity.CENTER);
         playbackTime.setPadding(0, 0, 0, 0);
         playbackTime.setOnClickListener(view -> showSeek());
@@ -490,7 +491,8 @@ public final class MainActivity extends Activity {
 
     @SuppressWarnings("deprecation")
     @Override public void onBackPressed() {
-        if (expanded.getVisibility() == View.VISIBLE) closePlayer();
+        if (miniPlayer.getVisibility() == View.VISIBLE) miniPlayer.setVisibility(View.GONE);
+        else if (expanded.getVisibility() == View.VISIBLE) closePlayer();
         else if (!"Home".equals(page)) navigate("Home");
         else super.onBackPressed();
     }

@@ -9,9 +9,12 @@ from the same upstream revision.
 
 Settings includes Account, Playback, Lyrics, Appearance, Connections, General,
 Keyboard shortcuts and About. Controls save on this device. Settings switches between two panes and a
-section picker using the available screen space and Android font scaling.
-Shelves page by whole, uncropped covers. Playback keeps primary controls
-visible and puts extras in a menu on compact screens.
+compact header using the available width and Android font scaling.
+Appearance contains inline Themes and App icon galleries. Some launchers
+cache app icons, so the launcher entry can take a moment to refresh.
+The player keeps volume, output, lyrics, queue, mini player and expand
+visible. Narrow displays use a second row. Mini player floats inside
+the Android app.
 
 Settings › Appearance › Frosted glass uses a small blurred album sample
 and translucent panels on API 27 and newer. All 30 upstream presets can

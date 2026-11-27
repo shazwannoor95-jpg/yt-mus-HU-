@@ -73,16 +73,59 @@ final class GoogleSignIn {
         return cookies();
     }
 
-    private static final Pattern TRUSTED_ORIGIN = Pattern.compile(
-            "^https://(?:accounts\\.google\\.com|myaccount\\.google\\.com|accounts\\.youtube\\.com|"
-                    + "music\\.youtube\\.com|www\\.youtube\\.com|youtube\\.com)(?::443)?(?=[/?#]|$)",
-            Pattern.CASE_INSENSITIVE);
+    private static final Pattern HTTPS_ORIGIN = Pattern.compile(
+            "^https://([a-z0-9.-]+)(?::443)?(?=[/?#]|$)", Pattern.CASE_INSENSITIVE);
     private static final Pattern UNSAFE = Pattern.compile("[\\p{Cntrl}\\\\]");
+    private static final Pattern DNS_NAME = Pattern.compile("[a-z0-9-]{1,63}(?:\\.[a-z0-9-]{1,63})+");
 
     static boolean trustedLoginPage(String location) {
-        // Chromium can accept first-party URLs that java.net.URI rejects because
-        // of literal characters in a query. Validate the origin on its own.
-        return location != null && !UNSAFE.matcher(location).find() && TRUSTED_ORIGIN.matcher(location).find();
+        // Validate the HTTPS origin independently of the query. Google's
+        // WebView URLs sometimes contain literal characters in query values.
+        if (location == null || UNSAFE.matcher(location).find()) return false;
+        java.util.regex.Matcher origin = HTTPS_ORIGIN.matcher(location);
+        if (!origin.find()) return false;
+        String host = origin.group(1).toLowerCase(Locale.ROOT);
+        switch (host) {
+            case "accounts.google.com": case "myaccount.google.com": case "accounts.youtube.com":
+            case "consent.google.com": case "consent.youtube.com": case "signin.google.com":
+            case "music.youtube.com": case "www.youtube.com": case "youtube.com":
+                return true;
+            case "g.co": case "www.g.co":
+                return authPath(location.substring(origin.end()), "/verifyaccount", "/signin", "/recover",
+                        "/accountrecovery", "/2sv", "/passkeys", "/sc");
+            case "www.google.com": case "google.com":
+                return authPath(location.substring(origin.end()), "/accounts", "/signin", "/recaptcha", "/sorry");
+            case "support.google.com":
+                return authPath(location.substring(origin.end()), "/accounts");
+            default:
+                return false;
+        }
+    }
+
+    private static boolean authPath(String remainder, String... accepted) {
+        int stop = remainder.length();
+        for (char delimiter : new char[]{'?', '#'}) {
+            int index = remainder.indexOf(delimiter);
+            if (index >= 0) stop = Math.min(stop, index);
+        }
+        String path = remainder.substring(0, stop);
+        if (path.indexOf('%') >= 0 || path.indexOf(';') >= 0 || path.contains("..")) return false;
+        for (String prefix : accepted) {
+            if (path.equals(prefix) || path.startsWith(prefix + "/")) return true;
+        }
+        return false;
+    }
+
+    static String diagnosticHost(String host) {
+        if (host == null) return "";
+        String name = host.toLowerCase(Locale.ROOT);
+        if (name.length() > 125 || !DNS_NAME.matcher(name).matches()) return "";
+        if (name.equals("g.co") || name.equals("www.g.co")
+                || name.equals("google.com") || name.endsWith(".google.com")
+                || name.equals("youtube.com") || name.endsWith(".youtube.com")) return name;
+        // Keep arbitrary subdomains out of clipboard reports.
+        String[] labels = name.split("\\.");
+        return "domain ending " + labels[labels.length - 2] + "." + labels[labels.length - 1];
     }
 
     static boolean isBlankNavigation(String location) {
@@ -187,7 +230,7 @@ final class GoogleSignIn {
                 status.setVisibility(View.VISIBLE);
                 recovery.setVisibility(View.VISIBLE);
                 continuation.setVisibility(fallback == null ? View.GONE : View.VISIBLE);
-                continuation.setOnClickListener(button -> {
+                continuation.setOnClickListener(fallback == null ? null : button -> {
                     clearMessage();
                     web.loadUrl(fallback);
                 });
@@ -209,6 +252,8 @@ final class GoogleSignIn {
                 }
                 String scheme = url.getScheme();
                 String kind = challengeType(scheme);
+                String host = "https".equalsIgnoreCase(scheme) ? diagnosticHost(url.getHost()) : "";
+                if (!host.isEmpty()) kind += " (" + host + ")";
                 String fallback = "intent".equalsIgnoreCase(scheme) ? intentFallback(location) : null;
                 if (fallback != null && fallback.equals(view.getUrl())) fallback = null;
                 showMessage(fallback == null

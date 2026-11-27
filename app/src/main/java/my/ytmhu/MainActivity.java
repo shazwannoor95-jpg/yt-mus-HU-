@@ -60,6 +60,12 @@ public final class MainActivity extends Activity {
     private FrostedBackdrop backdrop;
     private LinearLayout musicSearchBar;
     private ImageView playerArtwork;
+    private SeekBar inlineVolume;
+    private LinearLayout miniPlayer;
+    private TextView miniTitle;
+    private Button miniPlay, expandedButton;
+    private long volumeRefreshed;
+    private int settingsScroll;
     private String currentArtwork = "";
 
     private final ExecutorService network = Executors.newSingleThreadExecutor();
@@ -97,6 +103,9 @@ public final class MainActivity extends Activity {
     private final Runnable clock = new Runnable() {
         @Override public void run() {
             renderProgress();
+            if (inlineVolume != null && android.os.SystemClock.uptimeMillis() - volumeRefreshed >= 1000) {
+                syncVolume();
+            }
             if (expanded.getVisibility() == View.VISIBLE) {
                 expanded.tick(playback == null ? 0 : playback.position());
             }
@@ -136,7 +145,10 @@ public final class MainActivity extends Activity {
         viewport = new Viewport(width, height, config.fontScale, prefs.flag("collapseSidebar", false));
         api = new MusicApi(prefs);
         page = prefs.text("openOn", "Home");
-        if (savedState != null) settingsTab = savedState.getString("settingsTab", "Account");
+        if (savedState != null) {
+            settingsTab = savedState.getString("settingsTab", "Account");
+            settingsScroll = savedState.getInt("settingsScroll");
+        }
         LinearLayout root = column();
         if (appearance.glass) {
             backdrop = new FrostedBackdrop(appearance.window,
@@ -157,6 +169,7 @@ public final class MainActivity extends Activity {
         expanded = new NowPlayingView(this, prefs, appearance, artwork, this::showSongMenu, this::closePlayer);
         expanded.setVisibility(View.GONE);
         stage.addView(expanded, new FrameLayout.LayoutParams(-1, -1));
+        addMiniPlayer(stage);
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         LinearLayout side = column();
         side.setPadding(dp(4), dp(3), dp(4), dp(3));
@@ -173,7 +186,7 @@ public final class MainActivity extends Activity {
         brand.setGravity(Gravity.CENTER_VERTICAL);
         brand.setPadding(dp(8), 0, 0, 0);
         ImageView icon = new ImageView(this);
-        icon.setImageResource(getApplicationInfo().icon);
+        icon.setImageResource(AppIcons.drawable(this, prefs.text("appIcon", "classic")));
         brand.addView(icon, new LinearLayout.LayoutParams(dp(26), dp(26)));
         TextView wordmark = label("Music", 23, INK);
         wordmark.setTypeface(appearance.font, Typeface.BOLD);
@@ -256,10 +269,18 @@ public final class MainActivity extends Activity {
     }
 
     private LinearLayout playerBar() {
+        LinearLayout player = column();
+        player.setBackgroundColor(appearance.panel(appearance.window, appearance.barAlpha));
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(dp(viewport.shortScreen ? 4 : 9), 0, dp(4), 0);
-        bar.setBackgroundColor(appearance.panel(appearance.window, appearance.barAlpha));
+        player.addView(bar, new LinearLayout.LayoutParams(-1, 0, 1));
+        LinearLayout utility = viewport.twoLinePlayer ? new LinearLayout(this) : bar;
+        if (viewport.twoLinePlayer) {
+            utility.setGravity(Gravity.CENTER_VERTICAL);
+            utility.setPadding(dp(4), 0, dp(4), 0);
+            player.addView(utility, new LinearLayout.LayoutParams(-1, dp(38)));
+        }
         if (viewport.width >= 485) {
             playerArtwork = cover("");
             playerArtwork.setVisibility(View.GONE);
@@ -276,7 +297,11 @@ public final class MainActivity extends Activity {
         nowPlaying.setIncludeFontPadding(false);
         playerStatus.setPadding(dp(5), 0, dp(4), 0);
         playerStatus.setIncludeFontPadding(false);
-        nowPlaying.setOnClickListener(view -> openPlayer(false));
+        nowPlaying.setOnClickListener(view -> toggleExpanded());
+        nowPlaying.setOnLongClickListener(view -> {
+            showCurrentSongMenu(view);
+            return playback != null && playback.currentTrack() != null;
+        });
         information.addView(nowPlaying);
         information.addView(playerStatus);
         bar.addView(information, new LinearLayout.LayoutParams(0, -1, 1.55f));
@@ -289,7 +314,7 @@ public final class MainActivity extends Activity {
             songActions.setOnClickListener(this::showCurrentSongMenu);
         }
 
-        if (!viewport.compactPlayer) shuffle = transport(bar, Icons.SHUFFLE, "Shuffle", this::toggleShuffle);
+        shuffle = transport(bar, Icons.SHUFFLE, "Shuffle", this::toggleShuffle);
         previous = transport(bar, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); });
         play = transport(bar, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); });
         int inset = dp((viewport.target - 36) / 2);
@@ -300,13 +325,17 @@ public final class MainActivity extends Activity {
             play.setTextColor(0xff141119);
         }
         next = transport(bar, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); });
-        if (!viewport.compactPlayer) repeat = transport(bar, Icons.REPEAT, "Repeat", this::toggleRepeat);
+        repeat = transport(bar, Icons.REPEAT, "Repeat", this::toggleRepeat);
 
-        if (viewport.inlineSeek()) {
+        boolean separateSeek = viewport.twoLinePlayer && viewport.width < 490;
+        if (separateSeek) {
+            transport(bar, Icons.SEARCH, "Seek to position", this::showSeek);
+        } else {
             seek = new SeekBar(this);
             seek.setContentDescription("Track progress");
             seek.setProgressTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
             seek.setThumbTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
+            seek.setPadding(dp(7), 0, dp(7), 0);
             seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                 @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) {}
                 @Override public void onStartTrackingTouch(SeekBar bar) { seeking = true; }
@@ -315,22 +344,61 @@ public final class MainActivity extends Activity {
                     if (playback != null) playback.seekTo(bar.getProgress());
                 }
             });
-            bar.addView(seek, new LinearLayout.LayoutParams(0, dp(48), 1));
-            if (!viewport.compactPlayer) {
-                playbackTime = label("", 12, MUTED);
-                playbackTime.setGravity(Gravity.CENTER);
-                bar.addView(playbackTime, new LinearLayout.LayoutParams(dp(80), -2));
-            }
+            utility.addView(seek, new LinearLayout.LayoutParams(0, dp(38), 1));
         }
-        if (viewport.compactPlayer) {
-            Button more = transport(bar, Icons.MORE, "More player controls", null);
-            more.setOnClickListener(this::showPlayerActions);
-        } else {
-            transport(bar, Icons.VOLUME, "Volume and audio output", this::showAudio);
-            transport(bar, Icons.LYRICS, "Lyrics", () -> openPlayer(true));
-            transport(bar, Icons.QUEUE, "Up next", () -> openPlayer(false));
+        playbackTime = label("0:00 / –:––", 11, MUTED);
+        playbackTime.setFontFeatureSettings("tnum");
+        playbackTime.setGravity(Gravity.CENTER);
+        playbackTime.setPadding(0, 0, 0, 0);
+        playbackTime.setOnClickListener(view -> showSeek());
+        utility.addView(playbackTime, new LinearLayout.LayoutParams(dp(viewport.width < 540 ? 72 : 82), -1));
+        transport(utility, Icons.VOLUME, "Media volume", this::showAudio);
+        if (!separateSeek || viewport.width >= 398) {
+            inlineVolume = volumeSlider();
+            inlineVolume.setPadding(dp(5), 0, dp(5), 0);
+            utility.addView(inlineVolume, new LinearLayout.LayoutParams(dp(viewport.width >= 960 ? 77 : 50), dp(38)));
         }
-        return bar;
+        transport(utility, Icons.OUTPUT, "Audio output", this::showAudio);
+        transport(utility, Icons.LYRICS, "Lyrics", () -> openPlayer(true));
+        transport(utility, Icons.QUEUE, "Up next", () -> openPlayer(false));
+        transport(utility, Icons.MINI, "Mini player", this::toggleMiniPlayer);
+        expandedButton = transport(utility, Icons.EXPAND, "Expand Now Playing", this::toggleExpanded);
+        return player;
+    }
+
+    private void addMiniPlayer(FrameLayout stage) {
+        miniPlayer = column();
+        miniPlayer.setPadding(dp(6), dp(5), dp(6), 0);
+        miniPlayer.setBackground(shape(appearance.surface, 12));
+        miniPlayer.setElevation(dp(8));
+        miniTitle = label("Now playing", 14, INK);
+        miniTitle.setGravity(Gravity.CENTER);
+        miniPlayer.addView(miniTitle, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER);
+        transport(row, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); });
+        miniPlay = transport(row, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); });
+        transport(row, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); });
+        transport(row, Icons.CLOSE, "Close mini player", this::toggleMiniPlayer);
+        miniPlayer.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(210), -2, Gravity.BOTTOM | Gravity.END);
+        params.setMargins(dp(10), dp(10), dp(10), dp(8));
+        stage.addView(miniPlayer, params);
+        miniPlayer.setVisibility(View.GONE);
+    }
+
+    private void toggleMiniPlayer() {
+        if (miniPlayer.getVisibility() == View.VISIBLE) miniPlayer.setVisibility(View.GONE);
+        else {
+            closePlayer();
+            miniPlayer.setVisibility(View.VISIBLE);
+            renderPlayer();
+        }
+    }
+
+    private void toggleExpanded() {
+        if (expanded.getVisibility() == View.VISIBLE) closePlayer();
+        else openPlayer(false);
     }
 
     private void toggleShuffle() {
@@ -339,18 +407,6 @@ public final class MainActivity extends Activity {
 
     private void toggleRepeat() {
         if (playback != null) playback.toggleRepeat();
-    }
-
-    private void showPlayerActions(View anchor) {
-        PopupMenu popup = new PopupMenu(this, anchor);
-        addAction(popup, "Lyrics", () -> openPlayer(true));
-        addAction(popup, "Up next", () -> openPlayer(false));
-        addAction(popup, playback != null && playback.isShuffle() ? "Turn off shuffle" : "Shuffle", this::toggleShuffle);
-        addAction(popup, playback != null && playback.isRepeat() ? "Turn off repeat" : "Repeat", this::toggleRepeat);
-        addAction(popup, "Volume and audio output", this::showAudio);
-        if (playback != null && playback.currentTrack() != null) addAction(popup, "Song options", () -> showCurrentSongMenu(anchor));
-        if (playback != null && playback.duration() > 0) addAction(popup, "Seek to position", this::showSeek);
-        popup.show();
     }
 
     private void showCurrentSongMenu(View anchor) {
@@ -411,6 +467,7 @@ public final class MainActivity extends Activity {
         state.putString("mood", mood);
         state.putString("searchType", searchType.name());
         state.putString("settingsTab", settingsTab);
+        state.putInt("settingsScroll", settingsView == null ? 0 : settingsView.scrollPosition());
         if (pendingDownload != null) {
             Bundle song = new Bundle();
             song.putString("id", pendingDownload.id);
@@ -662,6 +719,10 @@ public final class MainActivity extends Activity {
             @Override public void changed(String key) { settingsChanged(key); }
         }, settingsTab, INK, MUTED, appearance.panel(appearance.surface, 166), accent(), appearance, viewport);
         paneContent.addView(settingsView, new FrameLayout.LayoutParams(-1, -1));
+        if (settingsScroll > 0) {
+            settingsView.restoreScroll(settingsScroll);
+            settingsScroll = 0;
+        }
     }
 
     private void settingsChanged(String key) {
@@ -683,6 +744,15 @@ public final class MainActivity extends Activity {
     }
 
     private void settingsAction(String action) {
+        if (action.startsWith("icon:")) {
+            try {
+                AppIcons.apply(this, prefs, action.substring(5));
+                recreate();
+            } catch (RuntimeException error) {
+                toast("Could not change the launcher icon.");
+            }
+            return;
+        }
         switch (action) {
             case "account": if (account.isEmpty()) openAccount(); else signOut(); break;
             case "audio": showAudio(); break;
@@ -958,37 +1028,66 @@ public final class MainActivity extends Activity {
     }
 
     private void openPlayer(boolean lyrics) {
+        miniPlayer.setVisibility(View.GONE);
+        if (expandedButton != null) {
+            expandedButton.setText(Icons.COLLAPSE);
+            expandedButton.setContentDescription("Collapse Now Playing");
+        }
         browser.setVisibility(View.GONE);
         expanded.setVisibility(View.VISIBLE);
         expanded.show(playback, lyrics);
     }
 
     private void closePlayer() {
+        if (expandedButton != null) {
+            expandedButton.setText(Icons.EXPAND);
+            expandedButton.setContentDescription("Expand Now Playing");
+        }
         expanded.setVisibility(View.GONE);
         browser.setVisibility(View.VISIBLE);
     }
 
-    private void showAudio() {
+    private SeekBar volumeSlider() {
         AudioManager audio = getSystemService(AudioManager.class);
-        LinearLayout body = column();
-        body.setPadding(dp(16), dp(8), dp(16), dp(8));
         SeekBar volume = new SeekBar(this);
         volume.setContentDescription("Media volume");
+        volume.setProgressTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
+        volume.setThumbTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
+        refreshVolume(volume, audio);
+        volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) {
+                if (!user || audio.isVolumeFixed()) return;
+                boolean log = prefs.flag("logVolume", false);
+                int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                int level = log ? (int) Math.round(max * Math.pow(progress / 100.0, 2)) : progress;
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, level, 0);
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) { syncVolume(); }
+        });
+        return volume;
+    }
+
+    private void syncVolume() {
+        if (inlineVolume != null && !inlineVolume.isPressed()) {
+            refreshVolume(inlineVolume, getSystemService(AudioManager.class));
+        }
+        volumeRefreshed = android.os.SystemClock.uptimeMillis();
+    }
+
+    private void refreshVolume(SeekBar volume, AudioManager audio) {
         int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
         int current = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
         boolean log = prefs.flag("logVolume", false);
         volume.setMax(log ? 100 : max);
         volume.setProgress(log && max > 0 ? (int) Math.round(100 * Math.sqrt((double) current / max)) : current);
-        volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) {
-                int level = log ? (int) Math.round(max * Math.pow(progress / 100.0, 2)) : progress;
-                if (user && !audio.isVolumeFixed()) audio.setStreamVolume(AudioManager.STREAM_MUSIC, level, 0);
-            }
-            @Override public void onStartTrackingTouch(SeekBar bar) {}
-            @Override public void onStopTrackingTouch(SeekBar bar) {}
-        });
         volume.setEnabled(!audio.isVolumeFixed());
-        body.addView(volume, new LinearLayout.LayoutParams(-1, dp(48)));
+    }
+
+    private void showAudio() {
+        LinearLayout body = column();
+        body.setPadding(dp(16), dp(8), dp(16), dp(8));
+        body.addView(volumeSlider(), new LinearLayout.LayoutParams(-1, dp(48)));
         MediaRouter router = getSystemService(MediaRouter.class);
         MediaRouter.RouteInfo route = router.getSelectedRoute(MediaRouter.ROUTE_TYPE_LIVE_AUDIO);
         body.addView(label(route == null ? "Android default output" : route.getName().toString(), 16, MUTED));
@@ -1182,6 +1281,10 @@ public final class MainActivity extends Activity {
         play.setEnabled(playback != null && playback.canPlay());
         boolean playing = playback != null && playback.playing();
         play.setText(playing ? Icons.PAUSE : Icons.PLAY);
+        miniPlay.setText(playing ? Icons.PAUSE : Icons.PLAY);
+        miniPlay.setContentDescription(playing ? "Pause" : "Play");
+        miniPlay.setEnabled(play.isEnabled());
+        miniTitle.setText(playback == null ? "Now playing" : playback.title());
         play.setContentDescription(playing ? "Pause" : "Play");
         if (shuffle != null) shuffle.setTextColor(playback != null && playback.isShuffle() ? accent() : INK);
         if (repeat != null) repeat.setTextColor(playback != null && playback.isRepeat() ? accent() : INK);
@@ -1225,7 +1328,7 @@ public final class MainActivity extends Activity {
             seek.setMax(Math.max(1, duration));
             seek.setProgress(position);
         }
-        if (playbackTime != null) playbackTime.setText(duration > 0 ? time(position) + " / " + time(duration) : "");
+        if (playbackTime != null) playbackTime.setText(duration > 0 ? time(position) + " / " + time(duration) : "0:00 / –:––");
     }
 
     private static String time(int millis) {

@@ -103,18 +103,32 @@ final class SettingsView extends LinearLayout {
             header.setGravity(Gravity.CENTER_VERTICAL);
             TextView title = label("Settings", 19, ink, true);
             header.addView(title, new LayoutParams(-2, -2));
-            header.addView(search, new LayoutParams(0, dp(44), 1));
-            addView(header, new LayoutParams(-1, -2));
             compactTab = button(tab + "  ▾");
-            compactTab.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            compactTab.setMinHeight(dp(44));
+            compactTab.setGravity(Gravity.CENTER);
+            compactTab.setMinHeight(dp(42));
             compactTab.setContentDescription("Settings section, " + tab);
             compactTab.setOnClickListener(view -> new AlertDialog.Builder(context).setTitle("Settings section")
                     .setSingleChoiceItems(TABS, java.util.Arrays.asList(TABS).indexOf(tab), (dialog, index) -> {
                         dialog.dismiss();
                         select(TABS[index]);
                     }).setNegativeButton("Cancel", null).show());
-            addView(compactTab, new LayoutParams(-1, -2));
+            header.addView(compactTab, new LayoutParams(0, -2, 1));
+            Button find = button(Icons.SEARCH);
+            find.setTypeface(appearance.icons);
+            find.setContentDescription("Search settings");
+            find.setOnClickListener(view -> {
+                if (search.getVisibility() == View.VISIBLE) {
+                    search.setText("");
+                    search.clearFocus();
+                    getContext().getSystemService(android.view.inputmethod.InputMethodManager.class)
+                            .hideSoftInputFromWindow(search.getWindowToken(), 0);
+                    search.setVisibility(View.GONE);
+                } else focusSearch();
+            });
+            header.addView(find, new LayoutParams(dp(44), dp(42)));
+            addView(header, new LayoutParams(-1, -2));
+            addView(search, new LayoutParams(-1, dp(44)));
+            search.setVisibility(View.GONE);
         }
 
         contents = column();
@@ -176,14 +190,6 @@ final class SettingsView extends LinearLayout {
         choice("Lyrics", "Lyrics sources", "Source priority", null, "lyricsFirst", "lrclib",
                 new String[]{"LRCLIB first", "YouTube Music first"}, new String[]{"lrclib", "youtube"});
 
-        if (!appearance.themes.isEmpty()) {
-            add("Appearance", "Colours", "Theme", "Browse the upstream themes and previews.",
-                    () -> {
-                        Button choose = button(appearance.themeName);
-                        choose.setOnClickListener(view -> showThemes());
-                        row("Theme", "Browse the upstream themes and previews.", choose);
-                    });
-        }
         choice("Appearance", "Background", "Frosted glass", "Use blurred album artwork behind translucent panels.", "glass",
                 "theme", new String[]{"Theme default", "On", "Off"}, new String[]{"theme", "on", "off"});
         choice("Appearance", "Colours", "Accent colour", null, "accent", "theme",
@@ -196,6 +202,11 @@ final class SettingsView extends LinearLayout {
                 new String[]{"System", "Inter", "DM Sans", "Figtree"}, new String[]{"system", "Inter", "DMSans", "Figtree"});
         range("Appearance", "Appearance", "Zoom", "Scale labels and other app text.", "zoom", 100, 85, 125, 5, value -> value + "%");
         toggle("Appearance", "Appearance", "Always show seek knob", "Keep the position marker visible even when the player is idle.", "seekKnob", true);
+
+        if (!appearance.themes.isEmpty()) {
+            add("Appearance", "Themes", "Theme", "Browse the upstream themes and previews.", this::themeGallery);
+        }
+        add("Appearance", "App icon", "App icon", "Choose the Android launcher icon.", this::iconGallery);
 
         action("Connections", "ListenBrainz", "ListenBrainz", host.connectionLabel(), "Manage", "listenbrainz");
         action("Connections", "Android", "Media controls", "Manage Android notifications for playback controls.", "Open", "notifications");
@@ -220,7 +231,7 @@ final class SettingsView extends LinearLayout {
 
         action("About", "Updates", "Check now", "Check GitHub for a newer Android APK. Updates are installed through Android.", "Check", "updates");
         action("About", "Updates", "What’s new in " + BuildVersion.VERSION,
-                "Responsive Settings, full album covers, a compact player and frosted glass.", null, "");
+                "Theme and app icon galleries, direct player controls, and Google sign-in diagnostics.", null, "");
         action("About", "About", "YTM Head Unit " + BuildVersion.VERSION, "Android port of parts of ytm-rs. Android API 27 and newer.", null, "");
         action("About", "About", "Lyrics", "LRCLIB and YouTube Music.", null, "");
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");
@@ -228,7 +239,11 @@ final class SettingsView extends LinearLayout {
         action("About", "About", "Upstream ytm-rs", "Desktop project, releases and credits.", "Open GitHub", "upstream");
     }
 
+    int scrollPosition() { return scroller.getScrollY(); }
+    void restoreScroll(int position) { scroller.post(() -> scroller.scrollTo(0, position)); }
+
     void focusSearch() {
+        search.setVisibility(View.VISIBLE);
         search.requestFocus();
         getContext().getSystemService(android.view.inputmethod.InputMethodManager.class)
                 .showSoftInput(search, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
@@ -345,44 +360,107 @@ final class SettingsView extends LinearLayout {
         });
     }
 
-    private void showThemes() {
-        AlertDialog picker = new AlertDialog.Builder(getContext()).setTitle("Theme")
-                .setNegativeButton("Cancel", null).create();
-        ScrollView scroll = new ScrollView(getContext());
-        LinearLayout choices = column();
-        choices.setPadding(dp(8), dp(4), dp(8), dp(8));
-        for (org.json.JSONObject theme : appearance.themes) {
-            String id = theme.optString("id");
+    private void themeGallery() {
+        contents.addView(label("Selected: " + appearance.themeName, 13, muted, false));
+        List<org.json.JSONObject> themes = new ArrayList<>(appearance.themes);
+        themes.sort(java.util.Comparator.comparingInt(theme -> themeRank(theme.optString("id"))));
+        int pane = viewport.width - viewport.railWidth - 2 * viewport.gutter - (viewport.splitSettings ? 150 : 0);
+        int columns = pane >= 680 ? 3 : pane >= 350 ? 2 : 1;
+        for (int index = 0; index < themes.size(); index += columns) {
             LinearLayout row = new LinearLayout(getContext());
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setMinimumHeight(dp(58));
-            android.widget.ImageView preview = new android.widget.ImageView(getContext());
-            preview.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            try (java.io.InputStream file = getContext().getAssets().open("theme-covers/" + id + ".jpg")) {
-                android.graphics.BitmapFactory.Options scale = new android.graphics.BitmapFactory.Options();
-                scale.inSampleSize = 2;
-                preview.setImageBitmap(android.graphics.BitmapFactory.decodeStream(file, null, scale));
-            } catch (java.io.IOException missing) {
-                preview.setBackground(card(7));
+            for (int i = index; i < index + columns; i++) {
+                View tile = i < themes.size() ? themeTile(themes.get(i), pane / columns) : new View(getContext());
+                addGalleryTile(row, tile);
             }
-            row.addView(preview, new LayoutParams(dp(72), dp(42)));
-            LinearLayout text = column();
-            text.addView(label(theme.optString("name"), 15, ink, true));
-            String credit = theme.optString("source");
-            if (!credit.isEmpty()) text.addView(label(credit, 11, muted, false));
-            row.addView(text, new LayoutParams(0, -2, 1));
-            if (id.equals(appearance.themeId)) row.addView(label("✓", 18, accent, true));
-            row.setOnClickListener(view -> {
-                picker.dismiss();
-                prefs.set("theme", id);
-                host.changed("theme");
-            });
-            row.setFocusable(true);
-            choices.addView(row);
+            contents.addView(row, new LayoutParams(-1, -2));
         }
-        scroll.addView(choices);
-        picker.setView(scroll);
-        picker.show();
+    }
+
+    private static int themeRank(String id) {
+        if ("ytm-rs".equals(id)) return 0;
+        if ("classic".equals(id)) return 1;
+        return 2;
+    }
+
+    private View themeTile(org.json.JSONObject theme, int widthDp) {
+        String id = theme.optString("id");
+        String name = theme.optString("name");
+        boolean selected = id.equals(appearance.themeId);
+        LinearLayout tile = column();
+        tile.setPadding(dp(4), dp(4), dp(4), dp(4));
+        tile.setBackground(galleryCard(selected));
+        android.widget.ImageView preview = new android.widget.ImageView(getContext());
+        preview.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        try (java.io.InputStream file = getContext().getAssets().open("theme-covers/" + id + ".jpg")) {
+            android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options();
+            options.inSampleSize = 2;
+            options.inPreferredConfig = android.graphics.Bitmap.Config.RGB_565;
+            preview.setImageBitmap(android.graphics.BitmapFactory.decodeStream(file, null, options));
+        } catch (java.io.IOException missing) {
+            preview.setImageResource(AppIcons.drawable(getContext(), "classic".equals(id) ? "classic" : "official"));
+            preview.setPadding(dp(16), dp(16), dp(16), dp(16));
+            preview.setBackground(new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    new int[]{appearance.start, appearance.end}));
+        }
+        tile.addView(preview, new LayoutParams(-1, dp(Math.max(70, Math.min(172, widthDp * 5 / 9)))));
+        tile.addView(label((selected ? "✓  " : "") + name, 14, ink, true));
+        org.json.JSONArray authors = theme.optJSONArray("creators");
+        if (authors != null && authors.length() > 0) {
+            List<String> names = new ArrayList<>();
+            for (int i = 0; i < authors.length(); i++) names.add(authors.optString(i));
+            tile.addView(label(String.join(", ", names), 11, muted, false));
+        }
+        tile.setContentDescription(name + (selected ? ", selected" : ""));
+        tile.setFocusable(true);
+        tile.setOnClickListener(view -> {
+            if (selected) return;
+            prefs.set("theme", id);
+            host.changed("theme");
+        });
+        return tile;
+    }
+
+    private void iconGallery() {
+        String current = prefs.text("appIcon", "classic");
+        contents.addView(label("Android launchers may take a moment to refresh the icon.", 12, muted, false));
+        int pane = viewport.width - viewport.railWidth - 2 * viewport.gutter - (viewport.splitSettings ? 150 : 0);
+        int columns = Math.max(2, Math.min(5, pane / 108));
+        for (int index = 0; index < AppIcons.IDS.length; index += columns) {
+            LinearLayout row = new LinearLayout(getContext());
+            for (int i = index; i < index + columns; i++) {
+                if (i >= AppIcons.IDS.length) { addGalleryTile(row, new View(getContext())); continue; }
+                String id = AppIcons.IDS[i];
+                String name = AppIcons.LABELS[i];
+                boolean selected = id.equals(current);
+                LinearLayout tile = column();
+                tile.setGravity(Gravity.CENTER);
+                tile.setPadding(dp(3), dp(8), dp(3), dp(3));
+                tile.setBackground(galleryCard(selected));
+                android.widget.ImageView icon = new android.widget.ImageView(getContext());
+                icon.setImageResource(AppIcons.drawable(getContext(), id));
+                tile.addView(icon, new LayoutParams(dp(46), dp(46)));
+                tile.addView(label((selected ? "✓ " : "") + name, 12, ink, true));
+                tile.setContentDescription(name + (selected ? ", selected" : ""));
+                tile.setFocusable(true);
+                tile.setOnClickListener(view -> {
+                    if (!selected) host.run("icon:" + id);
+                });
+                addGalleryTile(row, tile);
+            }
+            contents.addView(row, new LayoutParams(-1, -2));
+        }
+    }
+
+    private void addGalleryTile(LinearLayout row, View tile) {
+        LayoutParams params = new LayoutParams(0, -2, 1);
+        params.setMargins(dp(3), dp(3), dp(3), dp(5));
+        row.addView(tile, params);
+    }
+
+    private GradientDrawable galleryCard(boolean selected) {
+        GradientDrawable background = card(10);
+        if (selected) background.setStroke(dp(2), accent);
+        return background;
     }
 
     private void action(String tab, String group, String title, String detail, String caption, String id) {

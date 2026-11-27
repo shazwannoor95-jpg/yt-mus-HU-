@@ -10,7 +10,8 @@ final class Icons {
     static final String HOME = "\ue0f5", EXPLORE = "\ue09b", LIBRARY = "\ue100", SEARCH = "\ue151",
             SETTINGS = "\ue154", USER = "\ue461", PLAY = "\ue13c", PAUSE = "\ue12e", PREVIOUS = "\ue15f",
             NEXT = "\ue160", SHUFFLE = "\ue15e", REPEAT = "\ue146", VOLUME = "\ue1ab", LYRICS = "\ue349",
-            QUEUE = "\ue2e0", MORE = "\ue0b7", HEART = "\ue0f2", THUMBS_DOWN = "\ue189";
+            QUEUE = "\ue2e0", MORE = "\ue0b7", HEART = "\ue0f2", THUMBS_DOWN = "\ue189", OUTPUT = "\ue210", MINI = "\ue3af",
+            EXPAND = "\ue070", COLLAPSE = "\ue06d", CLOSE = "\ue1b2";
 
     private Icons() {}
 

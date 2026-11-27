@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="my.ytmhu" android:versionCode="7" android:versionName="0.4.2">
+    package="my.ytmhu" android:versionCode="8" android:versionName="0.4.3">
     <uses-sdk android:minSdkVersion="27" android:targetSdkVersion="32" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -8,12 +8,87 @@
     <application android:label="YTM Head Unit" android:icon="@drawable/music_icon" android:theme="@style/AppTheme"
         android:allowBackup="false" android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true"
-            android:screenOrientation="landscape">
+            android:screenOrientation="landscape" />
+        <activity-alias android:name=".Launcher_classic" android:targetActivity=".MainActivity"
+            android:enabled="true" android:exported="true"
+            android:icon="@drawable/music_icon">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_official" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_official">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_smilering" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_smilering">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_gear" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_gear">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_wave" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_wave">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_vinyl" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_vinyl">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_lyrics" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_lyrics">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_duet" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_duet">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_kawarp" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_kawarp">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".Launcher_fluent" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/music_fluent">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         <service android:name=".PlaybackService" android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
     </application>

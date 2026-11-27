@@ -30,6 +30,14 @@ final class MusicApi {
     private String visitor = "";
     private long nextRefresh;
 
+    static final class SignInRequired extends IOException {
+        private static final long serialVersionUID = 1L;
+
+        SignInRequired(String reason) {
+            super(reason);
+        }
+    }
+
     static final class Track {
         final String id, title, artist;
 
@@ -59,7 +67,9 @@ final class MusicApi {
                 .put("contentCheckOk", true).put("racyCheckOk", true), PLAYER_UA, "101", "1.02");
         JSONObject status = child(result, "playabilityStatus");
         if (!"OK".equals(status.optString("status"))) {
-            throw new IOException(status.optString("reason", "Lagu ini tidak boleh dimainkan."));
+            String reason = status.optString("reason", "Lagu ini tidak boleh dimainkan.");
+            if ("LOGIN_REQUIRED".equals(status.optString("status"))) throw new SignInRequired(reason);
+            throw new IOException(reason);
         }
         JSONObject data = child(result, "streamingData");
         List<String> urls = new ArrayList<>();

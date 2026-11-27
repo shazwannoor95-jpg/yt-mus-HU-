@@ -43,6 +43,7 @@ public final class PlaybackService extends Service {
     private PendingIntent stopCommand;
     private Future<?> request;
     private boolean prepared;
+    private boolean signInRequired;
     private boolean foreground;
     private boolean started;
     private boolean destroyed;
@@ -113,6 +114,10 @@ public final class PlaybackService extends Service {
         else resume();
     }
 
+    String officialTrackId() {
+        return signInRequired && index >= 0 ? queue.get(index).id : null;
+    }
+
     boolean playing() { return state == PlaybackState.STATE_PLAYING; }
     boolean canPlay() { return index >= 0 && state != PlaybackState.STATE_BUFFERING; }
     boolean canSkip(int delta) { return index >= 0 && index + delta >= 0 && index + delta < queue.size(); }
@@ -120,6 +125,7 @@ public final class PlaybackService extends Service {
 
     private void select(int selected) {
         index = selected;
+        signInRequired = false;
         int current = ++generation;
         if (request != null) request.cancel(true);
         releasePlayer();
@@ -138,7 +144,9 @@ public final class PlaybackService extends Service {
                 });
             } catch (Exception error) {
                 main.post(() -> {
-                    if (!destroyed && generation == current) fail(error.getMessage());
+                    if (destroyed || generation != current) return;
+                    signInRequired = error instanceof MusicApi.SignInRequired;
+                    fail(signInRequired ? "YouTube minta log masuk. Buka lagu di YouTube Music." : error.getMessage());
                 });
             }
         });
@@ -210,7 +218,9 @@ public final class PlaybackService extends Service {
     private void fail(String detail) {
         releasePlayer();
         audio.abandonAudioFocusRequest(focus);
-        publish(PlaybackState.STATE_ERROR, "Gagal main" + (detail == null ? "." : " · " + detail));
+        if (signInRequired) session.setActive(false);
+        publish(PlaybackState.STATE_ERROR, signInRequired ? detail :
+                "Gagal main" + (detail == null ? "." : " · " + detail));
         endForeground();
     }
 
@@ -220,6 +230,7 @@ public final class PlaybackService extends Service {
         releasePlayer();
         audio.abandonAudioFocusRequest(focus);
         index = -1;
+        signInRequired = false;
         session.setActive(false);
         publish(PlaybackState.STATE_STOPPED, "Pilih lagu untuk main.");
         endForeground();

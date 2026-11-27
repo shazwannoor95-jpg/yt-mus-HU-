@@ -2,10 +2,12 @@
 package my.ytmhu;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.text.TextUtils;
@@ -17,6 +19,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.Collections;
 import java.util.List;
@@ -89,7 +92,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout controls = new LinearLayout(this);
         previous = button("Sebelum", () -> { if (playback != null) playback.skip(-1); });
-        play = button("Main", () -> { if (playback != null) playback.toggle(); });
+        play = button("Main", this::playOrOpen);
         next = button("Seterus", () -> { if (playback != null) playback.skip(1); });
         for (Button control : new Button[]{previous, play, next}) {
             controls.addView(control, new LinearLayout.LayoutParams(0, dp(56), 1));
@@ -169,7 +172,32 @@ public final class MainActivity extends Activity {
         previous.setEnabled(playback != null && playback.canSkip(-1));
         play.setEnabled(playback != null && playback.canPlay());
         next.setEnabled(playback != null && playback.canSkip(1));
-        play.setText(playback != null && playback.playing() ? "Jeda" : "Main");
+        String officialId = playback == null ? null : playback.officialTrackId();
+        play.setText(officialId != null ? "Buka YouTube Music" :
+                playback != null && playback.playing() ? "Jeda" : "Main");
+    }
+
+    private void playOrOpen() {
+        if (playback == null) return;
+        String id = playback.officialTrackId();
+        if (id == null) {
+            playback.toggle();
+            return;
+        }
+        Uri link = Uri.parse("https://music.youtube.com/watch").buildUpon()
+                .appendQueryParameter("v", id).build();
+        Intent intent = new Intent(Intent.ACTION_VIEW, link);
+        intent.setPackage("com.google.android.apps.youtube.music");
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException missingApp) {
+            intent.setPackage(null);
+            try {
+                startActivity(intent);
+            } catch (ActivityNotFoundException missingBrowser) {
+                Toast.makeText(this, "YouTube Music atau pelayar diperlukan.", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     private Button button(String text, Runnable action) {

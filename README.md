@@ -32,6 +32,8 @@ debugging connection. Open **YTM Head Unit** from the app list.
 This build provides anonymous search, a queue from search results, playback
 and standard Android media controls. Login, account library, downloads, lyrics,
 video and the upstream desktop UI are outside this build. YouTube may refuse
-anonymous streams depending on the track, region or network.
+anonymous streams depending on the track, region or network. When YouTube
+requires sign-in, use **Buka YouTube Music** to open the same song in the
+official app or browser. Sign-in and playback then take place there.
 
 GPL-3.0-only. See [LICENSE](LICENSE).

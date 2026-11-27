@@ -4,6 +4,8 @@ package my.ytmhu;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.app.Dialog;
 import android.net.Uri;
 import android.view.Gravity;
@@ -20,7 +22,8 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.view.View;
 
-import java.net.URI;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.List;
 import java.util.Map;
 import javax.net.ssl.HttpsURLConnection;
@@ -70,19 +73,45 @@ final class GoogleSignIn {
         return cookies();
     }
 
+    private static final Pattern TRUSTED_ORIGIN = Pattern.compile(
+            "^https://(?:accounts\\.google\\.com|myaccount\\.google\\.com|accounts\\.youtube\\.com|"
+                    + "music\\.youtube\\.com|www\\.youtube\\.com|youtube\\.com)(?::443)?(?=[/?#]|$)",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern UNSAFE = Pattern.compile("[\\p{Cntrl}\\\\]");
+
     static boolean trustedLoginPage(String location) {
-        URI url;
-        try {
-            url = URI.create(location);
-        } catch (IllegalArgumentException malformed) {
-            return false;
+        // Chromium can accept first-party URLs that java.net.URI rejects because
+        // of literal characters in a query. Validate the origin on its own.
+        return location != null && !UNSAFE.matcher(location).find() && TRUSTED_ORIGIN.matcher(location).find();
+    }
+
+    static boolean isBlankNavigation(String location) {
+        return "about:blank".equals(location);
+    }
+
+    static String challengeType(String scheme) {
+        switch (scheme == null ? "" : scheme.toLowerCase(Locale.ROOT)) {
+            case "intent": return "Android app handoff";
+            case "https": return "unrecognized secure site";
+            case "http": return "unencrypted navigation";
+            case "about": return "internal browser page";
+            case "": return "navigation without a scheme";
+            default: return "device verification link";
         }
-        if (!"https".equals(url.getScheme()) || (url.getPort() != -1 && url.getPort() != 443)
-                || url.getRawUserInfo() != null) return false;
-        String host = url.getHost();
-        return "accounts.google.com".equals(host) || "myaccount.google.com".equals(host)
-                || "accounts.youtube.com".equals(host) || "music.youtube.com".equals(host)
-                || "www.youtube.com".equals(host) || "youtube.com".equals(host);
+    }
+
+    static String trustedFallback(String candidate) {
+        return trustedLoginPage(candidate) ? candidate : null;
+    }
+
+    private static String intentFallback(String location) {
+        try {
+            // Use only a first-party HTTPS fallback. Do not launch the supplied intent.
+            return trustedFallback(Intent.parseUri(location, Intent.URI_INTENT_SCHEME)
+                    .getStringExtra("browser_fallback_url"));
+        } catch (java.net.URISyntaxException | IllegalArgumentException invalid) {
+            return null;
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -115,8 +144,27 @@ final class GoogleSignIn {
         status.setPadding(12, 4, 12, 8);
         status.setVisibility(View.GONE);
         panel.addView(status);
+        LinearLayout recovery = new LinearLayout(activity);
+        recovery.setVisibility(View.GONE);
+        panel.addView(recovery);
 
         WebView web = new WebView(activity);
+        Button back = new Button(activity);
+        back.setText("Back");
+        back.setOnClickListener(view -> {
+            recovery.setVisibility(View.GONE);
+            status.setVisibility(View.GONE);
+            if (web.canGoBack()) web.goBack();
+            else web.loadUrl(GOOGLE_LOGIN);
+        });
+        recovery.addView(back, new LinearLayout.LayoutParams(0, -2, 1));
+        Button continuation = new Button(activity);
+        continuation.setText("Continue");
+        continuation.setVisibility(View.GONE);
+        recovery.addView(continuation, new LinearLayout.LayoutParams(0, -2, 1));
+        Button copy = new Button(activity);
+        copy.setText("Copy diagnostic");
+        recovery.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -128,18 +176,52 @@ final class GoogleSignIn {
         // Google and YouTube are separate sites in this dedicated sign-in WebView.
         jar.setAcceptThirdPartyCookies(web, true);
         web.setWebViewClient(new WebViewClient() {
+            private void clearMessage() {
+                status.setVisibility(View.GONE);
+                recovery.setVisibility(View.GONE);
+                continuation.setOnClickListener(null);
+            }
+
+            private void showMessage(String message, String code, String fallback) {
+                status.setText(message);
+                status.setVisibility(View.VISIBLE);
+                recovery.setVisibility(View.VISIBLE);
+                continuation.setVisibility(fallback == null ? View.GONE : View.VISIBLE);
+                continuation.setOnClickListener(button -> {
+                    clearMessage();
+                    web.loadUrl(fallback);
+                });
+                copy.setOnClickListener(button -> {
+                    ClipboardManager clipboard = activity.getSystemService(ClipboardManager.class);
+                    clipboard.setPrimaryClip(ClipData.newPlainText("YTM login diagnostic",
+                            "YTM " + BuildVersion.VERSION + " | Android API " + android.os.Build.VERSION.SDK_INT + " | " + code));
+                });
+            }
+
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 if (!request.isForMainFrame()) return false;
-                if (trustedLoginPage(request.getUrl().toString())) return false;
-                status.setText("This sign-in step could not open in Android WebView.");
-                status.setVisibility(View.VISIBLE);
+                Uri url = request.getUrl();
+                String location = url.toString();
+                if (isBlankNavigation(location)) return false;
+                if (trustedLoginPage(location)) {
+                    clearMessage();
+                    return false;
+                }
+                String scheme = url.getScheme();
+                String kind = challengeType(scheme);
+                String fallback = "intent".equalsIgnoreCase(scheme) ? intentFallback(location) : null;
+                if (fallback != null && fallback.equals(view.getUrl())) fallback = null;
+                showMessage(fallback == null
+                                ? "Google verification could not continue here. Go back and choose Try another way on Google’s page."
+                                : "Google supplied a browser step. Tap Continue to open it here.",
+                        kind + (fallback == null ? " | no in-app continuation" : " | HTTPS continuation"), fallback);
                 return true;
             }
 
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (!request.isForMainFrame()) return;
-                status.setText("Google sign-in page could not load. Close and try again.");
-                status.setVisibility(View.VISIBLE);
+                showMessage("Google sign-in page could not load. Go back and try again.",
+                        "WebView error " + error.getErrorCode(), null);
             }
 
             @Override public void onPageFinished(WebView view, String url) {
@@ -163,7 +245,9 @@ final class GoogleSignIn {
         window.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         window.setDimAmount(0.20f);
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        window.setLayout(activity.getResources().getDisplayMetrics().widthPixels * 55 / 100, -1);
+        int pixels = activity.getResources().getDisplayMetrics().widthPixels;
+        int minimum = (int) (480 * activity.getResources().getDisplayMetrics().density);
+        window.setLayout(Math.min(pixels, Math.max(minimum, pixels * 62 / 100)), -1);
         web.loadUrl(GOOGLE_LOGIN);
         return dialog;
     }

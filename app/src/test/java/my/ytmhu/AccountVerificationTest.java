@@ -59,7 +59,7 @@ public final class AccountVerificationTest {
             if (requests.incrementAndGet() == 1) return new JSONObject();
             assertEquals("browse", endpoint);
             assertEquals("FEmusic_home", body.getString("browseId"));
-            return new JSONObject("{\"responseContext\":{\"serviceTrackingParams\":[{\"params\":["
+            return new JSONObject("{\"responseContext\":{\"serviceTrackingParams\":[{\"service\":\"GFEEDBACK\",\"params\":["
                     + "{\"key\":\"logged_in\",\"value\":\"1\"}]}]}}");
         }));
         assertEquals(2, requests.get());
@@ -100,5 +100,14 @@ public final class AccountVerificationTest {
                 }));
         assertEquals("ACCOUNT_MENU_TIMEOUT", timeout.code);
         assertFalse(timeout.getMessage().contains("sensitive"));
+    }
+    @Test public void unrelatedTelemetryCannotOverrideTheAccountResponse() throws Exception {
+        assertEquals("YouTube account", MusicApi.verifyAccount((endpoint, body) ->
+                new JSONObject("{\"responseContext\":{\"mainAppWebResponseContext\":{\"loggedOut\":false},"
+                        + "\"serviceTrackingParams\":[{\"service\":\"Other\",\"params\":[{\"key\":\"logged_in\",\"value\":\"0\"}]}]}}")));
+        MusicApi.AccountFailure signedOut = assertThrows(MusicApi.AccountFailure.class,
+                () -> MusicApi.verifyAccount((endpoint, body) -> new JSONObject(
+                        "{\"responseContext\":{\"serviceTrackingParams\":[{\"service\":\"GFEEDBACK\",\"params\":[{\"key\":\"logged_in\",\"value\":\"0\"}]}]}}")));
+        assertEquals("ACCOUNT_MENU_SIGNED_OUT", signedOut.code);
     }
 }

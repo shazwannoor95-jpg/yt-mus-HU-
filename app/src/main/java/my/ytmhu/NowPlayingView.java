@@ -44,7 +44,10 @@ final class NowPlayingView extends LinearLayout {
     private MusicApi.Track track;
     private boolean lyricsMode;
     private Lyrics lyrics;
-    private Future<?> lyricsTask;
+    private Future<?> lyricsTask, extrasTask;
+    private LyricExtras extrasRequest;
+    private final List<List<TextView>> alternates = new ArrayList<>();
+    private TextView extrasStatus;
     private int lyricsGeneration;
     private int activeLine = -1;
     private boolean closed;
@@ -111,6 +114,7 @@ final class NowPlayingView extends LinearLayout {
     }
 
     boolean lyricsVisible() { return lyricsMode; }
+    boolean hasTimedLyrics() { return lyrics != null && !lyrics.lines.isEmpty(); }
 
     void setProfile(PerformancePolicy.Profile next) {
         if (profile == next) return;
@@ -122,8 +126,9 @@ final class NowPlayingView extends LinearLayout {
     void show(PlaybackService playback, boolean lyricsVisible) {
         lyricsMode = lyricsVisible;
         lastIndex = -2;
+        boolean sameTrack = track == (playback == null ? null : playback.currentTrack());
         update(playback);
-        render();
+        if (sameTrack) render();
     }
 
     void update(PlaybackService playback) {
@@ -167,6 +172,7 @@ final class NowPlayingView extends LinearLayout {
     }
 
     private void render() {
+        cancelExtras();
         lyricsTab.setSelected(lyricsMode);
         queueTab.setSelected(!lyricsMode);
         scroll.setVisibility(lyricsMode ? VISIBLE : GONE);
@@ -178,6 +184,7 @@ final class NowPlayingView extends LinearLayout {
         rows.removeAllViews();
         scroll.scrollTo(0, 0);
         lines.clear();
+        alternates.clear();
         activeLine = -1;
         if (track == null) {
             rows.addView(text("Play a song to see its lyrics.", 17, MUTED));
@@ -218,22 +225,133 @@ final class NowPlayingView extends LinearLayout {
     }
 
     private void showLyricsResult() {
-        if (lyrics.lines.isEmpty()) {
+        boolean roman = prefs.flag("lyricRoman", false);
+        boolean translate = prefs.flag("lyricTranslation", false);
+        if (lyrics.lines.isEmpty() && (lyrics.plain.isEmpty() || (!roman && !translate))) {
             rows.addView(lyricsLine(lyrics.plain.isEmpty() ? "No lyrics found." : lyrics.plain, FOREGROUND));
         } else {
-            for (Lyrics.Line line : lyrics.lines) {
-                TextView view = lyricsLine(line.text, MUTED);
-                if (!line.text.isEmpty()) {
-                    view.setOnClickListener(clicked -> {
-                        if (playback != null) playback.seekTo(line.millis + prefs.lyricOffset());
-                    });
-                }
+            List<Lyrics.Line> display = lyrics.displayLines();
+            for (Lyrics.Line line : display) {
+                LinearLayout group = column();
+                TextView view = lyricsLine(line.text, line.millis < 0 ? FOREGROUND : MUTED);
+                group.addView(view);
+                if (line.millis >= 0 && !line.text.isEmpty()) group.setOnClickListener(clicked -> {
+                    if (playback != null) playback.seekTo(line.millis + prefs.lyricOffset());
+                });
                 lines.add(view);
-                rows.addView(view);
+                List<TextView> extras = new ArrayList<>();
+                if (roman) extras.add(addAlternate(group, "lyricRomanSize"));
+                if (translate) extras.add(addAlternate(group, "lyricTranslationSize"));
+                alternates.add(extras);
+                rows.addView(group);
+            }
+            if (roman || translate) {
+                extrasStatus = text("", 13, MUTED);
+                extrasStatus.setVisibility(GONE);
+                rows.addView(extrasStatus);
+                showExtras(display, new org.json.JSONObject(), Collections.emptyList(), roman, translate,
+                        prefs.text("lyricTarget", "en"));
+                loadExtras(display, roman, translate);
             }
             tick(playback == null ? 0 : playback.position());
         }
         if (!lyrics.source.isEmpty()) rows.addView(text(lyrics.source, 13, MUTED));
+    }
+
+    private TextView addAlternate(LinearLayout group, String key) {
+        TextView view = lyricsLine("", MUTED);
+        view.setTextSize(appearance.lyricsSize * prefs.number("lyricsSize", 100) / 100f
+                * prefs.number(key, 75) / 100f);
+        view.setVisibility(GONE);
+        group.addView(view);
+        return view;
+    }
+
+    private void loadExtras(List<Lyrics.Line> display, boolean roman, boolean translate) {
+        cancelExtras();
+        Lyrics original = lyrics;
+        String target = prefs.text("lyricTarget", "en");
+        List<String> requested = LyricExtras.needed(display, roman, translate, target);
+        if (requested.isEmpty()) return;
+        LyricExtras request = new LyricExtras(getContext());
+        extrasRequest = request;
+        extrasTask = network.submit(() -> {
+            org.json.JSONObject values;
+            try { values = request.load(requested, target, original.language); }
+            catch (Exception unavailable) { values = new org.json.JSONObject(); }
+            org.json.JSONObject received = values;
+            List<String> local = new ArrayList<>();
+            if (roman) {
+                java.util.HashMap<String, String> readings = new java.util.HashMap<>();
+                for (Lyrics.Line line : display) {
+                    if (Thread.currentThread().isInterrupted()) return;
+                    String reading = extra(received, line.text, "romanization");
+                    if (line.roman.isEmpty() && reading.isEmpty()) {
+                        try {
+                            reading = readings.computeIfAbsent(line.text, text -> LyricExtras.localRomanization(text, original.language));
+                        } catch (RuntimeException unavailable) { reading = ""; }
+                    }
+                    local.add(reading);
+                }
+            }
+            post(() -> {
+                if (closed || !lyricsMode || original != lyrics || extrasRequest != request) return;
+                showExtras(display, received, local, roman, translate, target);
+                boolean missing = false;
+                for (int i = 0; i < display.size(); i++) {
+                    Lyrics.Line line = display.get(i);
+                    if (line.text.trim().isEmpty() || "♪".equals(line.text.trim())) continue;
+                    if ((roman && LyricExtras.nonLatin(line.text) && alternates.get(i).get(0).getVisibility() != VISIBLE)
+                            || (translate && alternates.get(i).get(roman ? 1 : 0).getVisibility() != VISIBLE
+                                && !target.equalsIgnoreCase(original.language))) {
+                        missing = true;
+                    }
+                }
+                if (missing) {
+                    extrasStatus.setText("Some romanization or translation is unavailable.");
+                    extrasStatus.setVisibility(VISIBLE);
+                }
+            });
+        });
+    }
+
+    private void showExtras(List<Lyrics.Line> display, org.json.JSONObject values,
+                            List<String> local, boolean roman, boolean translate, String target) {
+        for (int i = 0; i < display.size(); i++) {
+            Lyrics.Line line = display.get(i);
+            if (roman) {
+                String value = line.roman.isEmpty() ? extra(values, line.text, "romanization") : line.roman;
+                if (value.isEmpty() && i < local.size()) value = local.get(i);
+                showAlternate(alternates.get(i).get(0), value, i == activeLine);
+            }
+            if (translate) {
+                String value = line.translation(target);
+                if (value.isEmpty()) value = extra(values, line.text, "translation");
+                showAlternate(alternates.get(i).get(roman ? 1 : 0), value, i == activeLine);
+            }
+        }
+    }
+
+    private static String extra(org.json.JSONObject values, String text, String key) {
+        org.json.JSONObject entry = values.optJSONObject(text.trim());
+        return entry == null ? "" : entry.optString(key);
+    }
+
+    private static void showAlternate(TextView view, String text, boolean active) {
+        view.setText(text);
+        view.setTextColor(active ? FOREGROUND : MUTED);
+        view.setVisibility(text.isEmpty() ? GONE : VISIBLE);
+    }
+
+    private void cancelExtras() {
+        if (extrasRequest != null) extrasRequest.cancel();
+        if (extrasTask != null) extrasTask.cancel(true);
+        extrasRequest = null;
+        extrasTask = null;
+    }
+
+    void refreshLyricAppearance() {
+        if (lyricsMode && isShown()) render();
     }
 
     void tick(int position) {
@@ -242,17 +360,20 @@ final class NowPlayingView extends LinearLayout {
         if (activeLine == index) return;
         if (activeLine >= 0) {
             TextView last = lines.get(activeLine);
+            if (activeLine < alternates.size()) for (TextView extra : alternates.get(activeLine)) extra.setTextColor(MUTED);
             last.setTextColor(MUTED);
             last.setTypeface(last.getTypeface(), "bold".equals(prefs.text("lyricsWeight", "theme")) ? Typeface.BOLD : Typeface.NORMAL);
         }
         activeLine = index;
         if (index >= 0) {
             TextView line = lines.get(index);
+            if (index < alternates.size()) for (TextView extra : alternates.get(index)) extra.setTextColor(FOREGROUND);
             line.setTextColor(Color.WHITE);
             line.setTypeface(line.getTypeface(), "regular".equals(prefs.text("lyricsWeight", "theme")) ? Typeface.NORMAL : Typeface.BOLD);
             scroll.post(() -> {
-                if (activeLine == index && lyricsMode && line.getParent() == rows) {
-                    int top = Math.max(0, line.getTop() - scroll.getHeight() / 3);
+                if (activeLine == index && lyricsMode && line.getParent() instanceof View
+                        && ((View) line.getParent()).getParent() == rows) {
+                    int top = Math.max(0, ((View) line.getParent()).getTop() - scroll.getHeight() / 3);
                     if (prefs.flag("quickLyrics", false) || profile.ordinal() <= PerformancePolicy.Profile.LITE.ordinal()) scroll.scrollTo(0, top);
                     else scroll.smoothScrollTo(0, top);
                 }
@@ -310,6 +431,7 @@ final class NowPlayingView extends LinearLayout {
     }
 
     void invalidateLyrics() {
+        cancelExtras();
         if (lyricsTask != null) lyricsTask.cancel(true);
         ++lyricsGeneration;
         lyricsTask = null;
@@ -318,6 +440,7 @@ final class NowPlayingView extends LinearLayout {
 
     void close() {
         closed = true;
+        cancelExtras();
         network.shutdownNow();
     }
 

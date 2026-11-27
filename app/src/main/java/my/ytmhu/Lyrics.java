@@ -21,19 +21,37 @@ final class Lyrics {
 
     static final class Line {
         final int millis;
-        final String text;
+        final String text, roman;
+        final java.util.Map<String, String> translations;
 
-        Line(int millis, String text) {
+        Line(int millis, String text) { this(millis, text, null, null); }
+
+        Line(int millis, String text, String roman, java.util.Map<String, String> translations) {
             this.millis = millis;
             this.text = text;
+            this.roman = roman == null ? "" : roman;
+            this.translations = translations == null ? Collections.emptyMap() : translations;
+        }
+
+        String translation(String target) {
+            for (java.util.Map.Entry<String, String> entry : translations.entrySet()) {
+                if (target.equalsIgnoreCase(entry.getKey())) return entry.getValue();
+            }
+            for (java.util.Map.Entry<String, String> entry : translations.entrySet()) {
+                if (target.equalsIgnoreCase(entry.getKey().split("-", 2)[0])) return entry.getValue();
+            }
+            return "";
         }
     }
 
     final List<Line> lines;
     final String plain;
-    final String source;
+    final String source, language;
 
-    private Lyrics(List<Line> lines, String plain, String source) {
+    private Lyrics(List<Line> lines, String plain, String source) { this(lines, plain, source, ""); }
+
+    Lyrics(List<Line> lines, String plain, String source, String language) {
+        this.language = language;
         this.lines = lines;
         this.plain = plain;
         this.source = source;
@@ -43,17 +61,21 @@ final class Lyrics {
         boolean lrclib = prefs.flag("lrclib", true);
         boolean youtube = prefs.flag("ytLyrics", true);
         boolean youtubeFirst = "youtube".equals(prefs.text("lyricsFirst", "lrclib"));
-        if (!lrclib && !youtube) return new Lyrics(Collections.emptyList(), "", "");
+        boolean unison = prefs.flag("unisonLyrics", false);
+        if (!lrclib && !youtube && !unison) return new Lyrics(Collections.emptyList(), "", "");
         boolean failed = false;
-        for (boolean yt : new boolean[]{youtubeFirst, !youtubeFirst}) {
-            if (yt ? !youtube : !lrclib) continue;
+        String first = prefs.text("lyricsFirst", "lrclib");
+        String[] order = "unison".equals(first) ? new String[]{"unison", "lrclib", "youtube"}
+                : youtubeFirst ? new String[]{"youtube", "lrclib", "unison"} : new String[]{"lrclib", "youtube", "unison"};
+        for (String provider : order) {
+            if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+            if ("youtube".equals(provider) ? !youtube : "unison".equals(provider) ? !unison : !lrclib) continue;
             try {
                 Lyrics result;
-                if (yt) {
-                    String plain = new MusicApi(prefs).plainLyrics(track.id);
-                    result = new Lyrics(Collections.emptyList(), plain, "YouTube Music");
-                } else {
-                    result = lrclib(track, duration);
+                switch (provider) {
+                    case "youtube": result = new Lyrics(Collections.emptyList(), new MusicApi(prefs).plainLyrics(track.id), "YouTube Music"); break;
+                    case "unison": result = unison(track, duration); break;
+                    default: result = lrclib(track, duration);
                 }
                 if (result != null && (!result.lines.isEmpty() || !result.plain.isEmpty())) return result;
             } catch (Exception unavailable) {
@@ -62,6 +84,39 @@ final class Lyrics {
         }
         if (failed) throw new IOException("A lyrics source could not be reached.");
         return new Lyrics(Collections.emptyList(), "", "");
+    }
+
+    private static Lyrics unison(MusicApi.Track track, int duration) throws Exception {
+        if (!track.id.matches("[A-Za-z0-9_-]{11}")) return null;
+        String url = "https://unison.betterlyrics.org/lyrics?v=" + track.id
+                + "&song=" + URLEncoder.encode(track.title, "UTF-8") + "&artist=" + URLEncoder.encode(track.artist, "UTF-8")
+                + "&duration=" + Math.max(0, duration / 1000);
+        HttpsURLConnection connection = (HttpsURLConnection) URI.create(url).toURL().openConnection();
+        try {
+            connection.setConnectTimeout(4500);
+            connection.setReadTimeout(5000);
+            connection.setInstanceFollowRedirects(false);
+            if (connection.getResponseCode() == 404) return null;
+            JSONObject data = new JSONObject(MusicApi.read(connection)).optJSONObject("data");
+            if (data == null) return null;
+            String text = data.optString("lyrics");
+            if (text.length() > 512_000) return null;
+            switch (data.optString("format")) {
+                case "ttml": return TtmlLyrics.parse(text);
+                case "lrc": return new Lyrics(parse(text), "", "Unison", data.optString("language"));
+                case "plain": return new Lyrics(Collections.emptyList(), text, "Unison", data.optString("language"));
+                default: return null;
+            }
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    List<Line> displayLines() {
+        if (!lines.isEmpty()) return lines;
+        List<Line> display = new ArrayList<>();
+        for (String line : plain.split("\\r?\\n")) display.add(new Line(-1, line));
+        return display;
     }
 
     private static Lyrics lrclib(MusicApi.Track track, int duration) throws Exception {

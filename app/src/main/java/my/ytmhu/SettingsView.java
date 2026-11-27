@@ -163,6 +163,7 @@ final class SettingsView extends LinearLayout {
             if (host.canRetryAccount()) {
                 action("Account", "Account", "Check current session", "", "Retry", "account-retry");
             }
+            action("Account", "Account", "YouTube Music in browser", "Uses the browser’s separate session.", "Open separately", "account-browser");
             action("Account", "Account", "Sign-in diagnostics", "", "Copy diagnostic", "account-diagnostic");
         }
 
@@ -194,12 +195,26 @@ final class SettingsView extends LinearLayout {
         choice("Lyrics", "Lyrics look", "Line weight", null, "lyricsWeight", "theme",
                 new String[]{"Theme default", "Regular", "Bold"}, new String[]{"theme", "regular", "bold"});
         toggle("Lyrics", "Lyrics look", "Quick line changes", "Jump to the current line instead of scrolling smoothly.", "quickLyrics", false);
+        toggle("Lyrics", "Romanization & Translation", "Romanization",
+                "Show Latin readings when available. Missing lines may be sent to Unison.", "lyricRoman", false);
+        range("Lyrics", "Romanization & Translation", "Romanization size", null,
+                "lyricRomanSize", 75, 50, 125, 5, value -> value + "%");
+        toggle("Lyrics", "Romanization & Translation", "Translation",
+                "Use translations supplied with the lyrics or send missing lines to Unison.", "lyricTranslation", false);
+        choice("Lyrics", "Romanization & Translation", "Translate into", null, "lyricTarget", "en",
+                new String[]{"English", "Bahasa Melayu", "Indonesia", "日本語", "한국어", "简体中文", "Русский"},
+                new String[]{"en", "ms", "id", "ja", "ko", "zh-CN", "ru"});
+        range("Lyrics", "Romanization & Translation", "Translation size", null,
+                "lyricTranslationSize", 75, 50, 125, 5, value -> value + "%");
+        toggle("Lyrics", "Lyrics timing", "Lyrics at the screen’s refresh rate",
+                "Use faster line timing during playback when the effective profile allows it.", "lyricRefresh", false);
         range("Lyrics", "Lyrics timing", "Timing offset", "Positive values show lyrics later.", "lyricsOffset", 0, -5000, 5000, 100, SettingsView::milliseconds);
         range("Lyrics", "Lyrics timing", "Line-synced trim", "Extra offset for line-synced sources.", "lineTrim", 0, -2000, 2000, 100, SettingsView::milliseconds);
         toggle("Lyrics", "Lyrics sources", "LRCLIB", "Line-synced and plain text.", "lrclib", true);
         toggle("Lyrics", "Lyrics sources", "YouTube Music", "Plain text.", "ytLyrics", true);
+        toggle("Lyrics", "Lyrics sources", "Unison", "Line timing and translations supplied with the lyrics when available.", "unisonLyrics", false);
         choice("Lyrics", "Lyrics sources", "Source priority", null, "lyricsFirst", "lrclib",
-                new String[]{"LRCLIB first", "YouTube Music first"}, new String[]{"lrclib", "youtube"});
+                new String[]{"LRCLIB first", "YouTube Music first", "Unison first"}, new String[]{"lrclib", "youtube", "unison"});
 
         choice("Appearance", "Background", "Frosted glass", "Use blurred album artwork behind translucent panels.", "glass",
                 "theme", new String[]{"Theme default", "On", "Off"}, new String[]{"theme", "on", "off"});
@@ -259,7 +274,7 @@ final class SettingsView extends LinearLayout {
 
         action("About", "Updates", "Check now", "Check GitHub for a newer Android APK. Updates are installed through Android.", "Check", "updates");
         action("About", "Updates", "What’s new in " + BuildVersion.VERSION,
-                "Responsive head-unit layout, independent text sizing and adaptive artwork performance.", null, "");
+                "Sign-in recovery, solid playback icons and optional lyric romanization and translation.", null, "");
         action("About", "About", "YTM Head Unit " + BuildVersion.VERSION, "Android port of parts of ytm-rs. Android API 27 and newer.", null, "");
         action("About", "About", "Lyrics", "LRCLIB and YouTube Music.", null, "");
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");

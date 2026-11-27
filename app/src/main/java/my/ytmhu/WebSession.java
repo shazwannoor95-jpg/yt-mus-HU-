@@ -32,6 +32,15 @@ final class WebSession {
                 values.optString("visitor"), values.optString("version"));
     }
 
+    static String loginState(String result) {
+        try {
+            String state = new JSONObject(result == null ? "{}" : result).optString("loggedIn");
+            return "true".equals(state) || "false".equals(state) ? state : "";
+        } catch (JSONException invalid) {
+            return "";
+        }
+    }
+
     static WebSession fromLandingPage(String page) {
         String sync = field(page, "DATASYNC_ID", false);
         if (sync.isEmpty()) sync = field(page, "datasyncId", false);

@@ -104,7 +104,11 @@ public final class Android31Test {
             String selected = MusicApi.MUSIC + "/?authuser=2";
             web.loadUrl(selected);
             web.getWebViewClient().onPageFinished(web, selected);
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
+            // Older pages that cannot report LOGGED_IN require explicit native verification.
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(11));
+            assertTrue(first.isShowing());
+            assertEquals(0, verified.get());
+            text(first.getWindow().getDecorView(), "Continue").performClick();
             assertFalse(first.isShowing());
             assertEquals(1, verified.get());
             assertEquals(Integer.valueOf(2), GoogleSignIn.selection(GoogleSignIn.cookies()).index);
@@ -146,8 +150,12 @@ public final class Android31Test {
             web.getWebViewClient().onPageFinished(web, selected);
             assertTrue(shadowOf(web).getLastEvaluatedJavascript().contains("SESSION_INDEX"));
             assertFalse(shadowOf(web).getLastEvaluatedJavascript().contains("document.cookie"));
+            shadowOf(web).getLastEvaluatedJavascriptCallback().onReceiveValue("{\"loggedIn\":false}");
+            assertEquals(0, verified.get());
+            assertTrue(dialog.isShowing());
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500));
             shadowOf(web).getLastEvaluatedJavascriptCallback().onReceiveValue(
-                    "{\"index\":2,\"sync\":\"test-channel||test-user\",\"visitor\":\"visitor\",\"version\":\"1.20261101.00.00\"}");
+                    "{\"loggedIn\":true,\"index\":2,\"sync\":\"test-channel||test-user\",\"visitor\":\"visitor\",\"version\":\"1.20261101.00.00\"}");
             WebSession context = GoogleSignIn.selection(GoogleSignIn.cookies());
             assertEquals(Integer.valueOf(2), context.index);
             assertEquals("test-channel", context.pageId);

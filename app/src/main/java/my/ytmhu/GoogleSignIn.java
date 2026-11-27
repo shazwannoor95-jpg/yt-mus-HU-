@@ -47,9 +47,9 @@ final class GoogleSignIn {
     private static final String MUSIC_CONTEXT = "(function(){function read(k){"
             + "var v=window.ytcfg&&typeof window.ytcfg.get==='function'?window.ytcfg.get(k):undefined;"
             + "if(v==null&&window.yt&&window.yt.config_)v=window.yt.config_[k];"
-            + "return typeof v==='number'||typeof v==='string'?String(v):'';}"
+            + "return typeof v==='number'||typeof v==='string'||typeof v==='boolean'?String(v):'';}"
             + "return {index:read('SESSION_INDEX'),sync:read('DATASYNC_ID')||read('datasyncId'),"
-            + "visitor:read('VISITOR_DATA'),version:read('INNERTUBE_CLIENT_VERSION')};})()";
+            + "visitor:read('VISITOR_DATA'),version:read('INNERTUBE_CLIENT_VERSION'),loggedIn:read('LOGGED_IN')};})()";
 
     private static boolean signingOut;
     private static String selectionCookies = "";
@@ -235,6 +235,15 @@ final class GoogleSignIn {
         }
     }
 
+    static String webViewAdvice(String version) {
+        String major = version.split("\\.", 2)[0];
+        if (!major.matches("[0-9]{1,3}") || Integer.parseInt(major) >= 100) return "";
+        return "Android System WebView " + version
+                + " is old. Update the system WebView provider if your firmware offers an update, or use Open separately.";
+    }
+
+    static String webViewAdvice() { return webViewAdvice(webViewVersion()); }
+
     private static String playServices(Activity activity) {
         try {
             return activity.getPackageManager().getApplicationInfo("com.google.android.gms", 0).enabled
@@ -330,11 +339,12 @@ final class GoogleSignIn {
         jar.setAcceptCookie(true);
         // Google and YouTube are separate sites in this dedicated sign-in WebView.
         jar.setAcceptThirdPartyCookies(web, true);
+        Handler main = new Handler(Looper.getMainLooper());
         web.setWebViewClient(new WebViewClient() {
-            private final Handler main = new Handler(Looper.getMainLooper());
             private boolean interrupted;
             private String mainPage = GOOGLE_LOGIN;
             private int pageRevision;
+            private String pageLoginState = "";
 
             private void clearMessage() {
                 interrupted = false;
@@ -346,7 +356,8 @@ final class GoogleSignIn {
 
             private void showMessage(String message, Uri navigation, String result, String detail, String fallback) {
                 interrupted = true;
-                status.setText(message);
+                String advice = webViewAdvice();
+                status.setText(advice.isEmpty() ? message : message + "\n" + advice);
                 status.setVisibility(View.VISIBLE);
                 recovery.setVisibility(View.VISIBLE);
                 continuation.setVisibility(fallback == null ? View.GONE : View.VISIBLE);
@@ -428,30 +439,72 @@ final class GoogleSignIn {
             }
 
             @Override public void onPageFinished(WebView view, String url) {
-                if (interrupted || !dialog.isShowing() || !isMusicReturn(url) || !url.equals(view.getUrl())
-                        || !MusicApi.hasSession(cookies())) return;
+                if (interrupted || !dialog.isShowing() || !isMusicReturn(url) || !url.equals(view.getUrl())) return;
                 int revision = ++pageRevision;
-                String hint = Uri.parse(url).getQueryParameter("authuser");
-                java.util.function.Consumer<String> complete = context -> {
-                    if (interrupted || revision != pageRevision || !dialog.isShowing() || !url.equals(view.getUrl())) return;
-                    String session = cookies();
-                    if (!MusicApi.hasSession(session)) return;
-                    rememberSelection(session, WebSession.fromWebView(context, hint));
-                    jar.flush();
-                    dialog.dismiss();
-                    verify.run();
+                pageLoginState = "";
+                checkSession(view, url, revision, 0);
+            }
+
+            private boolean current(WebView view, String url, int revision) {
+                return !interrupted && revision == pageRevision && dialog.isShowing() && url.equals(view.getUrl());
+            }
+
+            private void checkSession(WebView view, String url, int revision, int attempt) {
+                if (!current(view, url, revision)) return;
+                // The return page can finish before its sign-in configuration or cookies arrive.
+                boolean[] resolved = {false};
+                Runnable noResult = () -> {
+                    resolved[0] = true;
+                    checkResult(view, url, revision, attempt, null);
                 };
-                Runnable fallback = () -> complete.accept(null);
-                main.postDelayed(fallback, 1500);
-                view.evaluateJavascript(MUSIC_CONTEXT, context -> {
-                    main.removeCallbacks(fallback);
-                    complete.accept(context);
+                main.postDelayed(noResult, 1250);
+                view.evaluateJavascript(MUSIC_CONTEXT, result -> {
+                    if (resolved[0]) return;
+                    resolved[0] = true;
+                    main.removeCallbacks(noResult);
+                    checkResult(view, url, revision, attempt, result);
                 });
+            }
+
+            private void checkResult(WebView view, String url, int revision, int attempt, String result) {
+                if (!current(view, url, revision)) return;
+                String session = cookies();
+                String state = WebSession.loginState(result);
+                if (!state.isEmpty()) pageLoginState = state;
+                if ("true".equals(state) && MusicApi.hasSession(session)) {
+                    finishSession(url, result, session);
+                } else if (attempt < 5) {
+                    main.postDelayed(() -> checkSession(view, url, revision, attempt + 1), 500);
+                } else {
+                    boolean canVerify = pageLoginState.isEmpty() && MusicApi.hasSession(session);
+                    showMessage(canVerify
+                                    ? "This WebView did not report a sign-in state. Tap Continue to check with YouTube Music."
+                                    : "YouTube Music did not establish a signed-in session. Choose an account or restart sign-in.",
+                            Uri.parse(url), "WebView session not confirmed",
+                            canVerify ? "WEBVIEW_STATE_MISSING" : "false".equals(pageLoginState) ? "WEBVIEW_SIGNED_OUT" : "WEBVIEW_SESSION_MISSING",
+                            null);
+                    if (canVerify) {
+                        continuation.setVisibility(View.VISIBLE);
+                        continuation.setOnClickListener(button -> {
+                            String latest = cookies();
+                            if (revision == pageRevision && dialog.isShowing() && url.equals(view.getUrl())
+                                    && MusicApi.hasSession(latest)) finishSession(url, result, latest);
+                        });
+                    }
+                }
+            }
+
+            private void finishSession(String url, String context, String session) {
+                rememberSelection(session, WebSession.fromWebView(context, Uri.parse(url).getQueryParameter("authuser")));
+                jar.flush();
+                dialog.dismiss();
+                verify.run();
             }
         });
         panel.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
         dialog.setContentView(panel);
         dialog.setOnDismissListener(ignored -> {
+            main.removeCallbacksAndMessages(null);
             panel.removeView(web);
             web.destroy();
         });

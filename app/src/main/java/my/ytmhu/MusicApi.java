@@ -306,10 +306,13 @@ final class MusicApi {
         JSONObject context = child(result, "responseContext");
         Object loggedOut = child(context, "mainAppWebResponseContext").opt("loggedOut");
         if (Boolean.TRUE.equals(loggedOut)) return SessionState.SIGNED_OUT;
-        boolean signedIn = Boolean.FALSE.equals(loggedOut);
+        if (Boolean.FALSE.equals(loggedOut)) return SessionState.SIGNED_IN;
+        boolean signedIn = false;
         JSONArray tracking = array(context, "serviceTrackingParams");
         for (int i = 0; i < tracking.length(); i++) {
-            JSONArray params = array(item(tracking, i), "params");
+            JSONObject service = item(tracking, i);
+            if (!"GFEEDBACK".equals(service.optString("service"))) continue;
+            JSONArray params = array(service, "params");
             for (int j = 0; j < params.length(); j++) {
                 JSONObject param = item(params, j);
                 if (!"logged_in".equals(param.optString("key"))) continue;

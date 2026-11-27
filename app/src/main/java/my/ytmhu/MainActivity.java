@@ -72,7 +72,7 @@ public final class MainActivity extends Activity {
     private FrostedBackdrop miniBackdrop;
     private ImageView miniArtwork;
     private TextView miniTitle, miniArtist;
-    private Button miniPrevious, miniPlay, miniNext, miniLike, miniDislike, expandedButton;
+    private Button miniPrevious, miniNext, miniLike, miniDislike, expandedButton;
     private SeekBar miniSeek;
     private boolean miniSeeking;
     private long volumeRefreshed;
@@ -135,7 +135,8 @@ public final class MainActivity extends Activity {
     }
     private TextView nowPlaying, playerStatus, playbackTime;
     private Button home, explore, library, liked, settings, accountButton, sideAccount;
-    private Button previous, play, next, shuffle, repeat;
+    private Button previous, next, shuffle, repeat;
+    private PlayPauseButton play, miniPlay;
     private SeekBar seek;
     private boolean seeking;
 
@@ -145,11 +146,39 @@ public final class MainActivity extends Activity {
             if (inlineVolume != null && android.os.SystemClock.uptimeMillis() - volumeRefreshed >= 1000) {
                 syncVolume();
             }
+            syncLyricFrames();
             boolean lyricsVisible = expanded.getVisibility() == View.VISIBLE && expanded.lyricsVisible();
-            if (lyricsVisible) expanded.tick(playback == null ? 0 : playback.position());
+            if (lyricsVisible && !lyricFramesRunning) expanded.tick(playback == null ? 0 : playback.position());
             main.postDelayed(this, lyricsVisible ? 250 : performance.profile().clockMs);
         }
     };
+
+    private boolean lyricFramesRunning;
+    private long lastLyricFrame;
+    private final android.view.Choreographer.FrameCallback lyricFrame = this::updateLyricFrame;
+
+    private void syncLyricFrames() {
+        boolean active = bound && playback != null && playback.playing()
+                && expanded.getVisibility() == View.VISIBLE && expanded.lyricsVisible() && expanded.hasTimedLyrics()
+                && prefs.flag("lyricRefresh", false) && performance.profile().ordinal() >= PerformancePolicy.Profile.BALANCED.ordinal();
+        if (active == lyricFramesRunning) return;
+        lyricFramesRunning = active;
+        android.view.Choreographer choreographer = android.view.Choreographer.getInstance();
+        if (active) {
+            lastLyricFrame = 0;
+            choreographer.postFrameCallback(lyricFrame);
+        } else choreographer.removeFrameCallback(lyricFrame);
+    }
+
+    private void updateLyricFrame(long nanos) {
+        if (!lyricFramesRunning) return;
+        long interval = performance.profile() == PerformancePolicy.Profile.BALANCED ? 32_000_000 : 16_000_000;
+        if (nanos - lastLyricFrame >= interval) {
+            lastLyricFrame = nanos;
+            expanded.tick(playback.position());
+        }
+        android.view.Choreographer.getInstance().postFrameCallback(lyricFrame);
+    }
 
     private final ServiceConnection connection = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName name, IBinder binder) {
@@ -363,7 +392,7 @@ public final class MainActivity extends Activity {
 
         if (!viewport.compactPlayer) shuffle = transport(bar, Icons.SHUFFLE, "Shuffle", this::toggleShuffle);
         previous = transport(bar, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); });
-        play = transport(bar, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); }, 52);
+        play = playButton(bar, 52);
         if (!appearance.barePlay) {
             play.setBackground(new android.graphics.drawable.RippleDrawable(
                     android.content.res.ColorStateList.valueOf(0x40666666),
@@ -483,7 +512,7 @@ public final class MainActivity extends Activity {
             miniDislike = transport(controls, Icons.THUMBS_DOWN, "Dislike song", () -> rateCurrent("dislike", "Disliked"));
         }
         miniPrevious = transport(controls, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); });
-        miniPlay = transport(controls, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); });
+        miniPlay = playButton(controls, Viewport.TOUCH);
         miniNext = transport(controls, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); });
         if (full) transport(controls, Icons.VOLUME, "Media volume", this::showVolume);
         else {
@@ -600,6 +629,7 @@ public final class MainActivity extends Activity {
         if (bound) unbindService(connection);
         playback = null;
         bound = false;
+        syncLyricFrames();
         super.onStop();
     }
 
@@ -980,7 +1010,9 @@ public final class MainActivity extends Activity {
             @Override public String accountDescription() {
                 if (refreshingAccount) return "Checking account…";
                 if (!account.isEmpty()) return "Signed in with Google.";
-                return accountError.isEmpty() ? "Sign in to see your home feed and playlists." : accountError;
+                if (accountError.isEmpty()) return "Sign in to see your home feed and playlists.";
+                String advice = GoogleSignIn.webViewAdvice();
+                return advice.isEmpty() ? accountError : accountError + "\n" + advice;
             }
             @Override public boolean checkingAccount() { return refreshingAccount; }
             @Override public boolean signedIn() { return !account.isEmpty(); }
@@ -1012,7 +1044,10 @@ public final class MainActivity extends Activity {
             case "performance":
                 performance.choose(prefs.text("performance", "AUTO"));
                 return;
-            case "lrclib": case "ytLyrics": case "lyricsFirst":
+            case "lyricRoman": case "lyricRomanSize": case "lyricTranslation": case "lyricTranslationSize": case "lyricTarget":
+                expanded.refreshLyricAppearance();
+                break;
+            case "lrclib": case "ytLyrics": case "unisonLyrics": case "lyricsFirst":
                 expanded.invalidateLyrics();
                 break;
             case "balance": case "normalization": case "equalizer": case "speed": case "speedEnabled": case "keepPitch": case "eqPreset":
@@ -1037,6 +1072,7 @@ public final class MainActivity extends Activity {
         switch (action) {
             case "account": if (account.isEmpty()) openAccount(); else signOut(); break;
             case "account-retry": verifyAccount(); break;
+            case "account-browser": GoogleSignIn.openSeparately(this); break;
             case "account-diagnostic":
                 if (!accountErrorCode.isEmpty()) {
                     GoogleSignIn.copyDiagnostic(this, Uri.parse(MusicApi.MUSIC), "account verification failed", accountErrorCode);
@@ -1330,6 +1366,7 @@ public final class MainActivity extends Activity {
         browser.setVisibility(View.GONE);
         expanded.setVisibility(View.VISIBLE);
         expanded.show(playback, lyrics);
+        syncLyricFrames();
     }
 
     private void closePlayer() {
@@ -1339,6 +1376,7 @@ public final class MainActivity extends Activity {
         }
         expanded.setVisibility(View.GONE);
         browser.setVisibility(View.VISIBLE);
+        syncLyricFrames();
     }
 
     private SeekBar volumeSlider() {
@@ -1572,9 +1610,8 @@ public final class MainActivity extends Activity {
         next.setEnabled(playback != null && playback.canSkip(1));
         play.setEnabled(playback != null && playback.canPlay());
         boolean playing = playback != null && playback.playing();
-        play.setText(playing ? Icons.PAUSE : Icons.PLAY);
-        miniPlay.setText(playing ? Icons.PAUSE : Icons.PLAY);
-        miniPlay.setContentDescription(playing ? "Pause" : "Play");
+        play.showPlaying(playing);
+        miniPlay.showPlaying(playing);
         miniPlay.setEnabled(play.isEnabled());
         MusicApi.Track song = playback == null ? null : playback.currentTrack();
         miniTitle.setText(song == null ? "Now playing" : song.title);
@@ -1583,10 +1620,10 @@ public final class MainActivity extends Activity {
         miniNext.setEnabled(next.isEnabled());
         if (miniLike != null) miniLike.setEnabled(song != null);
         if (miniDislike != null) miniDislike.setEnabled(song != null);
-        play.setContentDescription(playing ? "Pause" : "Play");
         if (shuffle != null) shuffle.setTextColor(playback != null && playback.isShuffle() ? accent() : INK);
         if (repeat != null) repeat.setTextColor(playback != null && playback.isRepeat() ? accent() : INK);
         if (expanded.getVisibility() == View.VISIBLE) expanded.update(playback);
+        syncLyricFrames();
         renderProgress();
     }
 
@@ -1658,6 +1695,14 @@ public final class MainActivity extends Activity {
         return button;
     }
 
+    private PlayPauseButton playButton(LinearLayout row, int target) {
+        PlayPauseButton button = new PlayPauseButton(this);
+        button.setTextColor(INK);
+        button.setOnClickListener(view -> { if (playback != null) playback.toggle(); });
+        addTransport(row, button, target);
+        return button;
+    }
+
     private Button transport(LinearLayout row, String title, String description, Runnable action) {
         return transport(row, title, description, action, viewport.target);
     }
@@ -1667,11 +1712,16 @@ public final class MainActivity extends Activity {
         button.setPadding(0, 0, 0, 0);
         button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 22);
         button.setTypeface(appearance.icons);
+        button.setContentDescription(description);
+        addTransport(row, button, target);
+        return button;
+    }
+
+    private void addTransport(LinearLayout row, Button button, int target) {
+        button.setGravity(Gravity.CENTER);
         button.setBackground(new android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf(0x48ffffff), null, shape(Color.WHITE, 22)));
-        button.setContentDescription(description);
         row.addView(button, new LinearLayout.LayoutParams(dp(target), dp(target)));
-        return button;
     }
 
     private Button button(String title, Runnable action) {

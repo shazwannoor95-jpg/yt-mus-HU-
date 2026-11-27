@@ -190,6 +190,7 @@ public final class Android31Test {
                 assertEquals("Second song", service.queueSnapshot().get(0).title);
 
                 player.show(service, false);
+                AdaptiveUiTest.layout(player, 640, 350);
                 Button lyrics = (Button) text(player, "Lyrics");
                 Button queue = (Button) text(player, "Up next");
                 assertTrue(queue.isSelected());

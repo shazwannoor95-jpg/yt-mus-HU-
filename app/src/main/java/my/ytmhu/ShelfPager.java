@@ -21,18 +21,21 @@ final class ShelfPager extends LinearLayout {
     private final Cell cell;
     private final LinearLayout cells;
     private final Button previous, next;
-    private int first, columns = 1;
+    private int first, columns = 1, measuredWidth;
+    private final int[] savedStart;
     private float downX, downY;
     private boolean horizontalDrag;
 
     ShelfPager(Context context, Viewport viewport, String title, int count, int preferredDp,
-               int colour, Typeface font, Cell cell) {
+               int colour, Typeface font, int[] savedStart, Cell cell) {
         super(context);
         this.viewport = viewport;
         this.count = count;
+        this.savedStart = savedStart;
+        first = savedStart[0];
         preferred = dp(preferredDp);
-        maximum = dp(preferredDp > 200 ? 320 : 166);
-        gap = dp(viewport.shortScreen ? 6 : 10);
+        maximum = dp(preferredDp > 200 ? 340 : Math.max(180, preferredDp));
+        gap = dp(viewport.gap);
         slop = ViewConfiguration.get(context).getScaledTouchSlop();
         this.cell = cell;
         setOrientation(VERTICAL);
@@ -42,27 +45,32 @@ final class ShelfPager extends LinearLayout {
         heading.setText(title);
         heading.setTextColor(colour);
         heading.setTypeface(font, Typeface.BOLD);
-        heading.setTextSize(viewport.shortScreen ? 18 : 21);
+        heading.setTextSize(viewport.sectionSp);
         heading.setPadding(dp(2), dp(4), dp(4), dp(4));
         header.addView(heading, new LayoutParams(0, -2, 1));
         previous = arrow("‹", "Previous " + title, () -> step(-1), colour);
         next = arrow("›", "Next " + title, () -> step(1), colour);
-        header.addView(previous, new LayoutParams(dp(48), dp(44)));
-        header.addView(next, new LayoutParams(dp(48), dp(44)));
+        header.addView(previous, new LayoutParams(dp(Viewport.TOUCH), dp(Viewport.TOUCH)));
+        header.addView(next, new LayoutParams(dp(Viewport.TOUCH), dp(Viewport.TOUCH)));
         addView(header);
         cells = new LinearLayout(context);
         addView(cells, new LayoutParams(-1, -2));
     }
 
-    @Override protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
-        super.onSizeChanged(width, height, oldWidth, oldHeight);
-        if (width > 0 && width != oldWidth) post(() -> render(getWidth()));
+    @Override protected void onMeasure(int widthSpec, int heightSpec) {
+        int width = MeasureSpec.getSize(widthSpec);
+        if (width != measuredWidth && width > 0) {
+            measuredWidth = width;
+            render(width);
+        }
+        super.onMeasure(widthSpec, heightSpec);
     }
 
     private void step(int delta) {
         int requested = first + delta * columns;
         if (requested >= count || requested < 0) return;
         first = requested;
+        savedStart[0] = first;
         render(getWidth());
     }
 

@@ -18,6 +18,14 @@ final class AppSettings {
     void set(String key, int value) { values.edit().putInt(key, value).apply(); }
     void set(String key, String value) { values.edit().putString(key, value).apply(); }
 
+    String sidebar() {
+        return text("sidebar", flag("collapseSidebar", false) ? "rail" : "auto");
+    }
+
+    void resetLayout() {
+        values.edit().remove("layoutDensity").remove("sidebar").remove("collapseSidebar").remove("zoom").apply();
+    }
+
     String language() { return text("songLanguage", "en"); }
     String country() { return text("songCountry", "MY"); }
     float speed() { return flag("speedEnabled", false) ? number("speed", 100) / 100f : 1f; }

@@ -44,6 +44,10 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.function.Supplier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -55,6 +59,11 @@ public final class MainActivity extends Activity {
     private AppSettings prefs;
     private Appearance appearance;
     private Viewport viewport;
+    private DevicePerformance performance;
+    private String restoredPlayer = "";
+    private Runnable cancelPlayerArtwork = () -> {};
+    private long lastDisplayedSecond = -1;
+    private int lastDisplayedDuration = -1;
     private FrostedBackdrop backdrop;
     private LinearLayout musicSearchBar;
     private ImageView playerArtwork;
@@ -76,7 +85,7 @@ public final class MainActivity extends Activity {
     private FrameLayout paneContent;
     private SettingsView settingsView;
     private String settingsTab = "Account";
-    private final Artwork artwork = new Artwork();
+    private Artwork artwork;
     private PlaybackService playback;
     private MusicApi.Track pendingDownload;
     private final ExecutorService downloads = Executors.newSingleThreadExecutor();
@@ -93,13 +102,39 @@ public final class MainActivity extends Activity {
     private String page = "Home";
     private Browse.Search searchType = Browse.Search.Songs;
     private String collectionId = "";
+    private String collectionTitle = "";
     private String mood = "";
     private Dialog signInDialog;
     private EditText query;
-    private ScrollView scroll;
-    private LinearLayout results, sidebarPlaylists;
+    private PageRows scroll;
+    private final List<Supplier<View>> results = new ArrayList<>();
+    private LinearLayout sidebarPlaylists;
+    private List<Browse.Card> sidebarItems = Collections.emptyList();
+    private int browseRow, browseOffset;
+    private String browseKey = "";
+    private final Map<String, BrowsePage> pages = new LinkedHashMap<>(6, 0.75f, true);
+
+    private static final class BrowsePage {
+        final List<Browse.Shelf> shelves;
+        final List<Browse.Mood> moods;
+        final List<MusicApi.Track> tracks;
+        final long loaded = android.os.SystemClock.uptimeMillis();
+        int row, offset;
+        final List<int[]> shelfStarts = new ArrayList<>();
+
+        BrowsePage(List<Browse.Shelf> shelves, List<Browse.Mood> moods, List<MusicApi.Track> tracks) {
+            this.shelves = shelves;
+            this.moods = moods;
+            this.tracks = tracks;
+        }
+
+        int[] shelfStart(int index) {
+            while (shelfStarts.size() <= index) shelfStarts.add(new int[1]);
+            return shelfStarts.get(index);
+        }
+    }
     private TextView nowPlaying, playerStatus, playbackTime;
-    private Button home, explore, library, settings, accountButton, sideAccount;
+    private Button home, explore, library, liked, settings, accountButton, sideAccount;
     private Button previous, play, next, shuffle, repeat;
     private SeekBar seek;
     private boolean seeking;
@@ -110,10 +145,9 @@ public final class MainActivity extends Activity {
             if (inlineVolume != null && android.os.SystemClock.uptimeMillis() - volumeRefreshed >= 1000) {
                 syncVolume();
             }
-            if (expanded.getVisibility() == View.VISIBLE) {
-                expanded.tick(playback == null ? 0 : playback.position());
-            }
-            main.postDelayed(this, 250);
+            boolean lyricsVisible = expanded.getVisibility() == View.VISIBLE && expanded.lyricsVisible();
+            if (lyricsVisible) expanded.tick(playback == null ? 0 : playback.position());
+            main.postDelayed(this, lyricsVisible ? 250 : performance.profile().clockMs);
         }
     };
 
@@ -122,6 +156,10 @@ public final class MainActivity extends Activity {
             playback = ((PlaybackService.LocalBinder) binder).service();
             playback.changed = MainActivity.this::renderPlayer;
             renderPlayer();
+            String restore = restoredPlayer;
+            restoredPlayer = "";
+            if ("mini".equals(restore)) toggleMiniPlayer();
+            else if (!restore.isEmpty()) openPlayer("lyrics".equals(restore));
         }
         @Override public void onServiceDisconnected(ComponentName name) {
             playback = null;
@@ -140,18 +178,17 @@ public final class MainActivity extends Activity {
         super.onCreate(savedState);
         prefs = new AppSettings(this);
         appearance = new Appearance(this, prefs);
-        Configuration config = getResources().getConfiguration();
-        float density = getResources().getDisplayMetrics().density;
-        int width = config.screenWidthDp > 0 ? config.screenWidthDp :
-                Math.round(getResources().getDisplayMetrics().widthPixels / density);
-        int height = config.screenHeightDp > 0 ? config.screenHeightDp :
-                Math.round(getResources().getDisplayMetrics().heightPixels / density);
-        viewport = new Viewport(width, height, config.fontScale, prefs.flag("collapseSidebar", false));
+        viewport = Viewport.current(this, prefs);
+        performance = new DevicePerformance(this, prefs.text("performance", "AUTO"), this::applyPerformance);
+        artwork = new Artwork(this);
         api = new MusicApi(prefs);
         page = prefs.text("openOn", "Home");
         if (savedState != null) {
             settingsTab = savedState.getString("settingsTab", "Account");
             settingsScroll = savedState.getInt("settingsScroll");
+            browseRow = savedState.getInt("browseRow");
+            browseOffset = savedState.getInt("browseOffset");
+            restoredPlayer = savedState.getString("playerPanel", "");
         }
         LinearLayout root = column();
         if (appearance.glass) {
@@ -188,27 +225,39 @@ public final class MainActivity extends Activity {
 
         LinearLayout brand = new LinearLayout(this);
         brand.setGravity(Gravity.CENTER_VERTICAL);
-        brand.setPadding(dp(8), 0, 0, 0);
-        ImageView icon = new ImageView(this);
-        icon.setImageResource(AppIcons.drawable(this, prefs.text("appIcon", "classic")));
-        brand.addView(icon, new LinearLayout.LayoutParams(dp(26), dp(26)));
-        TextView wordmark = label("Music", 23, INK);
-        wordmark.setTypeface(appearance.font, Typeface.BOLD);
-        if (!collapsed) brand.addView(wordmark);
-        navigationList.addView(brand, new LinearLayout.LayoutParams(-1, dp(viewport.shortScreen ? 42 : 49)));
+        Button sidebarToggle = transport(brand, "☰", collapsed ? "Expand navigation" : "Collapse navigation", () -> {
+            if (viewport.drawerSidebar) showNavigationDrawer();
+            else {
+                prefs.set("sidebar", viewport.iconRail() ? "expanded" : "rail");
+                recreate();
+            }
+        });
+        sidebarToggle.setTypeface(appearance.font);
+        if (!collapsed) {
+            ImageView icon = new ImageView(this);
+            icon.setImageResource(AppIcons.drawable(this, prefs.text("appIcon", "classic")));
+            brand.addView(icon, new LinearLayout.LayoutParams(dp(26), dp(26)));
+            TextView wordmark = label("Music", 19, INK);
+            wordmark.setTypeface(appearance.font, Typeface.BOLD);
+            brand.addView(wordmark, new LinearLayout.LayoutParams(0, -2, 1));
+        } else {
+            brand.setGravity(Gravity.CENTER);
+        }
+        navigationList.addView(brand, new LinearLayout.LayoutParams(-1, dp(Viewport.TOUCH)));
         home = navigation(navigationList, "Home", () -> navigate("Home"));
         explore = navigation(navigationList, "Explore", () -> navigate("Explore"));
         library = navigation(navigationList, "Library", () -> navigate("Library"));
         sideAccount = navigation(navigationList, "Sign in", this::openAccount);
+        liked = navigation(navigationList, "Liked Music", this::openLiked);
+        setNavIcon(liked, Icons.HEART, "Liked Music", collapsed);
         sidebarPlaylists = column();
         navigationList.addView(sidebarPlaylists);
         settings = navigation(side, "Settings", () -> navigate("Account"));
         if (collapsed) {
-            for (Button control : new Button[]{home, explore, library, sideAccount, settings}) {
+            for (Button control : new Button[]{home, explore, library, sideAccount, liked, settings}) {
                 control.setGravity(Gravity.CENTER);
                 control.setPadding(0, 0, 0, 0);
             }
-            sidebarPlaylists.setVisibility(View.GONE);
         }
 
         LinearLayout mainPane = column();
@@ -222,7 +271,7 @@ public final class MainActivity extends Activity {
         searchBar.setGravity(Gravity.CENTER_VERTICAL);
         query = new EditText(this);
         query.setSingleLine();
-        query.setTextSize(viewport.shortScreen ? 15 : 17);
+        query.setTextSize(viewport.songSp);
         query.setTypeface(appearance.font);
         query.setHint("Search songs, albums, artists");
         query.setPadding(dp(16), 0, dp(12), 0);
@@ -233,32 +282,31 @@ public final class MainActivity extends Activity {
             search();
             return true;
         });
-        searchBar.addView(query, new LinearLayout.LayoutParams(0, dp(44), 1));
-        boolean smallSearch = viewport.width < 720;
+        searchBar.addView(query, new LinearLayout.LayoutParams(0, dp(Viewport.TOUCH), 1));
+        boolean smallSearch = viewport.width < 780;
         Button submit = button(smallSearch ? Icons.SEARCH : "Search", this::search);
         if (smallSearch) submit.setTypeface(appearance.icons);
         submit.setContentDescription("Search");
-        searchBar.addView(submit, spacedWidth(smallSearch ? 48 : 80, 44));
+        searchBar.addView(submit, spacedWidth(smallSearch ? 48 : 78, Viewport.TOUCH));
         accountButton = button("Sign in", this::openAccount);
-        searchBar.addView(accountButton, spacedWidth(smallSearch ? 48 : 99, 44));
-        mainPane.addView(searchBar, new LinearLayout.LayoutParams(-1, dp(viewport.shortScreen ? 49 : 54)));
+        searchBar.addView(accountButton, spacedWidth(smallSearch ? 48 : 96, Viewport.TOUCH));
+        mainPane.addView(searchBar, new LinearLayout.LayoutParams(-1, dp(viewport.shortScreen ? 50 : 54)));
 
         paneContent = new FrameLayout(this);
         mainPane.addView(paneContent, new LinearLayout.LayoutParams(-1, 0, 1));
-        scroll = new ScrollView(this);
-        scroll.setFillViewport(false);
-        results = column();
-        results.setPadding(0, dp(3), 0, dp(8));
-        scroll.addView(results);
+        scroll = new PageRows(this);
+        scroll.setPadding(0, dp(3), 0, dp(viewport.gutter));
         paneContent.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
 
         root.addView(playerBar(), new LinearLayout.LayoutParams(-1, dp(viewport.playerHeight)));
+        applyPerformance();
         root.requestFocus();
         renderPlayer();
         if (savedState != null) {
             page = savedState.getString("page", "Home");
             query.setText(savedState.getString("query", ""));
             collectionId = savedState.getString("collectionId", "");
+            collectionTitle = savedState.getString("collectionTitle", "");
             mood = savedState.getString("mood", "");
             searchType = Browse.Search.valueOf(savedState.getString("searchType", "Songs"));
             Bundle song = savedState.getBundle("download");
@@ -275,99 +323,118 @@ public final class MainActivity extends Activity {
     private LinearLayout playerBar() {
         LinearLayout player = column();
         player.setBackgroundColor(appearance.panel(appearance.window, appearance.barAlpha));
+        android.view.View progressRule = new View(this);
+        progressRule.setBackgroundColor(0x27ffffff);
+        player.addView(progressRule, new LinearLayout.LayoutParams(-1, dp(1)));
+
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(viewport.shortScreen ? 4 : 9), 0, dp(4), 0);
+        bar.setPadding(dp(6), 0, dp(6), 0);
+        boolean separateMetadata = viewport.width < 430;
+        LinearLayout metadata = new LinearLayout(this);
+        metadata.setGravity(Gravity.CENTER_VERTICAL);
+        metadata.setPadding(dp(3), 0, dp(4), 0);
+        if (separateMetadata) player.addView(metadata, new LinearLayout.LayoutParams(-1, dp(Viewport.TOUCH)));
+        else bar.addView(metadata, new LinearLayout.LayoutParams(0, -1, 1));
         player.addView(bar, new LinearLayout.LayoutParams(-1, 0, 1));
-        LinearLayout utility = viewport.twoLinePlayer ? new LinearLayout(this) : bar;
-        if (viewport.twoLinePlayer) {
-            utility.setGravity(Gravity.CENTER_VERTICAL);
-            utility.setPadding(dp(4), 0, dp(4), 0);
-            player.addView(utility, new LinearLayout.LayoutParams(-1, dp(38)));
-        }
-        if (viewport.width >= 485) {
-            playerArtwork = cover("");
-            playerArtwork.setVisibility(View.GONE);
-            playerArtwork.setOnClickListener(view -> openPlayer(false));
-            playerArtwork.setContentDescription("Open Now Playing");
-            bar.addView(playerArtwork, new LinearLayout.LayoutParams(dp(38), dp(38)));
-        }
 
+        playerArtwork = cover("");
+        playerArtwork.setVisibility(View.GONE);
+        metadata.addView(playerArtwork, new LinearLayout.LayoutParams(dp(42), dp(42)));
         LinearLayout information = column();
         information.setGravity(Gravity.CENTER_VERTICAL);
-        nowPlaying = label("Now playing", viewport.shortScreen ? 13 : 15, INK);
-        playerStatus = label("", viewport.shortScreen ? 11 : 13, MUTED);
+        nowPlaying = label("Now playing", viewport.songSp, INK);
+        playerStatus = label("", viewport.metadataSp, MUTED);
         nowPlaying.setPadding(dp(5), 0, dp(4), 0);
-        nowPlaying.setIncludeFontPadding(false);
         playerStatus.setPadding(dp(5), 0, dp(4), 0);
+        nowPlaying.setIncludeFontPadding(false);
         playerStatus.setIncludeFontPadding(false);
-        nowPlaying.setOnClickListener(view -> toggleExpanded());
-        nowPlaying.setOnLongClickListener(view -> {
+        metadata.setOnClickListener(view -> {
+            if (playback != null && playback.requiresSignIn() && account.isEmpty()) openAccount();
+            else toggleExpanded();
+        });
+        metadata.setOnLongClickListener(view -> {
             showCurrentSongMenu(view);
             return playback != null && playback.currentTrack() != null;
         });
         information.addView(nowPlaying);
         information.addView(playerStatus);
-        bar.addView(information, new LinearLayout.LayoutParams(0, -1, 1.55f));
-        if (!viewport.compactPlayer) {
-            if (viewport.width >= 1100) {
-                transport(bar, Icons.HEART, "Like song", () -> rateCurrent("like", "Liked"));
-                transport(bar, Icons.THUMBS_DOWN, "Dislike song", () -> rateCurrent("dislike", "Disliked"));
-            }
-            Button songActions = transport(bar, Icons.MORE, "Song options", null);
-            songActions.setOnClickListener(this::showCurrentSongMenu);
-        }
+        metadata.addView(information, new LinearLayout.LayoutParams(0, -2, 1));
 
-        shuffle = transport(bar, Icons.SHUFFLE, "Shuffle", this::toggleShuffle);
+        if (!viewport.compactPlayer) shuffle = transport(bar, Icons.SHUFFLE, "Shuffle", this::toggleShuffle);
         previous = transport(bar, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); });
-        play = transport(bar, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); });
-        int inset = dp((viewport.target - 36) / 2);
+        play = transport(bar, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); }, 52);
         if (!appearance.barePlay) {
             play.setBackground(new android.graphics.drawable.RippleDrawable(
                     android.content.res.ColorStateList.valueOf(0x40666666),
-                    new android.graphics.drawable.InsetDrawable(shape(INK, 22), inset), null));
+                    new android.graphics.drawable.InsetDrawable(shape(INK, 28), dp(3)), null));
             play.setTextColor(0xff141119);
         }
         next = transport(bar, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); });
-        repeat = transport(bar, Icons.REPEAT, "Repeat", this::toggleRepeat);
+        if (!viewport.compactPlayer) repeat = transport(bar, Icons.REPEAT, "Repeat", this::toggleRepeat);
 
-        boolean separateSeek = viewport.twoLinePlayer && viewport.width < 490;
-        if (separateSeek) {
-            transport(bar, Icons.SEARCH, "Seek to position", this::showSeek);
-        } else {
-            seek = new SeekBar(this);
-            seek.setContentDescription("Track progress");
-            seek.setProgressTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
-            seek.setThumbTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
-            seek.setPadding(dp(7), 0, dp(7), 0);
-            seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) {}
-                @Override public void onStartTrackingTouch(SeekBar bar) { seeking = true; }
-                @Override public void onStopTrackingTouch(SeekBar bar) {
-                    seeking = false;
-                    if (playback != null) playback.seekTo(bar.getProgress());
-                }
-            });
-            utility.addView(seek, new LinearLayout.LayoutParams(0, dp(38), 1));
+        LinearLayout utility = viewport.twoLinePlayer ? new LinearLayout(this) : bar;
+        if (viewport.twoLinePlayer) {
+            utility.setGravity(Gravity.CENTER_VERTICAL);
+            utility.setPadding(dp(7), 0, dp(7), 0);
+            player.addView(utility, new LinearLayout.LayoutParams(-1, dp(Viewport.TOUCH)));
         }
-        playbackTime = label("0:00 / –:––", 11, MUTED);
+        seek = new SeekBar(this);
+        seek.setContentDescription("Track progress");
+        seek.setProgressTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
+        seek.setThumbTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
+        seek.setPadding(dp(8), 0, dp(8), 0);
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) {
+                if (user && !seeking && playback != null) playback.seekTo(progress);
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) { seeking = true; }
+            @Override public void onStopTrackingTouch(SeekBar bar) {
+                seeking = false;
+                if (playback != null) playback.seekTo(bar.getProgress());
+            }
+        });
+        utility.addView(seek, new LinearLayout.LayoutParams(0, dp(Viewport.TOUCH), viewport.twoLinePlayer ? 1 : 1.25f));
+        playbackTime = label("0:00 / –:––", viewport.metadataSp, MUTED);
         playbackTime.setFontFeatureSettings("tnum");
-        if (viewport.fontScale > 1.35f) playbackTime.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12);
         playbackTime.setGravity(Gravity.CENTER);
         playbackTime.setPadding(0, 0, 0, 0);
         playbackTime.setOnClickListener(view -> showSeek());
-        utility.addView(playbackTime, new LinearLayout.LayoutParams(dp(viewport.width < 540 ? 72 : 82), -1));
-        transport(utility, Icons.VOLUME, "Media volume", this::showVolume);
-        if (!separateSeek || viewport.width >= 398) {
-            inlineVolume = volumeSlider();
-            inlineVolume.setPadding(dp(5), 0, dp(5), 0);
-            utility.addView(inlineVolume, new LinearLayout.LayoutParams(dp(viewport.width >= 960 ? 77 : 50), dp(38)));
+        int timeWidth = Math.min(156, Math.round(Math.max(1, viewport.fontScale) * 92));
+        utility.addView(playbackTime, new LinearLayout.LayoutParams(dp(timeWidth), dp(Viewport.TOUCH)));
+
+        if (!viewport.twoLinePlayer && viewport.width >= 810) {
+            transport(bar, Icons.VOLUME, "Media volume", this::showVolume);
+            transport(bar, Icons.LYRICS, "Lyrics", () -> openPlayer(true));
+            transport(bar, Icons.QUEUE, "Up next", () -> openPlayer(false));
         }
-        transport(utility, Icons.LYRICS, "Lyrics", () -> openPlayer(true));
-        transport(utility, Icons.QUEUE, "Up next", () -> openPlayer(false));
-        transport(utility, Icons.MINI, "Mini player", this::toggleMiniPlayer);
-        expandedButton = transport(utility, Icons.EXPAND, "Expand Now Playing", this::toggleExpanded);
+        if ((!viewport.twoLinePlayer && viewport.width >= 960) || (viewport.twoLinePlayer && viewport.width >= 600)) {
+            transport(utility, Icons.MINI, "Mini player", this::toggleMiniPlayer);
+        }
+        if (viewport.width >= 1360 && !viewport.twoLinePlayer && !viewport.compactPlayer) {
+            inlineVolume = volumeSlider();
+            inlineVolume.setPadding(dp(6), 0, dp(6), 0);
+            bar.addView(inlineVolume, new LinearLayout.LayoutParams(dp(80), dp(Viewport.TOUCH)));
+        }
+        if (viewport.width >= 270) expandedButton = transport(bar, Icons.EXPAND, "Expand Now Playing", this::toggleExpanded);
+        Button more = transport(bar, Icons.MORE, "Playback options", null);
+        more.setOnClickListener(this::showPlaybackOptions);
+        if (separateMetadata) bar.setGravity(Gravity.CENTER);
         return player;
+    }
+
+    private void showPlaybackOptions(View anchor) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        addAction(popup, playback != null && playback.isShuffle() ? "Turn shuffle off" : "Turn shuffle on", this::toggleShuffle);
+        addAction(popup, playback != null && playback.isRepeat() ? "Turn repeat off" : "Turn repeat on", this::toggleRepeat);
+        addAction(popup, "Seek to position", this::showSeek);
+        addAction(popup, "Media volume", this::showVolume);
+        addAction(popup, "Lyrics", () -> openPlayer(true));
+        addAction(popup, "Up next", () -> openPlayer(false));
+        addAction(popup, "Mini player", this::toggleMiniPlayer);
+        addAction(popup, "Now Playing", this::toggleExpanded);
+        addAction(popup, "Song options", () -> showCurrentSongMenu(anchor));
+        popup.show();
     }
 
     private void addMiniPlayer(FrameLayout stage) {
@@ -388,10 +455,11 @@ public final class MainActivity extends Activity {
         miniPlayer.setElevation(dp(8));
 
         int width = Math.min(400, Math.max(1, viewport.width - 20));
-        int coverSize = width >= 370 ? 84 : width >= 315 ? 72 : 56;
+        int coverSize = width >= 388 ? 78 : 56;
+        boolean inline = width - coverSize - 30 >= 6 * Viewport.TOUCH;
         LinearLayout body = new LinearLayout(this);
         body.setGravity(Gravity.CENTER_VERTICAL);
-        body.setPadding(dp(10), dp(10), dp(10), 0);
+        body.setPadding(dp(10), dp(6), dp(10), 0);
         miniArtwork = cover("");
         miniArtwork.setContentDescription("Open Now Playing");
         miniArtwork.setOnClickListener(view -> openPlayer(false));
@@ -399,32 +467,45 @@ public final class MainActivity extends Activity {
 
         LinearLayout details = column();
         details.setPadding(dp(10), 0, 0, 0);
-        miniTitle = label("Now playing", 14, INK);
+        miniTitle = label("Now playing", viewport.songSp, INK);
         miniTitle.setTypeface(appearance.font, Typeface.BOLD);
-        miniArtist = label("", 12, MUTED);
+        miniArtist = label("", viewport.metadataSp, MUTED);
         miniTitle.setPadding(0, 0, 0, 0);
         miniArtist.setPadding(0, 0, 0, 0);
-        miniTitle.setOnClickListener(view -> openPlayer(false));
         details.addView(miniTitle, new LinearLayout.LayoutParams(-1, -2));
         details.addView(miniArtist, new LinearLayout.LayoutParams(-1, -2));
 
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
-        int target = Math.max(1, Math.min(36, (width - coverSize - 30) / 6));
-        miniLike = transport(controls, Icons.HEART, "Like song", () -> rateCurrent("like", "Liked"), target);
-        miniDislike = transport(controls, Icons.THUMBS_DOWN, "Dislike song", () -> rateCurrent("dislike", "Disliked"), target);
-        miniPrevious = transport(controls, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); }, target);
-        miniPlay = transport(controls, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); }, target);
-        miniNext = transport(controls, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); }, target);
-        transport(controls, Icons.VOLUME, "Media volume", this::showVolume, target);
+        boolean full = inline || width >= 6 * Viewport.TOUCH;
+        if (full) {
+            miniLike = transport(controls, Icons.HEART, "Like song", () -> rateCurrent("like", "Liked"));
+            miniDislike = transport(controls, Icons.THUMBS_DOWN, "Dislike song", () -> rateCurrent("dislike", "Disliked"));
+        }
+        miniPrevious = transport(controls, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); });
+        miniPlay = transport(controls, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); });
+        miniNext = transport(controls, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); });
+        if (full) transport(controls, Icons.VOLUME, "Media volume", this::showVolume);
+        else {
+            Button more = transport(controls, Icons.MORE, "Mini player options", null);
+            more.setOnClickListener(anchor -> {
+                PopupMenu popup = new PopupMenu(this, anchor);
+                addAction(popup, "Like song", () -> rateCurrent("like", "Liked"));
+                addAction(popup, "Dislike song", () -> rateCurrent("dislike", "Disliked"));
+                addAction(popup, "Media volume", this::showVolume);
+                popup.show();
+            });
+        }
         if (!appearance.barePlay) {
             miniPlay.setBackground(new android.graphics.drawable.RippleDrawable(
-                    android.content.res.ColorStateList.valueOf(0x40666666), shape(INK, 22), null));
+                    android.content.res.ColorStateList.valueOf(0x40666666),
+                    new android.graphics.drawable.InsetDrawable(shape(INK, 24), dp(5)), null));
             miniPlay.setTextColor(0xff141119);
         }
-        details.addView(controls, new LinearLayout.LayoutParams(-1, dp(44)));
+        if (inline) details.addView(controls, new LinearLayout.LayoutParams(-1, dp(Viewport.TOUCH)));
         body.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
         miniPlayer.addView(body);
+        if (!inline) miniPlayer.addView(controls, new LinearLayout.LayoutParams(-1, dp(Viewport.TOUCH)));
 
         miniSeek = new SeekBar(this);
         miniSeek.setPadding(0, 0, 0, 0);
@@ -450,7 +531,7 @@ public final class MainActivity extends Activity {
                 if (playback != null) playback.seekTo(bar.getProgress());
             }
         });
-        miniPlayer.addView(miniSeek, new LinearLayout.LayoutParams(-1, dp(12)));
+        miniPlayer.addView(miniSeek, new LinearLayout.LayoutParams(-1, dp(Viewport.TOUCH)));
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(width), -2, Gravity.BOTTOM | Gravity.END);
         params.setMargins(dp(10), dp(10), dp(10), dp(8));
         stage.addView(miniPlayer, params);
@@ -509,15 +590,44 @@ public final class MainActivity extends Activity {
         super.onStart();
         bound = bindService(new Intent(this, PlaybackService.class), connection, Context.BIND_AUTO_CREATE);
         main.post(clock);
+        performance.start();
     }
 
     @Override public void onStop() {
         main.removeCallbacks(clock);
+        performance.stop();
         if (playback != null) playback.changed = null;
         if (bound) unbindService(connection);
         playback = null;
         bound = false;
         super.onStop();
+    }
+
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (performance == null) return;
+        performance.trim(level);
+        if (level >= TRIM_MEMORY_UI_HIDDEN || level == TRIM_MEMORY_RUNNING_CRITICAL) {
+            artwork.trim();
+            pages.keySet().removeIf(key -> !key.equals(browseKey));
+        }
+    }
+
+    @Override public void onLowMemory() {
+        super.onLowMemory();
+        if (performance == null) return;
+        performance.trim(TRIM_MEMORY_COMPLETE);
+        artwork.trim();
+        pages.keySet().removeIf(key -> !key.equals(browseKey));
+    }
+
+    private void applyPerformance() {
+        PerformancePolicy.Profile profile = performance.profile();
+        artwork.configure(profile, performance.cacheBytes(), performance.diskBytes());
+        if (backdrop != null) backdrop.setProfile(profile);
+        if (miniBackdrop != null) miniBackdrop.setProfile(profile);
+        expanded.setProfile(profile);
+        if (settingsView != null) settingsView.updatePerformance();
     }
 
     @Override public void onDestroy() {
@@ -526,6 +636,7 @@ public final class MainActivity extends Activity {
         network.shutdownNow();
         downloads.shutdownNow();
         expanded.close();
+        cancelPlayerArtwork.run();
         artwork.close();
         super.onDestroy();
     }
@@ -534,10 +645,17 @@ public final class MainActivity extends Activity {
         state.putString("page", page);
         state.putString("query", query.getText().toString());
         state.putString("collectionId", collectionId);
+        state.putString("collectionTitle", collectionTitle);
         state.putString("mood", mood);
         state.putString("searchType", searchType.name());
         state.putString("settingsTab", settingsTab);
         state.putInt("settingsScroll", settingsView == null ? 0 : settingsView.scrollPosition());
+        state.putInt("browseRow", scroll.getFirstVisiblePosition());
+        state.putInt("browseOffset", scroll.rowOffset());
+        if (miniPlayer.getVisibility() == View.VISIBLE) state.putString("playerPanel", "mini");
+        else if (expanded.getVisibility() == View.VISIBLE) {
+            state.putString("playerPanel", expanded.lyricsVisible() ? "lyrics" : "queue");
+        }
         if (pendingDownload != null) {
             Bundle song = new Bundle();
             song.putString("id", pendingDownload.id);
@@ -617,6 +735,8 @@ public final class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (isDestroyed()) return;
                 refreshingAccount = false;
+                pages.clear();
+                browseKey = "";
                 account = verified;
                 accountError = detail == null ? "" : detail.getMessage();
                 accountErrorCode = detail == null ? "" : detail.code;
@@ -643,13 +763,16 @@ public final class MainActivity extends Activity {
                         new JSONObject().put("continuation", Browse.SAVED_PLAYLISTS)));
                 runOnUiThread(() -> {
                     if (isDestroyed() || refreshingAccount || !name.equals(account)) return;
-                    sidebarPlaylists.removeAllViews();
-                    sidebarPlaylists.addView(label("PLAYLISTS", 12, MUTED));
+                    List<Browse.Card> pinned = new ArrayList<>();
                     for (Browse.Shelf shelf : saved) {
                         for (Browse.Card card : shelf.cards) {
-                            if (!card.browseId.isEmpty()) sidebarPlaylists.addView(playlistNav(card));
+                            if (!card.browseId.isEmpty() && !"VLLM".equals(card.browseId)) pinned.add(card);
                         }
                     }
+                    sidebarItems = pinned;
+                    sidebarPlaylists.removeAllViews();
+                    if (!viewport.iconRail() && !pinned.isEmpty()) sidebarPlaylists.addView(label("Playlists", 12, MUTED));
+                    for (Browse.Card card : pinned) sidebarPlaylists.addView(playlistNav(card));
                 });
             } catch (Exception ignored) {
                 // Library's main page still offers a user-initiated retry.
@@ -683,18 +806,49 @@ public final class MainActivity extends Activity {
             accountErrorCode = "";
             retryAccount = false;
             sidebarPlaylists.removeAllViews();
+            sidebarItems = Collections.emptyList();
+            pages.clear();
+            browseKey = "";
             if (playback != null) playback.stopForSignOut();
             navigate("Home");
         });
         loadPage();
     }
 
+    private void openLiked() {
+        if (!requireAccount()) return;
+        collectionId = "VLLM";
+        collectionTitle = "Liked Music";
+        navigate("Collection");
+    }
+
+    private void showNavigationDrawer() {
+        List<String> labels = new ArrayList<>(java.util.Arrays.asList(
+                "Home", "Explore", "Library", account.isEmpty() ? "Sign in" : account, "Liked Music", "Settings"));
+        List<Browse.Card> playlists = sidebarItems;
+        for (Browse.Card card : playlists) labels.add(card.title);
+        new AlertDialog.Builder(this).setTitle("Navigation").setItems(labels.toArray(new String[0]), (dialog, index) -> {
+            switch (index) {
+                case 0: case 1: case 2: navigate(labels.get(index)); break;
+                case 3: openAccount(); break;
+                case 4: openLiked(); break;
+                case 5: navigate("Account"); break;
+                default: openCollection(playlists.get(index - 6));
+            }
+        }).show();
+    }
+
     private void loadPage() {
+        BrowsePage previous = pages.get(browseKey);
+        if (previous != null) {
+            previous.row = scroll.getFirstVisiblePosition();
+            previous.offset = scroll.rowOffset();
+        }
+        browseKey = "";
         final int current = ++generation;
         if (pageTask != null) pageTask.cancel(true);
         showNavigation();
-        results.removeAllViews();
-        scroll.scrollTo(0, 0);
+        results.clear();
         if (settingsView != null) {
             paneContent.removeView(settingsView);
             settingsView = null;
@@ -702,14 +856,16 @@ public final class MainActivity extends Activity {
         boolean settingsPage = "Account".equals(page);
         musicSearchBar.setVisibility(settingsPage ? View.GONE : View.VISIBLE);
         scroll.setVisibility(settingsPage ? View.GONE : View.VISIBLE);
-        if ("Account".equals(page)) {
+        if (settingsPage) {
+            publishRows(0, 0);
             showSettings();
             return;
         }
         if ("Library".equals(page) && account.isEmpty()) {
             heading("Library");
-            results.addView(label("Sign in to see your playlists.", 16, MUTED));
-            results.addView(button("Sign in with Google", this::openAccount), new LinearLayout.LayoutParams(dp(215), dp(48)));
+            results.add(() -> label("Sign in to see your playlists.", viewport.songSp, MUTED));
+            results.add(() -> button("Sign in with Google", this::openAccount));
+            publishRows(0, 0);
             return;
         }
         String active = page;
@@ -718,54 +874,89 @@ public final class MainActivity extends Activity {
         String selectedMood = mood;
         String selectedCollection = collectionId;
         String cookies = account.isEmpty() ? "" : GoogleSignIn.cookies();
-        results.addView(label("Loading…", 16, MUTED));
+        boolean hideExplicit = prefs.flag("hideExplicit", false);
+        String key = active + "\n" + !cookies.isEmpty() + "\n" + hideExplicit;
+        if ("Search".equals(active)) key += "\n" + type + "\n" + input;
+        if ("Home".equals(active)) key += "\n" + selectedMood;
+        if ("Collection".equals(active)) key += "\n" + selectedCollection;
+        final String destination = key;
+        BrowsePage cached = pages.get(key);
+        if (cached != null && android.os.SystemClock.uptimeMillis() - cached.loaded < 120_000) {
+            renderBrowsePage(key, cached);
+            return;
+        }
+        results.add(() -> label("Loading…", viewport.songSp, MUTED));
+        publishRows(0, 0);
         pageTask = network.submit(() -> {
             try {
                 api.setSession(cookies);
-                if ("Search".equals(active)) {
-                    if (type == Browse.Search.Songs) {
-                        List<MusicApi.Track> tracks = api.search(input);
-                        runOnUiThread(() -> { if (generation == current) showTracks(tracks); });
-                    } else {
-                        List<Browse.Shelf> shelves = Browse.shelves(api.search(input, type.params), prefs.flag("hideExplicit", false));
-                        runOnUiThread(() -> {
-                            if (generation != current) return;
-                            showBrowse(shelves, new ArrayList<>());
-                        });
+                BrowsePage loaded;
+                if ("Search".equals(active) && type == Browse.Search.Songs) {
+                    loaded = new BrowsePage(Collections.emptyList(), Collections.emptyList(), api.search(input));
+                } else {
+                    JSONObject data;
+                    if ("Search".equals(active)) data = api.search(input, type.params);
+                    else {
+                        JSONObject request = new JSONObject();
+                        switch (active) {
+                            case "Library": request.put("continuation", Browse.SAVED_PLAYLISTS); break;
+                            case "Explore": request.put("browseId", "FEmusic_explore"); break;
+                            case "Collection": request.put("browseId", selectedCollection); break;
+                            default:
+                                request.put("browseId", "FEmusic_home");
+                                if (!selectedMood.isEmpty()) request.put("params", selectedMood);
+                        }
+                        data = api.browse(request);
                     }
-                    return;
+                    loaded = new BrowsePage(Browse.shelves(data, hideExplicit),
+                            "Home".equals(active) ? Browse.moods(data) : Collections.emptyList(), null);
                 }
-                JSONObject request = new JSONObject();
-                switch (active) {
-                    case "Library": request.put("continuation", Browse.SAVED_PLAYLISTS); break;
-                    case "Explore": request.put("browseId", "FEmusic_explore"); break;
-                    case "Collection": request.put("browseId", selectedCollection); break;
-                    default:
-                        request.put("browseId", "FEmusic_home");
-                        if (!selectedMood.isEmpty()) request.put("params", selectedMood);
-                }
-                JSONObject data = api.browse(request);
-                List<Browse.Shelf> shelves = Browse.shelves(data, prefs.flag("hideExplicit", false));
-                List<Browse.Mood> moods = "Home".equals(active) ? Browse.moods(data) : new ArrayList<>();
-                runOnUiThread(() -> { if (generation == current) showBrowse(shelves, moods); });
+                runOnUiThread(() -> {
+                    if (generation != current || isDestroyed()) return;
+                    pages.put(destination, loaded);
+                    while (pages.size() > (performance.profile().workers == 1 ? 2 : 4)) {
+                        pages.remove(pages.keySet().iterator().next());
+                    }
+                    renderBrowsePage(destination, loaded);
+                });
             } catch (Exception error) {
                 runOnUiThread(() -> {
-                    if (generation != current) return;
-                    results.removeAllViews();
-                    results.addView(label("Could not load " + active.toLowerCase(java.util.Locale.ROOT) + ".", 16, MUTED));
-                    results.addView(button("Retry", this::loadPage), new LinearLayout.LayoutParams(dp(96), dp(44)));
+                    if (generation != current || isDestroyed()) return;
+                    if (cached != null) {
+                        renderBrowsePage(destination, cached);
+                        return;
+                    }
+                    results.clear();
+                    results.add(() -> label("Could not load " + active.toLowerCase(java.util.Locale.ROOT) + ".", viewport.songSp, MUTED));
+                    results.add(() -> button("Retry", this::loadPage));
+                    publishRows(0, 0);
                 });
             }
         });
+    }
+
+    private void renderBrowsePage(String key, BrowsePage content) {
+        browseKey = key;
+        results.clear();
+        if (content.tracks != null) showTracks(content.tracks);
+        else showBrowse(content);
+        publishRows(browseRow != 0 || browseOffset != 0 ? browseRow : content.row,
+                browseRow != 0 || browseOffset != 0 ? browseOffset : content.offset);
+        browseRow = browseOffset = 0;
+    }
+
+    private void publishRows(int row, int offset) {
+        scroll.show(new ArrayList<>(results), row, offset);
     }
 
     private void showNavigation() {
         home.setSelected("Home".equals(page));
         explore.setSelected("Explore".equals(page));
         library.setSelected("Library".equals(page));
+        liked.setSelected("Collection".equals(page) && "VLLM".equals(collectionId));
         settings.setSelected("Account".equals(page));
         String name = account.isEmpty() ? "Sign in" : account;
-        if (viewport.width < 720) setNavIcon(accountButton, Icons.USER, name, true);
+        if (viewport.width < 780) setNavIcon(accountButton, Icons.USER, name, true);
         else accountButton.setText(name);
         boolean iconsOnly = viewport.iconRail();
         setNavIcon(home, Icons.HOME, "Home", iconsOnly);
@@ -778,7 +969,8 @@ public final class MainActivity extends Activity {
     private void setNavIcon(Button button, String icon, String label, boolean iconsOnly) {
         button.setText(iconsOnly ? icon : Icons.withLabel(icon, label, appearance.icons));
         button.setTypeface(iconsOnly ? appearance.icons : appearance.font);
-        button.setTextSize(iconsOnly ? 18 : 14);
+        if (iconsOnly) button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 23);
+        else button.setTextSize(viewport.songSp);
         button.setContentDescription(label);
     }
 
@@ -794,6 +986,8 @@ public final class MainActivity extends Activity {
             @Override public boolean signedIn() { return !account.isEmpty(); }
             @Override public boolean accountVerificationFailed() { return !accountErrorCode.isEmpty(); }
             @Override public boolean canRetryAccount() { return retryAccount; }
+            @Override public String performanceStatus() { return performance.summary(); }
+            @Override public String deviceCapabilities() { return performance.capabilitiesText(viewport); }
             @Override public String connectionLabel() {
                 String user = ListenBrainz.account(prefs);
                 return user.isEmpty() ? "Send played tracks to ListenBrainz after connecting." : "Connected as " + user;
@@ -812,8 +1006,11 @@ public final class MainActivity extends Activity {
     private void settingsChanged(String key) {
         switch (key) {
             case "theme": case "accent": case "accentControls": case "font": case "zoom":
-            case "flat": case "brightness": case "collapseSidebar": case "coverColors": case "glass":
+            case "flat": case "brightness": case "sidebar": case "layoutDensity": case "coverColors": case "glass":
                 recreate();
+                return;
+            case "performance":
+                performance.choose(prefs.text("performance", "AUTO"));
                 return;
             case "lrclib": case "ytLyrics": case "lyricsFirst":
                 expanded.invalidateLyrics();
@@ -846,6 +1043,7 @@ public final class MainActivity extends Activity {
                     toast("Login diagnostic copied");
                 }
                 break;
+            case "reset-layout": prefs.resetLayout(); recreate(); break;
             case "cache": artwork.clear(); toast("Artwork cache cleared."); break;
             case "network": testConnection(); break;
             case "notifications":
@@ -972,68 +1170,69 @@ public final class MainActivity extends Activity {
     }
 
     private void showTracks(List<MusicApi.Track> tracks) {
-        results.removeAllViews();
         showSearchFilters();
-        if (tracks.isEmpty()) results.addView(label("No songs found.", 16, MUTED));
+        if (tracks.isEmpty()) results.add(() -> label("No songs found.", viewport.songSp, MUTED));
         for (int i = 0; i < tracks.size(); i++) {
-            final int index = i;
-            MusicApi.Track track = tracks.get(i);
-            Button row = navigation(results, track.title + (track.artist.isEmpty() ? "" : " · " + track.artist),
-                    () -> playTracks(tracks, index));
-            row.setMaxLines(2);
-            row.setOnLongClickListener(view -> {
-                showSongMenu(view, track, -1);
-                return true;
-            });
+            int index = i;
+            MusicApi.Track track = tracks.get(index);
+            Browse.Card card = new Browse.Card(track.title, track.artist, track.artwork, "", track);
+            results.add(() -> songRow(card, tracks, index));
         }
     }
 
     private void showSearchFilters() {
-        LinearLayout filters = carousel();
-        for (Browse.Search type : Browse.Search.values()) {
-            Button chip = button(type.name(), () -> {
-                searchType = type;
-                loadPage();
-            });
-            if (type == searchType) chip.setTextColor(accent());
-            filters.addView(chip, spacedWidth(-2, 42));
-        }
-    }
-
-    private void showBrowse(List<Browse.Shelf> shelves, List<Browse.Mood> moods) {
-        results.removeAllViews();
-        if ("Search".equals(page)) showSearchFilters();
-        if (!moods.isEmpty()) {
-            LinearLayout chips = carousel();
-            for (Browse.Mood value : moods) {
-                Button chip = button(value.title, () -> {
-                    mood = value.params;
+        results.add(() -> chipRow(row -> {
+            for (Browse.Search type : Browse.Search.values()) {
+                Button chip = button(type.name(), () -> {
+                    searchType = type;
                     loadPage();
                 });
-                chips.addView(chip, spacedWidth(-2, 42));
+                if (type == searchType) chip.setTextColor(accent());
+                row.addView(chip, spacedWidth(-2, Viewport.TOUCH));
             }
-        }
-        if ("Library".equals(page)) heading("Playlists");
-        if (shelves.isEmpty()) results.addView(label("No music to show.", 16, MUTED));
-        for (Browse.Shelf shelf : shelves) addShelf(shelf);
+        }));
     }
 
-    private void addShelf(Browse.Shelf shelf) {
+    private void showBrowse(BrowsePage content) {
+        if ("Search".equals(page)) showSearchFilters();
+        if (!content.moods.isEmpty()) {
+            results.add(() -> chipRow(row -> {
+                for (Browse.Mood value : content.moods) {
+                    Button chip = button(value.title, () -> {
+                        mood = value.params.equals(mood) ? "" : value.params;
+                        loadPage();
+                    });
+                    chip.setSelected(value.params.equals(mood));
+                    if (chip.isSelected()) chip.setTextColor(accent());
+                    row.addView(chip, spacedWidth(-2, Viewport.TOUCH));
+                }
+            }));
+        }
+        if ("Library".equals(page)) heading("Playlists");
+        else if ("Explore".equals(page)) heading("Explore");
+        else if ("Collection".equals(page) && !collectionTitle.isEmpty()) heading(collectionTitle);
+        if (content.shelves.isEmpty()) results.add(() -> label("No music to show.", viewport.songSp, MUTED));
+        for (int i = 0; i < content.shelves.size(); i++) addShelf(content.shelves.get(i), content.shelfStart(i));
+    }
+
+    private void addShelf(Browse.Shelf shelf, int[] start) {
         List<MusicApi.Track> tracks = new ArrayList<>();
         for (Browse.Card card : shelf.cards) if (card.track != null) tracks.add(card.track);
         String title = shelf.title.isEmpty() ? "Songs" : shelf.title;
         boolean songList = tracks.size() == shelf.cards.size();
         if (songList && "Collection".equals(page)) {
             if (!shelf.title.isEmpty()) heading(shelf.title);
-            for (int i = 0; i < tracks.size(); i++) results.addView(songRow(shelf.cards.get(i), tracks, i));
+            for (int i = 0; i < tracks.size(); i++) {
+                int index = i;
+                results.add(() -> songRow(shelf.cards.get(index), tracks, index));
+            }
             return;
         }
 
-        boolean groupSongs = songList && !"Library".equals(page) && !shelf.preferArtwork;
-        if (groupSongs) {
+        if (songList && !"Library".equals(page) && !shelf.preferArtwork) {
             int rows = viewport.shortScreen ? 2 : 3;
-            results.addView(new ShelfPager(this, viewport, title, (tracks.size() + rows - 1) / rows,
-                    225, INK, appearance.font, (group, width) -> {
+            results.add(() -> new ShelfPager(this, viewport, title, (tracks.size() + rows - 1) / rows,
+                    225, INK, appearance.font, start, (group, width) -> {
                 LinearLayout column = column();
                 for (int i = group * rows; i < Math.min(tracks.size(), (group + 1) * rows); i++) {
                     column.addView(songRow(shelf.cards.get(i), tracks, i));
@@ -1041,9 +1240,9 @@ public final class MainActivity extends Activity {
                 return column;
             }));
         } else {
-            int preferred = viewport.shortScreen ? 96 : 125;
-            results.addView(new ShelfPager(this, viewport, title, shelf.cards.size(),
-                    preferred, INK, appearance.font, (index, width) -> albumTile(shelf.cards.get(index), tracks, width)));
+            results.add(() -> new ShelfPager(this, viewport, title, shelf.cards.size(),
+                    viewport.albumCard, INK, appearance.font, start,
+                    (index, width) -> albumTile(shelf.cards.get(index), tracks, width)));
         }
     }
 
@@ -1051,7 +1250,8 @@ public final class MainActivity extends Activity {
         LinearLayout tile = column();
         int padding = dp(3);
         tile.setPadding(padding, padding, padding, dp(6));
-        tile.setBackground(shape(appearance.panel(appearance.surface, 155), appearance.cardRadius));
+        tile.setBackground(new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x35ffffff), null, shape(Color.WHITE, appearance.cardRadius)));
         tile.setContentDescription(card.title);
         tile.setFocusable(true);
         tile.setOnClickListener(view -> {
@@ -1063,10 +1263,11 @@ public final class MainActivity extends Activity {
             return true;
         });
         tile.addView(cover(card.image), new LinearLayout.LayoutParams(-1, Math.max(1, width - 2 * padding)));
-        TextView title = label(card.title, viewport.shortScreen ? 13 : 15, INK);
+        TextView title = label(card.title, viewport.songSp, INK);
+        title.setTypeface(appearance.font, Typeface.BOLD);
         title.setMaxLines(2);
         tile.addView(title);
-        if (!card.subtitle.isEmpty()) tile.addView(label(card.subtitle, viewport.shortScreen ? 11 : 13, MUTED));
+        if (!card.subtitle.isEmpty()) tile.addView(label(card.subtitle, viewport.metadataSp, MUTED));
         return tile;
     }
 
@@ -1074,6 +1275,8 @@ public final class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(4), dp(3), dp(4), dp(3));
+        row.setMinimumHeight(dp(Viewport.TOUCH));
+        row.setBackgroundResource(android.R.drawable.list_selector_background);
         row.setContentDescription(card.title);
         row.setFocusable(true);
         row.setOnClickListener(view -> playTracks(tracks, index));
@@ -1084,14 +1287,15 @@ public final class MainActivity extends Activity {
         row.addView(cover(card.image), new LinearLayout.LayoutParams(dp(40), dp(40)));
         LinearLayout text = column();
         text.setPadding(dp(6), 0, 0, 0);
-        text.addView(label(card.title, 15, INK));
-        text.addView(label(card.subtitle, 13, MUTED));
+        text.addView(label(card.title, viewport.songSp, INK));
+        text.addView(label(card.subtitle, viewport.metadataSp, MUTED));
         row.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
         return row;
     }
 
     private void openCollection(Browse.Card card) {
         collectionId = card.browseId;
+        collectionTitle = card.title;
         navigate("Collection");
     }
 
@@ -1108,13 +1312,13 @@ public final class MainActivity extends Activity {
         return view;
     }
 
-    private LinearLayout carousel() {
+    private View chipRow(java.util.function.Consumer<LinearLayout> populate) {
         HorizontalScrollView horizontal = new HorizontalScrollView(this);
         horizontal.setHorizontalScrollBarEnabled(false);
         LinearLayout row = new LinearLayout(this);
         horizontal.addView(row);
-        results.addView(horizontal);
-        return row;
+        populate.accept(row);
+        return horizontal;
     }
 
     private void openPlayer(boolean lyrics) {
@@ -1201,6 +1405,7 @@ public final class MainActivity extends Activity {
             addAction(popup, "Go to artist", () -> {
                 closePlayer();
                 collectionId = track.artistId;
+                collectionTitle = track.artist;
                 navigate("Collection");
             });
         }
@@ -1297,7 +1502,11 @@ public final class MainActivity extends Activity {
             try {
                 api.setSession(GoogleSignIn.cookies());
                 api.react(track, action);
-                runOnUiThread(() -> { if (!isDestroyed()) toast(feedback); });
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    pages.clear();
+                    toast(feedback);
+                });
             } catch (Exception error) {
                 runOnUiThread(() -> { if (!isDestroyed()) toast("YouTube rejected or could not save the rating."); });
             }
@@ -1339,7 +1548,11 @@ public final class MainActivity extends Activity {
             try {
                 api.setSession(GoogleSignIn.cookies());
                 api.addToPlaylist(song, playlist.browseId.substring(2));
-                runOnUiThread(() -> { if (!isDestroyed()) toast("Saved to " + playlist.title); });
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    pages.clear();
+                    toast("Saved to " + playlist.title);
+                });
             } catch (Exception error) {
                 runOnUiThread(() -> { if (!isDestroyed()) toast("YouTube could not edit this playlist."); });
             }
@@ -1368,16 +1581,11 @@ public final class MainActivity extends Activity {
         miniArtist.setText(song == null ? "" : song.artist);
         miniPrevious.setEnabled(previous.isEnabled());
         miniNext.setEnabled(next.isEnabled());
-        miniLike.setEnabled(song != null);
-        miniDislike.setEnabled(song != null);
+        if (miniLike != null) miniLike.setEnabled(song != null);
+        if (miniDislike != null) miniDislike.setEnabled(song != null);
         play.setContentDescription(playing ? "Pause" : "Play");
         if (shuffle != null) shuffle.setTextColor(playback != null && playback.isShuffle() ? accent() : INK);
         if (repeat != null) repeat.setTextColor(playback != null && playback.isRepeat() ? accent() : INK);
-        if (playback != null && playback.requiresSignIn() && account.isEmpty()) {
-            playerStatus.setOnClickListener(view -> openAccount());
-        } else {
-            playerStatus.setOnClickListener(null);
-        }
         if (expanded.getVisibility() == View.VISIBLE) expanded.update(playback);
         renderProgress();
     }
@@ -1387,6 +1595,7 @@ public final class MainActivity extends Activity {
         String desired = song == null ? "" : song.artwork;
         if (currentArtwork.equals(desired)) return;
         currentArtwork = desired;
+        cancelPlayerArtwork.run();
         if (backdrop != null) backdrop.setAlbum(null);
         if (miniBackdrop != null) miniBackdrop.setAlbum(null);
         miniArtwork.setImageDrawable(null);
@@ -1397,7 +1606,7 @@ public final class MainActivity extends Activity {
         }
         if (desired.isEmpty()) return;
         boolean tintArtwork = appearance.albumTint && prefs.flag("coverColors", true) && !prefs.flag("flat", false);
-        artwork.acquire(desired, bitmap -> {
+        cancelPlayerArtwork = artwork.acquire(desired, bitmap -> {
             if (isDestroyed() || !desired.equals(currentArtwork)) return;
             if (playerArtwork != null) playerArtwork.setImageBitmap(bitmap);
             miniArtwork.setImageBitmap(bitmap);
@@ -1421,7 +1630,11 @@ public final class MainActivity extends Activity {
             seek.setMax(Math.max(1, duration));
             seek.setProgress(position);
         }
-        if (playbackTime != null) playbackTime.setText(duration > 0 ? time(position) + " / " + time(duration) : "0:00 / –:––");
+        if (playbackTime != null && (lastDisplayedDuration != duration || lastDisplayedSecond != position / 1000)) {
+            lastDisplayedDuration = duration;
+            lastDisplayedSecond = position / 1000;
+            playbackTime.setText(duration > 0 ? time(position) + " / " + time(duration) : "0:00 / –:––");
+        }
     }
 
     private static String time(int millis) {
@@ -1435,9 +1648,10 @@ public final class MainActivity extends Activity {
         android.graphics.drawable.StateListDrawable background = new android.graphics.drawable.StateListDrawable();
         background.addState(new int[]{android.R.attr.state_selected}, shape(appearance.control, 9));
         background.addState(new int[]{android.R.attr.state_pressed}, shape(appearance.control, 9));
+        background.addState(new int[]{android.R.attr.state_focused}, shape(appearance.control, 9));
         background.addState(new int[]{}, shape(Color.TRANSPARENT, 9));
         button.setBackground(background);
-        button.setMinHeight(dp(viewport.shortScreen ? 43 : 47));
+        button.setMinHeight(dp(Viewport.TOUCH));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
         params.bottomMargin = dp(2);
         parent.addView(button, params);
@@ -1451,7 +1665,7 @@ public final class MainActivity extends Activity {
     private Button transport(LinearLayout row, String title, String description, Runnable action, int target) {
         Button button = button(title, action);
         button.setPadding(0, 0, 0, 0);
-        button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 18);
+        button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 22);
         button.setTypeface(appearance.icons);
         button.setBackground(new android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf(0x48ffffff), null, shape(Color.WHITE, 22)));
@@ -1467,10 +1681,11 @@ public final class MainActivity extends Activity {
         button.setTextColor(INK);
         button.setTextSize(15);
         button.setTypeface(appearance.font);
-        button.setSingleLine();
+        button.setMaxLines(1);
         button.setEllipsize(TextUtils.TruncateAt.END);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
+        button.setMinHeight(dp(Viewport.TOUCH));
         button.setPadding(dp(10), 0, dp(10), 0);
         button.setBackground(new android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf(0x40ffffff), shape(appearance.control, 12), null));
@@ -1479,10 +1694,12 @@ public final class MainActivity extends Activity {
     }
 
     private void heading(String title) {
-        TextView text = label(title, 22, INK);
-        text.setTypeface(appearance.font, Typeface.BOLD);
-        text.setPadding(dp(4), dp(9), 0, dp(9));
-        results.addView(text);
+        results.add(() -> {
+            TextView text = label(title, viewport.titleSp, INK);
+            text.setTypeface(appearance.font, Typeface.BOLD);
+            text.setPadding(dp(4), dp(8), 0, dp(5));
+            return text;
+        });
     }
 
     private TextView label(String text, int sp, int color) {

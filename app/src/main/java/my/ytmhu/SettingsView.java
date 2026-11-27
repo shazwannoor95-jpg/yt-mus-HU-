@@ -24,7 +24,7 @@ import java.util.Locale;
 import java.util.function.IntFunction;
 
 final class SettingsView extends LinearLayout {
-    static final String[] TABS = {"Account", "Playback", "Lyrics", "Appearance", "Connections", "General", "Keyboard shortcuts", "About"};
+    static final String[] TABS = {"Account", "Playback", "Lyrics", "Appearance", "Connections", "Performance", "General", "Keyboard shortcuts", "About"};
 
     interface Host {
         String accountLabel();
@@ -33,6 +33,8 @@ final class SettingsView extends LinearLayout {
         boolean signedIn();
         boolean accountVerificationFailed();
         boolean canRetryAccount();
+        String performanceStatus();
+        String deviceCapabilities();
         String connectionLabel();
         void run(String action);
         void tabChanged(String selected);
@@ -48,6 +50,7 @@ final class SettingsView extends LinearLayout {
     private final Viewport viewport;
     private final EditText search;
     private Button compactTab;
+    private TextView effectiveProfile, deviceDetails;
     private final List<Entry> entries = new ArrayList<>();
     private final ScrollView scroller;
     private String tab, filter = "";
@@ -83,7 +86,7 @@ final class SettingsView extends LinearLayout {
         setOrientation(viewport.splitSettings ? HORIZONTAL : VERTICAL);
         search = new EditText(context);
         search.setSingleLine();
-        search.setTextSize(15);
+        search.setTextSize(viewport.songSp);
         search.setTypeface(font);
         search.setHint("Search settings");
         search.setTextColor(ink);
@@ -96,11 +99,11 @@ final class SettingsView extends LinearLayout {
             LinearLayout left = column();
             left.setPadding(0, 0, dp(10), 0);
             left.addView(label("Settings", 23, ink, true));
-            left.addView(search, new LayoutParams(-1, dp(44)));
+            left.addView(search, new LayoutParams(-1, dp(Viewport.TOUCH)));
             ScrollView navScroll = new ScrollView(context);
             navScroll.addView(navigation);
             left.addView(navScroll, new LayoutParams(-1, 0, 1));
-            addView(left, new LayoutParams(dp(150), -1));
+            addView(left, new LayoutParams(dp(viewport.settingsWidth), -1));
         } else {
             LinearLayout header = new LinearLayout(context);
             header.setGravity(Gravity.CENTER_VERTICAL);
@@ -108,7 +111,7 @@ final class SettingsView extends LinearLayout {
             header.addView(title, new LayoutParams(-2, -2));
             compactTab = button(tab + "  ▾");
             compactTab.setGravity(Gravity.CENTER);
-            compactTab.setMinHeight(dp(42));
+            compactTab.setMinHeight(dp(Viewport.TOUCH));
             compactTab.setContentDescription("Settings section, " + tab);
             compactTab.setOnClickListener(view -> new AlertDialog.Builder(context).setTitle("Settings section")
                     .setSingleChoiceItems(TABS, java.util.Arrays.asList(TABS).indexOf(tab), (dialog, index) -> {
@@ -128,9 +131,9 @@ final class SettingsView extends LinearLayout {
                     search.setVisibility(View.GONE);
                 } else focusSearch();
             });
-            header.addView(find, new LayoutParams(dp(44), dp(42)));
+            header.addView(find, new LayoutParams(dp(Viewport.TOUCH), dp(Viewport.TOUCH)));
             addView(header, new LayoutParams(-1, -2));
-            addView(search, new LayoutParams(-1, dp(44)));
+            addView(search, new LayoutParams(-1, dp(Viewport.TOUCH)));
             search.setVisibility(View.GONE);
         }
 
@@ -208,7 +211,14 @@ final class SettingsView extends LinearLayout {
         range("Appearance", "Background", "Background brightness", null, "brightness", 100, 35, 130, 5, value -> value + "%");
         choice("Appearance", "Appearance", "Font", null, "font", "system",
                 new String[]{"System", "Inter", "DM Sans", "Figtree"}, new String[]{"system", "Inter", "DMSans", "Figtree"});
-        range("Appearance", "Appearance", "Zoom", "Scale labels and other app text.", "zoom", 100, 85, 125, 5, value -> value + "%");
+        choice("Appearance", "Display & Layout", "Layout density", "Changes card sizes and spacing.", "layoutDensity", "auto",
+                new String[]{"Auto", "Ultra Compact (70%)", "Compact (85%)", "Standard (100%)", "Large (115%)"},
+                new String[]{"auto", "ultra", "compact", "standard", "large"});
+        range("Appearance", "Display & Layout", "Text size", "Adjusts app text alongside Android font size.", "zoom",
+                100, 85, 150, 5, value -> value + "%");
+        choice("Appearance", "Display & Layout", "Sidebar", null, "sidebar", prefs.sidebar(),
+                new String[]{"Auto", "Collapsed", "Expanded"}, new String[]{"auto", "rail", "expanded"});
+        action("Appearance", "Display & Layout", "Reset display settings", null, "Reset", "reset-layout");
         toggle("Appearance", "Appearance", "Always show seek knob", "Keep the position marker visible even when the player is idle.", "seekKnob", true);
 
         if (!appearance.themes.isEmpty()) {
@@ -219,6 +229,18 @@ final class SettingsView extends LinearLayout {
         action("Connections", "ListenBrainz", "ListenBrainz", host.connectionLabel(), "Manage", "listenbrainz");
         action("Connections", "Android", "Media controls", "Manage Android notifications for playback controls.", "Open", "notifications");
 
+        choice("Performance", "Performance", "Performance mode", "Auto adapts artwork and effects to your device.", "performance",
+                "AUTO", new String[]{"Auto", "Ultra Lite", "Lite", "Balanced", "High Quality"},
+                new String[]{"AUTO", "ULTRA_LITE", "LITE", "BALANCED", "HIGH_QUALITY"});
+        add("Performance", "Performance", "Effective profile", "Current profile and fallback reason", () -> {
+            effectiveProfile = label(host.performanceStatus(), viewport.songSp, muted, false);
+            row("Effective profile", null, effectiveProfile);
+        });
+        add("Performance", "Device", "Runtime capabilities", "Android version, artwork budgets and available window", () -> {
+            deviceDetails = label(host.deviceCapabilities(), viewport.metadataSp, muted, false);
+            contents.addView(deviceDetails);
+        });
+
         choice("General", "Song info", "Song info language", "Requested language for YouTube Music data.", "songLanguage", "en",
                 new String[]{"English", "Bahasa Melayu", "Indonesia", "日本語", "한국어", "Français", "Español", "Deutsch"},
                 new String[]{"en", "ms", "id", "ja", "ko", "fr", "es", "de"});
@@ -227,9 +249,8 @@ final class SettingsView extends LinearLayout {
                 new String[]{"MY", "SG", "ID", "US", "GB", "JP", "KR", "IN"});
         choice("General", "Window", "Open on", "Page to open when the app starts.", "openOn", "Home",
                 new String[]{"Home", "Explore", "Library"}, new String[]{"Home", "Explore", "Library"});
-        toggle("General", "Window", "Collapse sidebar", "Use a narrow icon-only sidebar.", "collapseSidebar", false);
         action("General", "Network", "Test connection", "Check the connection to YouTube Music from this device.", "Test", "network");
-        action("General", "Storage", "Cache", "Clear decoded album artwork from the app’s memory.", "Clear", "cache");
+        action("General", "Storage", "Cache", "Clear cached artwork from memory and disk.", "Clear", "cache");
 
         action("Keyboard shortcuts", "Playback", "Space", "Play or pause outside a text field.", null, "");
         action("Keyboard shortcuts", "Playback", "Ctrl + Left / Right", "Previous or next track.", null, "");
@@ -238,12 +259,17 @@ final class SettingsView extends LinearLayout {
 
         action("About", "Updates", "Check now", "Check GitHub for a newer Android APK. Updates are installed through Android.", "Check", "updates");
         action("About", "Updates", "What’s new in " + BuildVersion.VERSION,
-                "Improved YouTube Music account verification, retry and sign-in diagnostics.", null, "");
+                "Responsive head-unit layout, independent text sizing and adaptive artwork performance.", null, "");
         action("About", "About", "YTM Head Unit " + BuildVersion.VERSION, "Android port of parts of ytm-rs. Android API 27 and newer.", null, "");
         action("About", "About", "Lyrics", "LRCLIB and YouTube Music.", null, "");
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");
         action("About", "About", "Source code", "GPL-3.0-only. Includes upstream attributions.", "Open GitHub", "source");
         action("About", "About", "Upstream ytm-rs", "Desktop project, releases and credits.", "Open GitHub", "upstream");
+    }
+
+    void updatePerformance() {
+        if (effectiveProfile != null) effectiveProfile.setText(host.performanceStatus());
+        if (deviceDetails != null) deviceDetails.setText(host.deviceCapabilities());
     }
 
     int scrollPosition() { return scroller.getScrollY(); }
@@ -273,7 +299,7 @@ final class SettingsView extends LinearLayout {
         if (navigation.getChildCount() == 0) {
             for (String name : TABS) {
                 Button button = button(name);
-                button.setMinHeight(dp(44));
+                button.setMinHeight(dp(Viewport.TOUCH));
                 button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
                 button.setOnClickListener(view -> select(name));
                 navigation.addView(button, new LayoutParams(-1, -2));
@@ -287,6 +313,8 @@ final class SettingsView extends LinearLayout {
 
     private void render() {
         contents.removeAllViews();
+        effectiveProfile = null;
+        deviceDetails = null;
         scroller.scrollTo(0, 0);
         themeAnchor = null;
         iconAnchor = null;
@@ -307,7 +335,7 @@ final class SettingsView extends LinearLayout {
             String group = filter.isEmpty() || entry.tab.equals(entry.section)
                     ? entry.section : entry.tab + " · " + entry.section;
             if (!group.equals(last)) {
-                View heading = label(group, 18, ink, true);
+                View heading = label(group, viewport.sectionSp, ink, true);
                 contents.addView(heading);
                 if ("Appearance".equals(entry.tab) && "Themes".equals(entry.section)) themeAnchor = heading;
                 if ("Appearance".equals(entry.tab) && "App icon".equals(entry.section)) iconAnchor = heading;
@@ -389,18 +417,46 @@ final class SettingsView extends LinearLayout {
     }
 
     private void themeGallery() {
-        contents.addView(label("Selected: " + appearance.themeName, 13, muted, false));
         List<org.json.JSONObject> themes = new ArrayList<>(appearance.themes);
         themes.sort(java.util.Comparator.comparingInt(theme -> themeRank(theme.optString("id"))));
-        int pane = viewport.width - viewport.railWidth - 2 * viewport.gutter - (viewport.splitSettings ? 150 : 0);
+        int pane = viewport.width - viewport.railWidth - 2 * viewport.gutter
+                - (viewport.splitSettings ? viewport.settingsWidth : 0);
         int columns = pane >= 680 ? 3 : pane >= 350 ? 2 : 1;
-        for (int index = 0; index < themes.size(); index += columns) {
+        LinearLayout panel = column();
+        contents.addView(panel, new LayoutParams(-1, -2));
+        int selected = 0;
+        for (int i = 0; i < themes.size(); i++) {
+            if (appearance.themeId.equals(themes.get(i).optString("id"))) selected = i;
+        }
+        themePage(panel, themes, pane, columns, selected / (2 * columns));
+    }
+
+    private void themePage(LinearLayout panel, List<org.json.JSONObject> themes, int pane, int columns, int page) {
+        panel.removeAllViews();
+        int pageSize = 2 * columns;
+        int start = page * pageSize;
+        int end = Math.min(themes.size(), start + pageSize);
+        LinearLayout header = new LinearLayout(getContext());
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(label(appearance.themeName, viewport.songSp, ink, true), new LayoutParams(0, -2, 1));
+        Button prev = button("‹");
+        prev.setContentDescription("Previous themes");
+        prev.setEnabled(start > 0);
+        prev.setOnClickListener(view -> themePage(panel, themes, pane, columns, page - 1));
+        header.addView(prev, new LayoutParams(dp(Viewport.TOUCH), dp(Viewport.TOUCH)));
+        Button next = button("›");
+        next.setContentDescription("More themes");
+        next.setEnabled(end < themes.size());
+        next.setOnClickListener(view -> themePage(panel, themes, pane, columns, page + 1));
+        header.addView(next, new LayoutParams(dp(Viewport.TOUCH), dp(Viewport.TOUCH)));
+        panel.addView(header);
+        for (int index = start; index < end; index += columns) {
             LinearLayout row = new LinearLayout(getContext());
             for (int i = index; i < index + columns; i++) {
-                View tile = i < themes.size() ? themeTile(themes.get(i), pane / columns) : new View(getContext());
+                View tile = i < end ? themeTile(themes.get(i), pane / columns) : new View(getContext());
                 addGalleryTile(row, tile);
             }
-            contents.addView(row, new LayoutParams(-1, -2));
+            panel.addView(row, new LayoutParams(-1, -2));
         }
     }
 
@@ -451,7 +507,7 @@ final class SettingsView extends LinearLayout {
     private void iconGallery() {
         String current = prefs.text("appIcon", "classic");
         contents.addView(label("Android launchers may take a moment to refresh the icon.", 12, muted, false));
-        int pane = viewport.width - viewport.railWidth - 2 * viewport.gutter - (viewport.splitSettings ? 150 : 0);
+        int pane = viewport.width - viewport.railWidth - 2 * viewport.gutter - (viewport.splitSettings ? viewport.settingsWidth : 0);
         int columns = Math.max(2, Math.min(5, pane / 108));
         for (int index = 0; index < AppIcons.IDS.length; index += columns) {
             LinearLayout row = new LinearLayout(getContext());
@@ -508,16 +564,17 @@ final class SettingsView extends LinearLayout {
         boolean stacked = viewport.stackedSettingsRows && control != null && !(control instanceof Switch);
         row.setOrientation(stacked ? VERTICAL : HORIZONTAL);
         row.setGravity(stacked ? Gravity.START : Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(9), dp(4), dp(8), dp(4));
+        row.setPadding(dp(viewport.scale(11)), dp(viewport.scale(4)), dp(viewport.scale(9)), dp(viewport.scale(4)));
         row.setBackground(card(8));
         LinearLayout text = column();
-        text.addView(label(title, 15, ink, true));
-        if (detail != null) text.addView(label(detail, 13, muted, false));
+        text.addView(label(title, viewport.songSp, ink, true));
+        if (detail != null && !detail.isEmpty()) text.addView(label(detail, viewport.metadataSp, muted, false));
         if (stacked) row.addView(text, new LayoutParams(-1, -2));
         else row.addView(text, new LayoutParams(0, -2, 1));
         if (control != null) {
             int width = control instanceof Switch ? -2 : stacked ? -1 : dp(156);
-            control.setMinimumHeight(dp(44));
+            control.setMinimumHeight(dp(Viewport.TOUCH));
+            control.setMinimumWidth(dp(Viewport.TOUCH));
             row.addView(control, new LayoutParams(width, -2));
         }
         LayoutParams params = new LayoutParams(-1, -2);
@@ -536,7 +593,7 @@ final class SettingsView extends LinearLayout {
         label.setText(text);
         label.setTextColor(colour);
         label.setTextSize(size);
-        label.setPadding(dp(4), dp(6), dp(4), dp(5));
+        label.setPadding(dp(4), dp(viewport.scale(4)), dp(4), dp(viewport.scale(4)));
         label.setTypeface(font, bold ? Typeface.BOLD : Typeface.NORMAL);
         return label;
     }
@@ -549,7 +606,7 @@ final class SettingsView extends LinearLayout {
         button.setTextSize(14);
         button.setTypeface(font);
         button.setPadding(dp(8), dp(3), dp(8), dp(3));
-        button.setMinHeight(dp(42));
+        button.setMinHeight(dp(Viewport.TOUCH));
         button.setSingleLine(false);
         button.setMaxLines(3);
         button.setBackground(card(8));

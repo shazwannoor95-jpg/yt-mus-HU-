@@ -5,6 +5,8 @@ at `99d404b9d78d0edb72361eb8c5c465ae6af57979`. The landscape UI uses
 Android Views, MediaPlayer and MediaSession. The original app icon comes
 from the same upstream revision.
 
+The [adaptive head-unit guide](docs/adaptive-head-unit.md) describes layout presets, artwork budgets, test coverage and the parked-device checklist.
+
 ## Android preview
 
 Settings includes Account, Playback, Lyrics, Appearance, Connections, General,

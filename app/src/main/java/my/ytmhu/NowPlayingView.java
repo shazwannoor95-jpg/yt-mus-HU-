@@ -37,6 +37,7 @@ final class NowPlayingView extends LinearLayout {
     private final ImageView cover;
     private final FrostedBackdrop frost;
     private final ScrollView scroll;
+    private final PageRows queueRows;
     private final LinearLayout rows;
     private final List<TextView> lines = new ArrayList<>();
     private PlaybackService playback;
@@ -49,6 +50,7 @@ final class NowPlayingView extends LinearLayout {
     private boolean closed;
     private List<MusicApi.Track> lastQueue = Collections.emptyList();
     private int lastIndex = -2;
+    private PerformancePolicy.Profile profile = PerformancePolicy.Profile.BALANCED;
 
     NowPlayingView(Context context, AppSettings prefs, Appearance appearance, Artwork artwork, SongMenu menu, Runnable close) {
         super(context);
@@ -92,13 +94,29 @@ final class NowPlayingView extends LinearLayout {
         tabs.setPadding(dp(6), 0, 0, dp(6));
         addTab(tabs, lyricsTab, 0, 1);
         addTab(tabs, queueTab, 0, 1);
-        addTab(tabs, button("Close", close), dp(72), 0);
+        Button closeTab = button(Icons.CLOSE, close);
+        closeTab.setTypeface(appearance.icons);
+        closeTab.setContentDescription("Close Now Playing");
+        addTab(tabs, closeTab, dp(Viewport.TOUCH), 0);
         right.addView(tabs);
         scroll = new ScrollView(context);
         rows = column();
         scroll.addView(rows);
-        right.addView(scroll, new LayoutParams(-1, 0, 1));
+        android.widget.FrameLayout panel = new android.widget.FrameLayout(context);
+        panel.addView(scroll, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        queueRows = new PageRows(context);
+        panel.addView(queueRows, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        right.addView(panel, new LayoutParams(-1, 0, 1));
         addView(right, new LayoutParams(0, -1, 1.17f));
+    }
+
+    boolean lyricsVisible() { return lyricsMode; }
+
+    void setProfile(PerformancePolicy.Profile next) {
+        if (profile == next) return;
+        profile = next;
+        if (frost != null) frost.setProfile(next);
+        if (track != null && isShown()) bindCover(track);
     }
 
     void show(PlaybackService playback, boolean lyricsVisible) {
@@ -115,30 +133,30 @@ final class NowPlayingView extends LinearLayout {
             invalidateLyrics();
             track = current;
             lastIndex = -2;
-            cover.setTag(null);
+            artwork.unbind(cover);
             cover.setImageDrawable(null);
             if (frost != null) frost.setAlbum(null);
             background(appearance.start);
             title.setText(track == null ? "Now playing" : track.title);
             artist.setText(track == null ? "" : track.artist);
-            if (track != null) {
-                artwork.loadDetail(cover, track.artwork, bitmap -> {
-                    if (track == current && !closed && appearance.albumTint && prefs.flag("coverColors", true)
-                            && !prefs.flag("flat", false)) {
-                        if (frost != null) {
-                            frost.setAlbum(bitmap);
-                        } else {
-                            int tone = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() / 2);
-                            background(Color.rgb(32 + Color.red(tone) / 3, 18 + Color.green(tone) / 3,
-                                    24 + Color.blue(tone) / 3));
-                        }
-                    }
-                });
-            }
+            if (track != null) bindCover(track);
             render();
         } else if (!lyricsMode) {
             renderQueue();
         }
+    }
+
+    private void bindCover(MusicApi.Track current) {
+        artwork.loadDetail(cover, current.artwork, bitmap -> {
+            if (track != current || closed || !appearance.albumTint || !prefs.flag("coverColors", true)
+                    || prefs.flag("flat", false)) return;
+            if (frost != null) {
+                frost.setAlbum(bitmap);
+            } else {
+                int tone = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() / 2);
+                background(Color.rgb(32 + Color.red(tone) / 3, 18 + Color.green(tone) / 3, 24 + Color.blue(tone) / 3));
+            }
+        });
     }
 
     private void showLyrics(boolean visible) {
@@ -151,6 +169,8 @@ final class NowPlayingView extends LinearLayout {
     private void render() {
         lyricsTab.setSelected(lyricsMode);
         queueTab.setSelected(!lyricsMode);
+        scroll.setVisibility(lyricsMode ? VISIBLE : GONE);
+        queueRows.setVisibility(lyricsMode ? GONE : VISIBLE);
         if (!lyricsMode) {
             renderQueue();
             return;
@@ -233,7 +253,7 @@ final class NowPlayingView extends LinearLayout {
             scroll.post(() -> {
                 if (activeLine == index && lyricsMode && line.getParent() == rows) {
                     int top = Math.max(0, line.getTop() - scroll.getHeight() / 3);
-                    if (prefs.flag("quickLyrics", false)) scroll.scrollTo(0, top);
+                    if (prefs.flag("quickLyrics", false) || profile.ordinal() <= PerformancePolicy.Profile.LITE.ordinal()) scroll.scrollTo(0, top);
                     else scroll.smoothScrollTo(0, top);
                 }
             });
@@ -246,38 +266,47 @@ final class NowPlayingView extends LinearLayout {
         List<MusicApi.Track> queue = playback == null ? Collections.emptyList() : playback.queueSnapshot();
         int current = playback == null ? -1 : playback.queueIndex();
         if (lastIndex == current && lastQueue.equals(queue)) return;
+        int visible = current == lastIndex ? queueRows.getFirstVisiblePosition() : 0;
+        int offset = current == lastIndex ? queueRows.rowOffset() : 0;
         lastIndex = current;
         lastQueue = queue;
-        rows.removeAllViews();
-        scroll.scrollTo(0, 0);
-        if (queue.isEmpty()) {
-            rows.addView(text("The queue is empty.", 17, MUTED));
-            return;
-        }
+        List<java.util.function.Supplier<View>> items = new ArrayList<>();
+        if (queue.isEmpty()) items.add(() -> text("The queue is empty.", 17, MUTED));
         for (int i = Math.max(0, current); i < queue.size(); i++) {
             int position = i;
             MusicApi.Track song = queue.get(i);
-            LinearLayout row = new LinearLayout(getContext());
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            ImageView thumbnail = new ImageView(getContext());
-            thumbnail.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            artwork.load(thumbnail, song.artwork);
-            row.addView(thumbnail, new LayoutParams(dp(38), dp(38)));
-            LinearLayout names = column();
-            names.addView(text(song.title, 16, i == current ? 0xffffd2db : FOREGROUND));
-            if (!song.artist.isEmpty()) names.addView(text(song.artist, 13, MUTED));
-            names.setOnClickListener(view -> {
-                if (playback != null) playback.playAt(position);
-            });
-            row.addView(names, new LayoutParams(0, -2, 1));
-            Button options = new Button(getContext());
-            options.setText(Icons.MORE);
-            options.setTypeface(appearance.icons);
-            options.setContentDescription("Actions for " + song.title);
-            options.setOnClickListener(view -> menu.show(view, song, position));
-            row.addView(options, new LayoutParams(dp(48), dp(48)));
-            rows.addView(row, new LayoutParams(-1, -2));
+            items.add(() -> queueRow(song, position, position == current));
         }
+        queueRows.show(items, visible, offset);
+    }
+
+    private View queueRow(MusicApi.Track song, int position, boolean current) {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView thumbnail = new ImageView(getContext());
+        thumbnail.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        artwork.load(thumbnail, song.artwork);
+        row.addView(thumbnail, new LayoutParams(dp(38), dp(38)));
+        LinearLayout names = column();
+        TextView name = text(song.title, 16, current ? 0xffffd2db : FOREGROUND);
+        name.setMaxLines(2);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        names.addView(name);
+        if (!song.artist.isEmpty()) names.addView(text(song.artist, 13, MUTED));
+        names.setMinimumHeight(dp(Viewport.TOUCH));
+        names.setGravity(Gravity.CENTER_VERTICAL);
+        names.setFocusable(true);
+        names.setOnClickListener(view -> {
+            if (playback != null) playback.playAt(position);
+        });
+        row.addView(names, new LayoutParams(0, -2, 1));
+        Button options = new Button(getContext());
+        options.setText(Icons.MORE);
+        options.setTypeface(appearance.icons);
+        options.setContentDescription("Actions for " + song.title);
+        options.setOnClickListener(view -> menu.show(view, song, position));
+        row.addView(options, new LayoutParams(dp(Viewport.TOUCH), dp(Viewport.TOUCH)));
+        return row;
     }
 
     void invalidateLyrics() {
@@ -338,7 +367,7 @@ final class NowPlayingView extends LinearLayout {
     }
 
     private void addTab(LinearLayout row, Button button, int width, float weight) {
-        LayoutParams params = new LayoutParams(width, dp(40), weight);
+        LayoutParams params = new LayoutParams(width, dp(Viewport.TOUCH), weight);
         params.rightMargin = dp(5);
         row.addView(button, params);
     }

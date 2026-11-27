@@ -34,6 +34,9 @@ public final class PlaybackService extends Service {
     private List<MusicApi.Track> queue = Collections.emptyList();
     private int index = -1;
     private int generation;
+    private boolean shuffle;
+    private boolean repeat;
+    private List<MusicApi.Track> originalQueue = Collections.emptyList();
     private MediaSession session;
     private MediaPlayer player;
     private AudioManager audio;
@@ -48,7 +51,7 @@ public final class PlaybackService extends Service {
     private boolean started;
     private boolean destroyed;
     private int state = PlaybackState.STATE_NONE;
-    private String message = "Pilih lagu untuk main.";
+    private String message = "";
     Runnable changed;
 
     final class LocalBinder extends Binder {
@@ -79,6 +82,7 @@ public final class PlaybackService extends Service {
             @Override public void onPause() { pause(); }
             @Override public void onSkipToNext() { skip(1); }
             @Override public void onSkipToPrevious() { skip(-1); }
+            @Override public void onSeekTo(long position) { seekTo((int) Math.min(Integer.MAX_VALUE, position)); }
             @Override public void onStop() { stopPlayback(); }
         });
         publish(state, message);
@@ -100,13 +104,22 @@ public final class PlaybackService extends Service {
     }
 
     void play(List<MusicApi.Track> tracks, int selected) {
+        originalQueue = new ArrayList<>(tracks);
         queue = new ArrayList<>(tracks);
-        select(selected);
+        if (shuffle) {
+            MusicApi.Track first = queue.remove(selected);
+            Collections.shuffle(queue);
+            queue.add(0, first);
+            select(0);
+        } else {
+            select(selected);
+        }
     }
 
     void skip(int delta) {
         int next = index + delta;
-        if (next >= 0 && next < queue.size()) select(next);
+        if (!canSkip(delta)) return;
+        select((next + queue.size()) % queue.size());
     }
 
     void toggle() {
@@ -114,14 +127,47 @@ public final class PlaybackService extends Service {
         else resume();
     }
 
-    String officialTrackId() {
-        return signInRequired && index >= 0 ? queue.get(index).id : null;
-    }
-
+    boolean requiresSignIn() { return signInRequired; }
     boolean playing() { return state == PlaybackState.STATE_PLAYING; }
     boolean canPlay() { return index >= 0 && state != PlaybackState.STATE_BUFFERING; }
-    boolean canSkip(int delta) { return index >= 0 && index + delta >= 0 && index + delta < queue.size(); }
+    boolean canSkip(int delta) {
+        return index >= 0 && queue.size() > 1 && (repeat || (index + delta >= 0 && index + delta < queue.size()));
+    }
+    String title() { return index < 0 ? "Now playing" : queue.get(index).title; }
     String status() { return message; }
+    boolean isShuffle() { return shuffle; }
+    boolean isRepeat() { return repeat; }
+    int duration() { return prepared ? player.getDuration() : 0; }
+    int position() { return prepared ? player.getCurrentPosition() : 0; }
+
+    void seekTo(int where) {
+        if (!prepared) return;
+        player.seekTo(Math.max(0, Math.min(where, duration())));
+    }
+
+    void toggleShuffle() {
+        shuffle = !shuffle;
+        if (index >= 0) {
+            MusicApi.Track current = queue.get(index);
+            queue = new ArrayList<>(originalQueue);
+            if (shuffle) {
+                queue.remove(current);
+                Collections.shuffle(queue);
+                queue.add(0, current);
+            }
+            index = queue.indexOf(current);
+        }
+        publish(state, message);
+    }
+
+    void toggleRepeat() {
+        repeat = !repeat;
+        publish(state, message);
+    }
+
+    void stopForSignOut() {
+        stopPlayback();
+    }
 
     private void select(int selected) {
         index = selected;
@@ -134,11 +180,13 @@ public final class PlaybackService extends Service {
                 .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist).build());
         session.setActive(true);
-        publish(PlaybackState.STATE_BUFFERING, "Memuatkan · " + track.title);
+        publish(PlaybackState.STATE_BUFFERING, "Loading…");
         if (!started) startService(new Intent(this, PlaybackService.class));
+        String cookies = GoogleSignIn.cookies();
         request = network.submit(() -> {
             try {
-                List<String> urls = api.audio(track);
+                api.setSession(cookies);
+                List<MusicApi.AudioSource> urls = api.audio(track);
                 main.post(() -> {
                     if (!destroyed && generation == current) prepare(urls, 0, current);
                 });
@@ -146,7 +194,7 @@ public final class PlaybackService extends Service {
                 main.post(() -> {
                     if (destroyed || generation != current) return;
                     signInRequired = error instanceof MusicApi.SignInRequired;
-                    fail(signInRequired ? "YouTube minta log masuk. Buka lagu di YouTube Music." : error.getMessage());
+                    fail(error.getMessage());
                 });
             }
         });
@@ -155,10 +203,10 @@ public final class PlaybackService extends Service {
 
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
 
-    private void prepare(List<String> urls, int source, int current) {
+    private void prepare(List<MusicApi.AudioSource> urls, int source, int current) {
         releasePlayer();
         if (source == urls.size()) {
-            fail("Penstriman gagal.");
+            fail("Audio stream failed.");
             return;
         }
         MediaPlayer next = new MediaPlayer();
@@ -174,18 +222,20 @@ public final class PlaybackService extends Service {
         next.setOnCompletionListener(done -> {
             if (done != player || generation != current) return;
             if (canSkip(1)) skip(1);
+            else if (repeat) select(index);
             else stopPlayback();
         });
         next.setOnErrorListener((broken, what, extra) -> {
             if (broken == player && generation == current) {
-                publish(PlaybackState.STATE_BUFFERING, "Mencuba sumber audio lain…");
+                publish(PlaybackState.STATE_BUFFERING, "Trying another audio source…");
                 prepare(urls, source + 1, current);
             }
             return true;
         });
         try {
-            next.setDataSource(this, android.net.Uri.parse(urls.get(source)),
-                    Collections.singletonMap("User-Agent", MusicApi.PLAYER_UA));
+            MusicApi.AudioSource audioSource = urls.get(source);
+            next.setDataSource(this, android.net.Uri.parse(audioSource.url),
+                    Collections.singletonMap("User-Agent", audioSource.agent));
             next.prepareAsync();
         } catch (Exception error) {
             prepare(urls, source + 1, current);
@@ -201,18 +251,18 @@ public final class PlaybackService extends Service {
             return;
         }
         if (audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            publish(PlaybackState.STATE_PAUSED, "Sumber audio sedang digunakan.");
+            publish(PlaybackState.STATE_PAUSED, "Another app is using audio.");
             return;
         }
         player.start();
-        publish(PlaybackState.STATE_PLAYING, queue.get(index).title);
+        publish(PlaybackState.STATE_PLAYING, queue.get(index).artist);
     }
 
     private void pause() {
         if (!playing() || !prepared) return;
         player.pause();
         audio.abandonAudioFocusRequest(focus);
-        publish(PlaybackState.STATE_PAUSED, "Dijeda · " + queue.get(index).title);
+        publish(PlaybackState.STATE_PAUSED, queue.get(index).artist);
     }
 
     private void fail(String detail) {
@@ -220,7 +270,7 @@ public final class PlaybackService extends Service {
         audio.abandonAudioFocusRequest(focus);
         if (signInRequired) session.setActive(false);
         publish(PlaybackState.STATE_ERROR, signInRequired ? detail :
-                "Gagal main" + (detail == null ? "." : " · " + detail));
+                "Playback failed" + (detail == null ? "." : " · " + detail));
         endForeground();
     }
 
@@ -232,7 +282,7 @@ public final class PlaybackService extends Service {
         index = -1;
         signInRequired = false;
         session.setActive(false);
-        publish(PlaybackState.STATE_STOPPED, "Pilih lagu untuk main.");
+        publish(PlaybackState.STATE_STOPPED, "");
         endForeground();
     }
 
@@ -241,6 +291,7 @@ public final class PlaybackService extends Service {
         message = text;
         long actions = PlaybackState.ACTION_STOP;
         if (canPlay()) actions |= PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE;
+        if (prepared) actions |= PlaybackState.ACTION_SEEK_TO;
         if (canSkip(-1)) actions |= PlaybackState.ACTION_SKIP_TO_PREVIOUS;
         if (canSkip(1)) actions |= PlaybackState.ACTION_SKIP_TO_NEXT;
         session.setPlaybackState(new PlaybackState.Builder().setActions(actions)

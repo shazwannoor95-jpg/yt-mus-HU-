@@ -89,9 +89,10 @@ final class NowPlayingView extends LinearLayout {
         LinearLayout tabs = new LinearLayout(context);
         lyricsTab = button("Lyrics", () -> showLyrics(true));
         queueTab = button("Up next", () -> showLyrics(false));
-        tabs.addView(lyricsTab, new LayoutParams(0, dp(46), 1));
-        tabs.addView(queueTab, new LayoutParams(0, dp(46), 1));
-        tabs.addView(button("Close", close), new LayoutParams(dp(84), dp(46)));
+        tabs.setPadding(dp(6), 0, 0, dp(6));
+        addTab(tabs, lyricsTab, 0, 1);
+        addTab(tabs, queueTab, 0, 1);
+        addTab(tabs, button("Close", close), dp(72), 0);
         right.addView(tabs);
         scroll = new ScrollView(context);
         rows = column();
@@ -121,9 +122,10 @@ final class NowPlayingView extends LinearLayout {
             title.setText(track == null ? "Now playing" : track.title);
             artist.setText(track == null ? "" : track.artist);
             if (track != null) {
-                artwork.load(cover, track.artwork, bitmap -> {
-                    if (track == current && !closed && appearance.albumTint && prefs.flag("coverColors", true)) {
-                        if (frost != null && !prefs.flag("flat", false)) {
+                artwork.loadDetail(cover, track.artwork, bitmap -> {
+                    if (track == current && !closed && appearance.albumTint && prefs.flag("coverColors", true)
+                            && !prefs.flag("flat", false)) {
+                        if (frost != null) {
                             frost.setAlbum(bitmap);
                         } else {
                             int tone = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() / 2);
@@ -147,8 +149,8 @@ final class NowPlayingView extends LinearLayout {
     }
 
     private void render() {
-        lyricsTab.setTextColor(lyricsMode ? FOREGROUND : MUTED);
-        queueTab.setTextColor(lyricsMode ? MUTED : FOREGROUND);
+        lyricsTab.setSelected(lyricsMode);
+        queueTab.setSelected(!lyricsMode);
         if (!lyricsMode) {
             renderQueue();
             return;
@@ -312,8 +314,33 @@ final class NowPlayingView extends LinearLayout {
         Button button = new Button(getContext());
         button.setText(label);
         button.setAllCaps(false);
+        button.setTypeface(appearance.font);
+        button.setTextColor(new android.content.res.ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_selected}, new int[0]},
+                new int[]{FOREGROUND, MUTED}));
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+        button.setPadding(dp(3), 0, dp(3), 0);
+        android.graphics.drawable.StateListDrawable states = new android.graphics.drawable.StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_selected}, tabShape(appearance.glass ? 0x36ffffff : appearance.control));
+        states.addState(new int[0], tabShape(appearance.glass ? 0x12ffffff : appearance.surface));
+        button.setBackground(new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x48ffffff), states, null));
         button.setOnClickListener(view -> action.run());
         return button;
+    }
+
+    private GradientDrawable tabShape(int color) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(color);
+        shape.setCornerRadius(dp(9));
+        return shape;
+    }
+
+    private void addTab(LinearLayout row, Button button, int width, float weight) {
+        LayoutParams params = new LayoutParams(width, dp(40), weight);
+        params.rightMargin = dp(5);
+        row.addView(button, params);
     }
 
     private TextView text(String label, int size, int color) {

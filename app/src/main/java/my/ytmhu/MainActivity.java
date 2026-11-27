@@ -3,7 +3,6 @@ package my.ytmhu;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.MediaRouteButton;
 import android.app.Dialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -18,7 +17,6 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.media.AudioManager;
-import android.media.MediaRouter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -62,8 +60,12 @@ public final class MainActivity extends Activity {
     private ImageView playerArtwork;
     private SeekBar inlineVolume;
     private LinearLayout miniPlayer;
-    private TextView miniTitle;
-    private Button miniPlay, expandedButton;
+    private FrostedBackdrop miniBackdrop;
+    private ImageView miniArtwork;
+    private TextView miniTitle, miniArtist;
+    private Button miniPrevious, miniPlay, miniNext, miniLike, miniDislike, expandedButton;
+    private SeekBar miniSeek;
+    private boolean miniSeeking;
     private long volumeRefreshed;
     private int settingsScroll;
     private String currentArtwork = "";
@@ -353,13 +355,12 @@ public final class MainActivity extends Activity {
         playbackTime.setPadding(0, 0, 0, 0);
         playbackTime.setOnClickListener(view -> showSeek());
         utility.addView(playbackTime, new LinearLayout.LayoutParams(dp(viewport.width < 540 ? 72 : 82), -1));
-        transport(utility, Icons.VOLUME, "Media volume", this::showAudio);
+        transport(utility, Icons.VOLUME, "Media volume", this::showVolume);
         if (!separateSeek || viewport.width >= 398) {
             inlineVolume = volumeSlider();
             inlineVolume.setPadding(dp(5), 0, dp(5), 0);
             utility.addView(inlineVolume, new LinearLayout.LayoutParams(dp(viewport.width >= 960 ? 77 : 50), dp(38)));
         }
-        transport(utility, Icons.OUTPUT, "Audio output", this::showAudio);
         transport(utility, Icons.LYRICS, "Lyrics", () -> openPlayer(true));
         transport(utility, Icons.QUEUE, "Up next", () -> openPlayer(false));
         transport(utility, Icons.MINI, "Mini player", this::toggleMiniPlayer);
@@ -369,20 +370,86 @@ public final class MainActivity extends Activity {
 
     private void addMiniPlayer(FrameLayout stage) {
         miniPlayer = column();
-        miniPlayer.setPadding(dp(6), dp(5), dp(6), 0);
-        miniPlayer.setBackground(shape(appearance.surface, 12));
+        if (appearance.glass) {
+            miniBackdrop = new FrostedBackdrop(appearance.window, appearance.surface, appearance.scrim,
+                    prefs.number("brightness", 100));
+            miniPlayer.setBackground(miniBackdrop);
+        } else {
+            miniPlayer.setBackground(shape(appearance.surface, 8));
+        }
+        miniPlayer.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override public void getOutline(View view, android.graphics.Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(8));
+            }
+        });
+        miniPlayer.setClipToOutline(true);
         miniPlayer.setElevation(dp(8));
+
+        int width = Math.min(400, Math.max(1, viewport.width - 20));
+        int coverSize = width >= 370 ? 84 : width >= 315 ? 72 : 56;
+        LinearLayout body = new LinearLayout(this);
+        body.setGravity(Gravity.CENTER_VERTICAL);
+        body.setPadding(dp(10), dp(10), dp(10), 0);
+        miniArtwork = cover("");
+        miniArtwork.setContentDescription("Open Now Playing");
+        miniArtwork.setOnClickListener(view -> openPlayer(false));
+        body.addView(miniArtwork, new LinearLayout.LayoutParams(dp(coverSize), dp(coverSize)));
+
+        LinearLayout details = column();
+        details.setPadding(dp(10), 0, 0, 0);
         miniTitle = label("Now playing", 14, INK);
-        miniTitle.setGravity(Gravity.CENTER);
-        miniPlayer.addView(miniTitle, new LinearLayout.LayoutParams(-1, -2));
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER);
-        transport(row, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); });
-        miniPlay = transport(row, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); });
-        transport(row, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); });
-        transport(row, Icons.CLOSE, "Close mini player", this::toggleMiniPlayer);
-        miniPlayer.addView(row, new LinearLayout.LayoutParams(-1, -2));
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(210), -2, Gravity.BOTTOM | Gravity.END);
+        miniTitle.setTypeface(appearance.font, Typeface.BOLD);
+        miniArtist = label("", 12, MUTED);
+        miniTitle.setPadding(0, 0, 0, 0);
+        miniArtist.setPadding(0, 0, 0, 0);
+        miniTitle.setOnClickListener(view -> openPlayer(false));
+        details.addView(miniTitle, new LinearLayout.LayoutParams(-1, -2));
+        details.addView(miniArtist, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout controls = new LinearLayout(this);
+        controls.setGravity(Gravity.CENTER);
+        int target = Math.max(1, Math.min(36, (width - coverSize - 30) / 6));
+        miniLike = transport(controls, Icons.HEART, "Like song", () -> rateCurrent("like", "Liked"), target);
+        miniDislike = transport(controls, Icons.THUMBS_DOWN, "Dislike song", () -> rateCurrent("dislike", "Disliked"), target);
+        miniPrevious = transport(controls, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); }, target);
+        miniPlay = transport(controls, Icons.PLAY, "Play", () -> { if (playback != null) playback.toggle(); }, target);
+        miniNext = transport(controls, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); }, target);
+        transport(controls, Icons.VOLUME, "Media volume", this::showVolume, target);
+        if (!appearance.barePlay) {
+            miniPlay.setBackground(new android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(0x40666666), shape(INK, 22), null));
+            miniPlay.setTextColor(0xff141119);
+        }
+        details.addView(controls, new LinearLayout.LayoutParams(-1, dp(44)));
+        body.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
+        miniPlayer.addView(body);
+
+        miniSeek = new SeekBar(this);
+        miniSeek.setPadding(0, 0, 0, 0);
+        miniSeek.setThumb(null);
+        miniSeek.setContentDescription("Mini player track progress");
+        android.graphics.drawable.ClipDrawable filled = new android.graphics.drawable.ClipDrawable(
+                shape(appearance.progress(accent()), 0), Gravity.LEFT, android.graphics.drawable.ClipDrawable.HORIZONTAL);
+        android.graphics.drawable.LayerDrawable line = new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[]{shape(0x44ffffff, 0), filled});
+        line.setId(1, android.R.id.progress);
+        for (int i = 0; i < line.getNumberOfLayers(); i++) {
+            line.setLayerHeight(i, dp(2));
+            line.setLayerGravity(i, Gravity.BOTTOM | Gravity.FILL_HORIZONTAL);
+        }
+        miniSeek.setProgressDrawable(line);
+        miniSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int value, boolean user) {
+                if (user && !miniSeeking && playback != null) playback.seekTo(value);
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) { miniSeeking = true; }
+            @Override public void onStopTrackingTouch(SeekBar bar) {
+                miniSeeking = false;
+                if (playback != null) playback.seekTo(bar.getProgress());
+            }
+        });
+        miniPlayer.addView(miniSeek, new LinearLayout.LayoutParams(-1, dp(12)));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(width), -2, Gravity.BOTTOM | Gravity.END);
         params.setMargins(dp(10), dp(10), dp(10), dp(8));
         stage.addView(miniPlayer, params);
         miniPlayer.setVisibility(View.GONE);
@@ -519,6 +586,7 @@ public final class MainActivity extends Activity {
         } catch (RuntimeException unavailable) {
             accountError = "Android System WebView could not be opened.";
             navigate("Account");
+            GoogleSignIn.openSeparately(this);
         }
     }
 
@@ -533,6 +601,9 @@ public final class MainActivity extends Activity {
             try {
                 api.setSession(cookies);
                 name = api.accountName();
+            } catch (MusicApi.SessionExpired expired) {
+                api.setSession("");
+                error = "Your YouTube Music session expired. Open Sign in to connect again.";
             } catch (Exception failure) {
                 error = "YouTube could not verify your sign-in. Try signing in again.";
             }
@@ -757,7 +828,6 @@ public final class MainActivity extends Activity {
         }
         switch (action) {
             case "account": if (account.isEmpty()) openAccount(); else signOut(); break;
-            case "audio": showAudio(); break;
             case "cache": artwork.clear(); toast("Artwork cache cleared."); break;
             case "network": testConnection(); break;
             case "notifications":
@@ -1086,22 +1156,11 @@ public final class MainActivity extends Activity {
         volume.setEnabled(!audio.isVolumeFixed());
     }
 
-    private void showAudio() {
+    private void showVolume() {
         LinearLayout body = column();
         body.setPadding(dp(16), dp(8), dp(16), dp(8));
         body.addView(volumeSlider(), new LinearLayout.LayoutParams(-1, dp(48)));
-        MediaRouter router = getSystemService(MediaRouter.class);
-        MediaRouter.RouteInfo route = router.getSelectedRoute(MediaRouter.ROUTE_TYPE_LIVE_AUDIO);
-        body.addView(label(route == null ? "Android default output" : route.getName().toString(), 16, MUTED));
-        MediaRouteButton routes = new MediaRouteButton(this);
-        routes.setRouteTypes(MediaRouter.ROUTE_TYPE_LIVE_AUDIO);
-        routes.setContentDescription("Choose Android audio output");
-        LinearLayout selector = new LinearLayout(this);
-        selector.setGravity(Gravity.CENTER_VERTICAL);
-        selector.addView(routes, new LinearLayout.LayoutParams(dp(54), dp(54)));
-        selector.addView(label("Android audio routes", 16, INK));
-        body.addView(selector);
-        new AlertDialog.Builder(this).setTitle("Volume and audio output").setView(body)
+        new AlertDialog.Builder(this).setTitle("Media volume").setView(body)
                 .setPositiveButton("Done", null).show();
     }
 
@@ -1286,7 +1345,13 @@ public final class MainActivity extends Activity {
         miniPlay.setText(playing ? Icons.PAUSE : Icons.PLAY);
         miniPlay.setContentDescription(playing ? "Pause" : "Play");
         miniPlay.setEnabled(play.isEnabled());
-        miniTitle.setText(playback == null ? "Now playing" : playback.title());
+        MusicApi.Track song = playback == null ? null : playback.currentTrack();
+        miniTitle.setText(song == null ? "Now playing" : song.title);
+        miniArtist.setText(song == null ? "" : song.artist);
+        miniPrevious.setEnabled(previous.isEnabled());
+        miniNext.setEnabled(next.isEnabled());
+        miniLike.setEnabled(song != null);
+        miniDislike.setEnabled(song != null);
         play.setContentDescription(playing ? "Pause" : "Play");
         if (shuffle != null) shuffle.setTextColor(playback != null && playback.isShuffle() ? accent() : INK);
         if (repeat != null) repeat.setTextColor(playback != null && playback.isRepeat() ? accent() : INK);
@@ -1305,18 +1370,21 @@ public final class MainActivity extends Activity {
         if (currentArtwork.equals(desired)) return;
         currentArtwork = desired;
         if (backdrop != null) backdrop.setAlbum(null);
+        if (miniBackdrop != null) miniBackdrop.setAlbum(null);
+        miniArtwork.setImageDrawable(null);
         if (playerArtwork != null) {
             playerArtwork.setTag(null);
             playerArtwork.setImageDrawable(null);
             playerArtwork.setVisibility(desired.isEmpty() ? View.GONE : View.VISIBLE);
         }
-        if (desired.isEmpty() || (backdrop == null && playerArtwork == null)) return;
-        boolean useBackdrop = backdrop != null && appearance.albumTint && prefs.flag("coverColors", true)
-                && !prefs.flag("flat", false);
+        if (desired.isEmpty()) return;
+        boolean tintArtwork = appearance.albumTint && prefs.flag("coverColors", true) && !prefs.flag("flat", false);
         artwork.acquire(desired, bitmap -> {
             if (isDestroyed() || !desired.equals(currentArtwork)) return;
             if (playerArtwork != null) playerArtwork.setImageBitmap(bitmap);
-            if (useBackdrop) backdrop.setAlbum(bitmap);
+            miniArtwork.setImageBitmap(bitmap);
+            if (tintArtwork && backdrop != null) backdrop.setAlbum(bitmap);
+            if (tintArtwork && miniBackdrop != null) miniBackdrop.setAlbum(bitmap);
         });
     }
 
@@ -1324,6 +1392,11 @@ public final class MainActivity extends Activity {
         if (seeking) return;
         int duration = playback == null ? 0 : playback.duration();
         int position = playback == null ? 0 : playback.position();
+        if (!miniSeeking && miniPlayer.getVisibility() == View.VISIBLE) {
+            miniSeek.setEnabled(duration > 0);
+            miniSeek.setMax(Math.max(1, duration));
+            miniSeek.setProgress(position);
+        }
         if (seek != null) {
             seek.setEnabled(duration > 0);
             if (seek.getThumb() != null) seek.getThumb().setAlpha(prefs.flag("seekKnob", true) || duration > 0 ? 255 : 0);
@@ -1354,6 +1427,10 @@ public final class MainActivity extends Activity {
     }
 
     private Button transport(LinearLayout row, String title, String description, Runnable action) {
+        return transport(row, title, description, action, viewport.target);
+    }
+
+    private Button transport(LinearLayout row, String title, String description, Runnable action, int target) {
         Button button = button(title, action);
         button.setPadding(0, 0, 0, 0);
         button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 18);
@@ -1361,7 +1438,7 @@ public final class MainActivity extends Activity {
         button.setBackground(new android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf(0x48ffffff), null, shape(Color.WHITE, 22)));
         button.setContentDescription(description);
-        row.addView(button, new LinearLayout.LayoutParams(dp(viewport.target), dp(viewport.target)));
+        row.addView(button, new LinearLayout.LayoutParams(dp(target), dp(target)));
         return button;
     }
 

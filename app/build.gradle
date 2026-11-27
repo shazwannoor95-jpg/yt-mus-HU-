@@ -1,0 +1,35 @@
+plugins {
+    id 'com.android.application' version '8.9.0'
+}
+
+android {
+    namespace 'my.ytmhu'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'my.ytmhu'
+        minSdk 27
+        targetSdk 32
+        versionCode 9
+        versionName '0.4.4'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    def existingDebugKey = rootProject.file('build/debug.keystore')
+    if (existingDebugKey.isFile()) {
+        signingConfigs.debug.storeFile = existingDebugKey
+    }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+}

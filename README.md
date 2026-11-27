@@ -12,7 +12,7 @@ Keyboard shortcuts and About. Controls save on this device. Settings switches be
 compact header using the available width and Android font scaling.
 Appearance contains inline Themes and App icon galleries. Some launchers
 cache app icons, so the launcher entry can take a moment to refresh.
-The player keeps volume, output, lyrics, queue, mini player and expand
+The player keeps volume, lyrics, queue, mini player and expand
 visible. Narrow displays use a second row. Mini player floats inside
 the Android app.
 
@@ -26,6 +26,9 @@ See the
 [settings parity audit](docs/settings-parity.md) for the Android behavior and
 the remaining desktop controls.
 
+The [authentication audit](docs/authentication.md) records the regional
+redirect fix, login architecture and Gradle test commands.
+
 - Home and Explore show YouTube Music shelves and artwork. Home mood chips
   reload the feed, and search supports songs, albums, artists and playlists.
 - Settings › Account opens Google's sign-in page in Android System WebView.
@@ -36,15 +39,15 @@ the remaining desktop controls.
   and a plain-text YouTube Music fallback. The app sends song title and
   artist to LRCLIB only when lyrics are opened.
 - Up Next includes queue editing, play next, ratings, saved playlists,
-  radio and links. The player also includes media volume and an Android
-  route selector for outputs exposed by the firmware.
+  radio and links. The main bar includes Android media volume. The in-app
+  mini player has album art, ratings, transport, volume and a slim seek line.
 - Download exports a complete direct AAC stream to an Android document
   chosen by the user. HLS-only tracks, tags and an in-app offline library
   are pending.
 - The signed-in player can use directly available AAC sources. The upstream
   signature solver and additional playback fallbacks have yet to be ported.
   YouTube refusals are displayed in the player.
-- Google sign-in and device audio routes still need testing on the target
+- Google sign-in still needs testing on the target
   head unit. Sign-in supports the dedicated Google and YouTube account
   pages in WebView. If Google rejects the flow, **Open separately** opens
   YouTube Music outside the APK and leaves its browser session separate.

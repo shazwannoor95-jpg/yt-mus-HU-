@@ -18,7 +18,7 @@ final class FrostedBackdrop extends Drawable {
     private final int tint;
     private final int scrimAlpha, brightness;
     private Bitmap blur;
-    private int albumScrim;
+    private GradientDrawable albumShade;
 
     FrostedBackdrop(int base, int end, double scrim, int brightness) {
         this.brightness = brightness;
@@ -37,11 +37,9 @@ final class FrostedBackdrop extends Drawable {
             scaled.getPixels(pixels, 0, SAMPLE, 0, 0, SAMPLE, SAMPLE);
             int[] soft = smooth(pixels, SAMPLE);
             blur = Bitmap.createBitmap(soft, SAMPLE, SAMPLE, Bitmap.Config.ARGB_8888);
-            int luminance = 0;
-            for (int color : soft) {
-                luminance += (Color.red(color) * 21 + Color.green(color) * 72 + Color.blue(color) * 7) / 100;
-            }
-            albumScrim = Math.max(scrimAlpha, luminance / soft.length > 135 ? 160 : 108);
+            int shade = tint & 0x00ffffff;
+            albumShade = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    new int[]{Math.max(scrimAlpha, 138) << 24 | shade, 0xe0000000 | shade});
         }
         invalidateSelf();
     }
@@ -81,9 +79,8 @@ final class FrostedBackdrop extends Drawable {
         }
         paint.setAlpha(255);
         canvas.drawBitmap(blur, null, bounds, paint);
-        paint.setColor(Color.rgb(Color.red(tint), Color.green(tint), Color.blue(tint)));
-        paint.setAlpha(albumScrim);
-        canvas.drawRect(bounds, paint);
+        albumShade.setBounds(bounds);
+        albumShade.draw(canvas);
         if (brightness != 100) {
             paint.setColor(brightness < 100 ? Color.BLACK : Color.WHITE);
             paint.setAlpha(brightness < 100 ? (100 - brightness) * 255 / 100 : (brightness - 100) * 2);

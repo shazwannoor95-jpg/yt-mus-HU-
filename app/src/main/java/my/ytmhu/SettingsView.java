@@ -164,7 +164,6 @@ final class SettingsView extends LinearLayout {
                 new String[]{"Off", "Normal", "Quiet"}, new String[]{"off", "normal", "quiet"});
         range("Playback", "Sound", "Balance", "Adjust the left and right channels.", "balance", 0, -100, 100, 5,
                 value -> value == 0 ? "Centre" : value < 0 ? "L " + -value : "R " + value);
-        action("Playback", "Sound", "Output device", "Android routes exposed by this head unit.", "Choose", "audio");
         toggle("Playback", "Equalizer", "Equalizer", "Use Android’s equalizer when the device supports it.", "equalizer", false);
         choice("Playback", "Equalizer", "Preset", "Editing a band switches to Custom.", "eqPreset", "custom",
                 new String[]{"Custom", "Flat", "Bass boost", "Vocal", "Treble boost"},
@@ -211,7 +210,6 @@ final class SettingsView extends LinearLayout {
 
         action("Connections", "ListenBrainz", "ListenBrainz", host.connectionLabel(), "Manage", "listenbrainz");
         action("Connections", "Android", "Media controls", "Manage Android notifications for playback controls.", "Open", "notifications");
-        action("Connections", "Android", "Audio output", "View audio routes reported by Android.", "Choose", "audio");
 
         choice("General", "Song info", "Song info language", "Requested language for YouTube Music data.", "songLanguage", "en",
                 new String[]{"English", "Bahasa Melayu", "Indonesia", "日本語", "한국어", "Français", "Español", "Deutsch"},
@@ -232,7 +230,7 @@ final class SettingsView extends LinearLayout {
 
         action("About", "Updates", "Check now", "Check GitHub for a newer Android APK. Updates are installed through Android.", "Check", "updates");
         action("About", "Updates", "What’s new in " + BuildVersion.VERSION,
-                "Theme and app icon galleries, direct player controls, and Google sign-in diagnostics.", null, "");
+                "Redesigned mini player, sharper Now Playing artwork, and support for Google Malaysia sign-in pages.", null, "");
         action("About", "About", "YTM Head Unit " + BuildVersion.VERSION, "Android port of parts of ytm-rs. Android API 27 and newer.", null, "");
         action("About", "About", "Lyrics", "LRCLIB and YouTube Music.", null, "");
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");

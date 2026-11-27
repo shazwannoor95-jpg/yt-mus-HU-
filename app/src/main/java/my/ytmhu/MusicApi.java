@@ -77,8 +77,14 @@ final class MusicApi {
     }
 
     String accountName() throws Exception {
-        if (!hasSession(cookies)) throw new IOException("Sign in to see your library.");
-        JSONObject account = web("account/account_menu", new JSONObject());
+        if (!hasSession(cookies)) throw new SessionExpired();
+        JSONObject account;
+        try {
+            account = web("account/account_menu", new JSONObject());
+        } catch (HttpStatus failure) {
+            if (failure.status == 401) throw new SessionExpired();
+            throw failure;
+        }
         JSONObject header = find(account, "activeAccountHeaderRenderer", 0);
         if (header == null) throw new IOException("YouTube could not verify this account.");
         String name = displayText(header.optJSONObject("accountName"));
@@ -535,9 +541,20 @@ final class MusicApi {
         return connection;
     }
 
+    static final class SessionExpired extends IOException {}
+
+    private static final class HttpStatus extends IOException {
+        final int status;
+
+        HttpStatus(int status) {
+            super("YouTube HTTP " + status);
+            this.status = status;
+        }
+    }
+
     static String read(HttpsURLConnection connection) throws IOException {
         int status = connection.getResponseCode();
-        if (status != 200) throw new IOException("YouTube HTTP " + status);
+        if (status != 200) throw new HttpStatus(status);
         try (InputStream input = connection.getInputStream()) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             byte[] bytes = new byte[8192];

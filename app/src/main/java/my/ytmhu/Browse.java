@@ -44,10 +44,12 @@ final class Browse {
     static final class Shelf {
         final String title;
         final List<Card> cards;
+        final boolean preferArtwork;
 
-        Shelf(String title, List<Card> cards) {
+        Shelf(String title, List<Card> cards, boolean preferArtwork) {
             this.title = title;
             this.cards = cards;
+            this.preferArtwork = preferArtwork;
         }
     }
 
@@ -102,7 +104,13 @@ final class Browse {
                 Card card = card(item(contents, j));
                 if (card != null && !(hideExplicit && card.track != null && card.track.explicit)) cards.add(card);
             }
-            if (!cards.isEmpty()) out.add(new Shelf(title, cards));
+            int specifiedRows = renderer.optInt("numItemsPerColumn", 0);
+            String display = renderer.optString("itemSize");
+            boolean artwork = grid != null || specifiedRows == 1 || display.contains("LARGE");
+            for (int j = 0; j < contents.length() && !artwork; j++) {
+                artwork = item(contents, j).has("musicTwoRowItemRenderer");
+            }
+            if (!cards.isEmpty()) out.add(new Shelf(title, cards, artwork));
         }
         return out;
     }

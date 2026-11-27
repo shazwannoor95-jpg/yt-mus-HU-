@@ -8,7 +8,18 @@ from the same upstream revision.
 ## Android preview
 
 Settings includes Account, Playback, Lyrics, Appearance, Connections, General,
-Keyboard shortcuts and About. Controls save on this device. See the
+Keyboard shortcuts and About. Controls save on this device. Settings switches between two panes and a
+section picker using the available screen space and Android font scaling.
+Shelves page by whole, uncropped covers. Playback keeps primary controls
+visible and puts extras in a menu on compact screens.
+
+Settings › Appearance › Frosted glass uses a small blurred album sample
+and translucent panels on API 27 and newer. All 30 upstream presets can
+be selected and their supported colours, geometry and text styles apply.
+The Android renderer does not include the original GPU effects or the full
+upstream lyrics theme engine.
+
+See the
 [settings parity audit](docs/settings-parity.md) for the Android behavior and
 the remaining desktop controls.
 

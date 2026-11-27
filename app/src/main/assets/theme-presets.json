@@ -1,0 +1,5671 @@
+[
+  {
+    "id": "ad-nextgen",
+    "name": "AppleTify",
+    "creators": [
+      "a-dogann"
+    ],
+    "blurb": "Minimal dark skin mixing Apple Music and Spotify: right-leaning bold lyrics with a depth blur, a dark blurred still cover backdrop on now playing, a floating pill player bar and a red accent.",
+    "source": "Better Lyrics: a-dogann/-ADNEXTGEN-THEME 1.0.1",
+    "accent": "#fa243c",
+    "background": {
+      "mode": "cover_static",
+      "solid": "#000000",
+      "saturation": 0.8,
+      "np_dim": 0.45,
+      "np_contrast": 1.1
+    },
+    "lyrics": {
+      "font": "SF Pro Display",
+      "agent_align": "only_v1_left",
+      "font_rem": [
+        [
+          0,
+          4.2
+        ]
+      ],
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0.0,
+          4.0
+        ]
+      ],
+      "upcoming": [
+        [
+          1.0,
+          1.5
+        ],
+        [
+          1.0,
+          3.0
+        ],
+        [
+          1.0,
+          5.0
+        ],
+        [
+          1.0,
+          8.0
+        ]
+      ],
+      "opacity_transition": {
+        "secs": 0.4
+      },
+      "blur_transition": {
+        "secs": 0.4
+      },
+      "wobble": false,
+      "letter_wave": {
+        "on": false
+      },
+      "glow_alpha": 0.0001,
+      "long_glow_alpha": 1.0,
+      "scroll_secs": 0.4,
+      "word_rise_px": 3.0,
+      "word_rise_secs": 0.2,
+      "word_rise_ratio": 1.0,
+      "line_ease": [
+        0.0,
+        0.0,
+        0.58,
+        1.0
+      ],
+      "line_fade_secs": 0.4,
+      "past_opacity_transition": {
+        "secs": 0.6
+      },
+      "past_blur_transition": {
+        "secs": 0.2
+      }
+    },
+    "cover": {
+      "radius": 20,
+      "fullscreen": {
+        "top_only": true,
+        "max_px": 640
+      },
+      "shadow": 0.2,
+      "shadow_blur": 48,
+      "shadow_offset": 24,
+      "outline": [
+        1,
+        0.08
+      ],
+      "shadow2": [
+        4,
+        8,
+        0.1
+      ]
+    },
+    "now_playing": {
+      "panel_frac": [
+        0.42,
+        0.5
+      ],
+      "title_align": "left",
+      "title_px": 25,
+      "artist_alpha": 0.82,
+      "fullscreen_title_card": {
+        "fill": 0.04,
+        "stroke": 0.08,
+        "radius": 20,
+        "shadow": [
+          16,
+          32,
+          0.15
+        ],
+        "attached": true,
+        "pad": 24
+      }
+    },
+    "chrome": {
+      "radius": 16,
+      "player_bar": "floating",
+      "bar_height": 58,
+      "bar_radius": 50,
+      "bar_color": "#1e1e1e",
+      "bar_margin": [
+        14,
+        20
+      ],
+      "progress_at": "bottom",
+      "progress_px": 2,
+      "progress_color": "white",
+      "play_button": "bare",
+      "play_scale": 1.1,
+      "bar_layout": "song_middle",
+      "bar_pad": [
+        24,
+        0
+      ],
+      "progress_inset": 60,
+      "like_on_hover": true,
+      "bar_max_px": 1200.0,
+      "thumb_px": 40,
+      "thumb_radius": 10,
+      "bar_title_px": 14,
+      "bar_byline_alpha": 1.0,
+      "bar_shadow": [
+        8,
+        32,
+        0.4
+      ],
+      "bar_border_alpha": 0.08,
+      "icon_scale": 0.75,
+      "icon_alpha": 0.75
+    },
+    "app": {
+      "font": "SF Pro Display",
+      "page_bg": "solid",
+      "sidebar": "transparent",
+      "bar_alpha": 0.8,
+      "bar_border": true,
+      "nav": "text",
+      "chip_radius": 20,
+      "card_radius": 12,
+      "thumb_radius": 6,
+      "panel_radius": 16,
+      "menu_radius": 16,
+      "menu_border": 0.08,
+      "text_dim": "#8c8c8c",
+      "search_radius": 100,
+      "search_border": 0,
+      "hide_scrollbars": true,
+      "tabular_digits": true,
+      "queue_upper": true,
+      "heading_tracking_em": -0.015,
+      "header_title_weight": "extra_bold",
+      "glass": {
+        "top_bar": [
+          12,
+          1.8,
+          1
+        ],
+        "bar": [
+          30,
+          1.6,
+          1
+        ],
+        "menu": [
+          80,
+          2.5,
+          1
+        ],
+        "search_drop": [
+          60,
+          2.2,
+          1.1
+        ],
+        "title_card": [
+          6,
+          1,
+          1
+        ]
+      },
+      "all_bold": true,
+      "heading_px": 26,
+      "heading_weight": "bold",
+      "menu_color": "#121212",
+      "search_alpha": 0.5,
+      "controls": {
+        "press_scale": 0.95,
+        "button_fill": 0.06,
+        "button_hover": 0.06,
+        "ghost_outline": 0.12,
+        "hover_border": 0.2,
+        "accent_primary": true
+      },
+      "nav_item": {
+        "rail": true,
+        "rail_px": 125,
+        "rail_labels": true,
+        "hover": 0.1,
+        "radius": 6,
+        "hide_divider": true,
+        "rail_height": 72
+      },
+      "chip_look": {
+        "height": 34,
+        "fill": 0.1,
+        "hover": 0.05,
+        "selected_fill": "white",
+        "selected_text": "#000000",
+        "weight": "medium",
+        "selected_weight": "semibold",
+        "border": 0.08
+      },
+      "card_look": {
+        "hover_scale": 1.03,
+        "shadow": [
+          8,
+          24,
+          0.45
+        ],
+        "title_px": 14,
+        "title_weight": "semibold",
+        "subtitle_alpha": 0.7,
+        "image_outline": 0.12
+      },
+      "row_look": {
+        "height": 52,
+        "radius": 6,
+        "hover": 0.06,
+        "current": 0.08,
+        "current_color": "accent",
+        "separator": 0.04,
+        "hover_menu": true,
+        "pad": 8,
+        "byline_alpha": 1.0,
+        "thumb_radius": 10
+      },
+      "menu_look": {
+        "row_px": 36,
+        "hover": 0.1,
+        "alpha": 0.3,
+        "icon_right": true,
+        "shadow": [
+          12,
+          40,
+          0.5
+        ],
+        "row_radius": 0
+      },
+      "search_look": {
+        "height": 40,
+        "max_px": 800,
+        "color": "#141414",
+        "drop_radius": 12,
+        "drop_ring": 0.1
+      },
+      "top_bar": {
+        "capsule_px": 1400.0,
+        "capsule": [
+          0.7,
+          26
+        ],
+        "logo_text": "YouTube Music",
+        "logo_color": "accent",
+        "logo_color2": "#ffffff",
+        "logo_in_bar": true
+      },
+      "header_title_px": 32.0,
+      "header_art_shadow": [
+        20,
+        50,
+        0.6
+      ],
+      "header_art_hover": 1.03,
+      "header_play_shadow": [
+        8,
+        24,
+        0.45
+      ]
+    }
+  },
+  {
+    "id": "apple-music-v3",
+    "name": "Apple Music Refine",
+    "creators": [
+      "ankit008-mishra"
+    ],
+    "blurb": "Apple Music skin with big bold lyrics and a depth blur, a darkened cover backdrop on every page, liquid-glass surfaces and a floating pill player bar.",
+    "source": "Better Lyrics: ankit008-mishra/apple-music-v3 1.1.8",
+    "background": {
+      "mode": "kawarp",
+      "solid": "#000000",
+      "intensity": 1.0,
+      "saturation": 2.0,
+      "speed": 1.0,
+      "scale": 1.25,
+      "np_dim": 0.57,
+      "page_dim": 0.55,
+      "reactive": 1.1,
+      "audio_speed": 4.5,
+      "scrim": 0.3,
+      "layer": {
+        "opacity": 0.55,
+        "saturate": 0.5
+      },
+      "scrim_gradient": [
+        0.15,
+        0.45
+      ],
+      "scrim_across": true,
+      "crossfade_secs": 1.0,
+      "beat_threshold": 0.01,
+      "blur_passes": 7,
+      "dither": 0.004
+    },
+    "lyrics": {
+      "font": "SF Pro Display",
+      "agent_align": "only_v1_left",
+      "font_rem": [
+        [
+          0,
+          5.8
+        ]
+      ],
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0.0,
+          5.0
+        ]
+      ],
+      "upcoming": [
+        [
+          1.0,
+          2.0
+        ],
+        [
+          1.0,
+          3.5
+        ],
+        [
+          1.0,
+          5.0
+        ],
+        [
+          1.0,
+          6.5
+        ],
+        [
+          1.0,
+          8.0
+        ],
+        [
+          1.0,
+          9.5
+        ]
+      ],
+      "opacity_transition": {
+        "secs": 0.5
+      },
+      "blur_transition": {
+        "secs": 0.5
+      },
+      "wobble": false,
+      "letter_wave": {
+        "on": false
+      },
+      "glow_alpha": 0.0001,
+      "long_glow_alpha": 1.0,
+      "scroll_secs": 0.4,
+      "word_rise_px": 3.0,
+      "word_rise_secs": 0.2,
+      "word_rise_ratio": 1.0,
+      "scroll_ease": [
+        0.42,
+        0.0,
+        0.58,
+        1.0
+      ],
+      "line_fade_secs": 0.4,
+      "past_opacity_transition": {
+        "secs": 0.9
+      },
+      "past_blur_transition": {
+        "secs": 0.25
+      }
+    },
+    "cover": {
+      "radius": 20,
+      "fullscreen": {
+        "top_only": true,
+        "max_px": 640
+      },
+      "shadow2": [
+        12,
+        13,
+        0.09
+      ],
+      "shadow3": [
+        -12,
+        30,
+        0.06
+      ],
+      "shadow4": [
+        4,
+        6,
+        0.06
+      ],
+      "shadow5": [
+        -3,
+        5,
+        0.04
+      ],
+      "shadow": 0.1,
+      "shadow_blur": 55,
+      "shadow_offset": 54,
+      "outline": [
+        1,
+        0.1
+      ]
+    },
+    "now_playing": {
+      "panel_frac": [
+        0.42,
+        0.5
+      ],
+      "title_align": "left",
+      "title_px": 25,
+      "artist_alpha": 0.75,
+      "fullscreen_title_card": {
+        "fill": 0.05,
+        "stroke": 0.15,
+        "radius": 20,
+        "dashed": true,
+        "shadow": [
+          20,
+          20,
+          0.1
+        ],
+        "attached": true,
+        "pad": 20
+      }
+    },
+    "chrome": {
+      "radius": 16,
+      "player_bar": "floating",
+      "bar_height": 60,
+      "bar_radius": 50,
+      "bar_color": "#1e1e1e",
+      "bar_margin": [
+        14,
+        20
+      ],
+      "progress_at": "bottom",
+      "progress_px": 3,
+      "progress_color": "white",
+      "play_button": "bare",
+      "play_scale": 1.1,
+      "bar_layout": "song_middle",
+      "bar_pad": [
+        24,
+        0
+      ],
+      "progress_inset": 60,
+      "progress_track": 0.15,
+      "bar_max_px": 1200.0,
+      "thumb_px": 40,
+      "thumb_radius": 10,
+      "bar_title_px": 15,
+      "bar_title_weight": "bold",
+      "bar_byline_alpha": 0.7,
+      "bar_shadow": [
+        10,
+        40,
+        0.5
+      ],
+      "bar_border_alpha": 0.08
+    },
+    "app": {
+      "font": "SF Pro Display",
+      "page_bg": "static",
+      "page_dim": 0.55,
+      "page_saturation": 0.5,
+      "page_contrast": 1.3,
+      "page_scale": 1.6,
+      "sidebar": "glass",
+      "sidebar_alpha": 0.15,
+      "sidebar_border": 0.06,
+      "bar_alpha": 0.85,
+      "bar_border": true,
+      "thumb_radius": 10,
+      "panel_radius": 16,
+      "menu_radius": 16,
+      "menu_border": 0.15,
+      "search_radius": 100,
+      "search_alpha": 0,
+      "search_border": 0,
+      "glass": {
+        "top_bar": [
+          10,
+          2,
+          1
+        ],
+        "bar": [
+          25,
+          1.5,
+          1
+        ],
+        "menu": [
+          80,
+          3,
+          1.1
+        ],
+        "search_drop": [
+          55,
+          2.2,
+          1.15
+        ],
+        "title_card": [
+          4,
+          1,
+          1
+        ]
+      },
+      "all_bold": true,
+      "menu_color": "#0a0a0a",
+      "nav_item": {
+        "radius": 6,
+        "hover": 0.08,
+        "hide_divider": true
+      },
+      "card_look": {
+        "image_outline": 0.15
+      },
+      "menu_look": {
+        "row_px": 34,
+        "hover": 0.12,
+        "alpha": 0.25,
+        "row_radius": 0,
+        "icon_right": true,
+        "shadow": [
+          15,
+          50,
+          0.75
+        ]
+      },
+      "search_look": {
+        "max_px": 720,
+        "drop_radius": 8,
+        "drop_ring": 0.12,
+        "item_radius": 4
+      },
+      "top_bar": {
+        "capsule_px": 1400.0,
+        "capsule": [
+          0.88,
+          27
+        ]
+      },
+      "queue_look": {
+        "thumb_radius": 5
+      }
+    }
+  },
+  {
+    "id": "apple-music",
+    "name": "Apple Music",
+    "creators": [
+      "tposejank"
+    ],
+    "blurb": "Apple Music look: bold lyrics with a six-step depth blur, a saturated warped cover backdrop and a black, tightly rounded interface.",
+    "source": "Better Lyrics: tposejank/blyrics-am-theme 1.0.3",
+    "accent": "#fa586a",
+    "background": {
+      "mode": "kawarp",
+      "solid": "#000000",
+      "intensity": 1.0,
+      "saturation": 2.0,
+      "speed": 1.0,
+      "scale": 1.25,
+      "np_dim": 0.57,
+      "reactive": 1.1,
+      "audio_speed": 4.5,
+      "layer": {
+        "opacity": 0.3
+      },
+      "crossfade_secs": 1.0,
+      "beat_threshold": 0.01,
+      "blur_passes": 7,
+      "dither": 0.004
+    },
+    "lyrics": {
+      "font": "SF Pro Display",
+      "agent_align": "only_v1_left",
+      "font_rem": [
+        [
+          0,
+          2.9
+        ],
+        [
+          1279,
+          4.0
+        ],
+        [
+          1500,
+          4.4
+        ],
+        [
+          1700,
+          5.2
+        ],
+        [
+          1900,
+          6.0
+        ]
+      ],
+      "line_padding_rem": 1.5,
+      "anchor": 0.45,
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0.0,
+          5.0
+        ]
+      ],
+      "upcoming": [
+        [
+          1.0,
+          2.0
+        ],
+        [
+          1.0,
+          3.5
+        ],
+        [
+          1.0,
+          5.0
+        ],
+        [
+          1.0,
+          6.5
+        ],
+        [
+          1.0,
+          8.0
+        ],
+        [
+          1.0,
+          9.5
+        ]
+      ],
+      "opacity_transition": {
+        "secs": 0.5
+      },
+      "blur_transition": {
+        "secs": 0.5
+      },
+      "wobble": false,
+      "letter_wave": {
+        "on": false
+      },
+      "glow_alpha": 0.0001,
+      "long_glow_alpha": 1.0,
+      "glow_rem": 1.0,
+      "background_em": 0.65,
+      "scale_secs": 0.166,
+      "scroll_secs": 0.4,
+      "scroll_offset": 0.6,
+      "word_rise_px": 3.0,
+      "word_rise_secs": 0.2,
+      "word_rise_ratio": 1.0,
+      "background_gap_em": 0.0,
+      "resume_look": [
+        6,
+        0.15,
+        0
+      ],
+      "line_fade_secs": 1.2,
+      "scroll_ease": [
+        0.42,
+        0.0,
+        0.58,
+        1.0
+      ],
+      "past_opacity_transition": {
+        "secs": 0.9
+      },
+      "past_blur_transition": {
+        "secs": 0.25
+      }
+    },
+    "cover": {
+      "radius": 12,
+      "size_steps": [
+        [
+          0,
+          200
+        ],
+        [
+          769,
+          300
+        ],
+        [
+          1025,
+          350
+        ],
+        [
+          1171,
+          400
+        ],
+        [
+          1280,
+          450
+        ],
+        [
+          1401,
+          500
+        ],
+        [
+          1591,
+          550
+        ],
+        [
+          1701,
+          600
+        ]
+      ]
+    },
+    "now_playing": {
+      "title_align": "left",
+      "title_px": 20,
+      "artist_px": 20,
+      "switch": {
+        "back": 0.15,
+        "selected": 0.15,
+        "radius": 8,
+        "at_corner": true,
+        "at_right": true,
+        "plain": true
+      },
+      "video_max_frac": 0.7,
+      "fullscreen_panel_frac": 0.55
+    },
+    "chrome": {
+      "radius": 6,
+      "bar_height": 64,
+      "bar_color": "#000000",
+      "progress_color": "white",
+      "progress_px": 3,
+      "progress_radius": 100,
+      "bar_layout": "song_middle",
+      "track_block": [
+        0.1,
+        4
+      ],
+      "side_alpha": 0.75,
+      "transport_scale": 0.8,
+      "play_scale": 0.8,
+      "thumb_px": 47
+    },
+    "app": {
+      "font": "SF Pro Display",
+      "page_bg": "solid",
+      "sidebar": "solid",
+      "bar_alpha": 1.0,
+      "chip_radius": 6,
+      "panel_radius": 6,
+      "menu_radius": 6,
+      "search_radius": 6,
+      "search_alpha": 0.08,
+      "all_bold": true,
+      "glass": {
+        "tabs": [
+          4,
+          1,
+          1
+        ],
+        "switch": [
+          4,
+          1,
+          1
+        ]
+      },
+      "scrollbar": [
+        8,
+        0.2
+      ],
+      "scrollbar_color": "#45494e",
+      "controls": {
+        "button_fill": 0.1,
+        "button_hover": 0.1
+      },
+      "nav_item": {
+        "radius": 6,
+        "hover": 0.0,
+        "hide_divider": true,
+        "playlists_label": "Playlists",
+        "playlists_plus": true
+      },
+      "card_look": {
+        "play_px": 40,
+        "play_alpha": 0.25,
+        "play_hover_accent": true,
+        "menu_hover_accent": true,
+        "image_dim": 0.5
+      },
+      "chip_look": {
+        "segmented": [
+          6,
+          3,
+          4
+        ]
+      },
+      "row_look": {
+        "menu_dots_across": true
+      },
+      "menu_look": {
+        "row_px": 32,
+        "icon_right": true,
+        "separator": 0.1,
+        "row_radius": 0
+      },
+      "search_look": {
+        "height": 36,
+        "drop_radius": 6,
+        "attached": true,
+        "item_radius": 6
+      },
+      "icons": {
+        "song": {
+          "view": [
+            24.0,
+            24.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M9.732 19.241c1.077 0 2.688-.79 2.688-2.922V9.617c0-.388.074-.469.418-.542l3.347-.732a.48.48 0 0 0 .403-.484V5.105c0-.388-.315-.637-.689-.563l-3.764.82c-.47.102-.725.359-.725.769l.014 8.144c.037.36-.132.594-.454.66l-1.164.241c-1.465.308-2.154 1.055-2.154 2.16 0 1.122.864 1.905 2.08 1.905z"
+        },
+        "video": {
+          "view": [
+            16.0,
+            16.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M1.75 2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25zM0 2.75C0 1.784.784 1 1.75 1h12.5c.967 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25z m6 5 5.196 3L6 11z"
+        },
+        "up_next": {
+          "view": [
+            18.0,
+            18.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M2.634 5.537a.906.906 0 1 0 0-1.813.906.906 0 1 0 0 1.813zm3.192-.325h9.865a.576.576 0 0 0 .585-.578.578.578 0 0 0-.585-.585H5.826a.574.574 0 0 0-.585.585c0 .325.253.578.585.578zM2.634 9.906c.506 0 .91-.404.91-.91a.906.906 0 0 0-.91-.91.906.906 0 0 0-.91.91c0 .506.405.91.91.91zm3.192-.325h9.865a.582.582 0 1 0 0-1.162H5.826a.572.572 0 0 0-.585.577c0 .325.253.585.585.585zm-3.192 4.694a.91.91 0 1 0-.001-1.82.91.91 0 0 0 0 1.82zm3.192-.332h9.865a.576.576 0 0 0 .585-.577.578.578 0 0 0-.585-.585H5.826a.574.574 0 0 0-.585.585c0 .324.253.577.585.577z"
+        },
+        "lyrics": {
+          "view": [
+            64.0,
+            64.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M18.53 62.724c1.764 0 3.115-.81 5.257-2.707l9.816-8.638h16.62c8.72 0 13.777-5.152 13.777-13.777V15.053c0-8.625-5.056-13.777-13.777-13.777H13.777C5.057 1.276 0 6.42 0 15.053v22.549c0 8.633 5.27 13.777 13.456 13.777h1.016v6.793c0 2.812 1.511 4.552 4.057 4.552zm1.57-7.16v-8.11c0-1.81-.805-2.485-2.486-2.485h-3.55c-5.165 0-7.654-2.603-7.654-7.654V15.34c0-5.033 2.489-7.632 7.654-7.632h35.872c5.149 0 7.654 2.599 7.654 7.632v21.975c0 5.051-2.505 7.654-7.654 7.654H33.188c-1.835 0-2.702.33-4.012 1.65zm-2.212-32.177c0 3.398 2.156 5.936 5.388 5.936 1.361 0 2.592-.302 3.372-1.263h.385c-.868 2.231-3 3.845-5.303 4.4-.95.243-1.327.737-1.327 1.425 0 .8.658 1.36 1.51 1.36 3.174 0 8.8-3.775 8.8-10.6 0-4.138-2.602-7.336-6.588-7.336-3.576 0-6.237 2.518-6.237 6.078zm15.663 0c0 3.398 2.134 5.936 5.387 5.936 1.34 0 2.593-.302 3.373-1.263h.39c-.865 2.231-3.023 3.845-5.308 4.4-.947.243-1.327.737-1.327 1.425 0 .8.636 1.36 1.51 1.36 3.178 0 8.779-3.775 8.779-10.6 0-4.138-2.577-7.336-6.567-7.336-3.577 0-6.237 2.518-6.237 6.078z"
+        },
+        "home": {
+          "view": [
+            24.0,
+            24.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M5.93 20.16a1.94 1.94 0 0 1-1.43-.502c-.334-.335-.502-.794-.502-1.393v-7.142c0-.362.062-.688.177-.953.123-.264.326-.529.6-.75l6.145-5.157c.176-.141.344-.247.52-.318.176-.07.362-.105.564-.105.194 0 .388.035.565.105.176.07.352.177.52.318l6.146 5.158c.273.23.467.476.59.75.124.264.177.59.177.96v7.134c0 .59-.159 1.058-.503 1.393-.335.335-.811.503-1.428.503H5.929Zm12.14-1.172c.221 0 .406-.07.547-.212a.688.688 0 0 0 .22-.511v-7.142c0-.177-.026-.344-.087-.459a.97.97 0 0 0-.265-.353l-6.154-5.149a.756.756 0 0 0-.177-.115.37.37 0 0 0-.15-.035.37.37 0 0 0-.158.035l-.177.115-6.145 5.15a.982.982 0 0 0-.274.352 1.13 1.13 0 0 0-.088.468v7.133c0 .203.08.379.23.511a.744.744 0 0 0 .546.212h12.133Zm-8.323-4.7c0-.176.062-.326.177-.432a.6.6 0 0 1 .423-.159h3.315c.176 0 .326.053.432.16s.159.255.159.431v4.973H9.756v-4.973Z"
+        },
+        "explore": {
+          "view": [
+            24.0,
+            24.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M9.92 11.354c.966 0 1.453-.487 1.453-1.49v-3.4c0-1.004-.487-1.483-1.453-1.483H6.452C5.487 4.981 5 5.46 5 6.464v3.4c0 1.003.487 1.49 1.452 1.49zm7.628 0c.965 0 1.452-.487 1.452-1.49v-3.4c0-1.004-.487-1.483-1.452-1.483h-3.46c-.974 0-1.46.479-1.46 1.483v3.4c0 1.003.486 1.49 1.46 1.49zm-7.65-1.073h-3.43c-.266 0-.396-.137-.396-.418v-3.4c0-.273.13-.41.396-.41h3.43c.265 0 .402.137.402.41v3.4c0 .281-.137.418-.403.418zm7.634 0h-3.43c-.273 0-.402-.137-.402-.418v-3.4c0-.273.129-.41.403-.41h3.43c.265 0 .395.137.395.41v3.4c0 .281-.13.418-.396.418zm-7.612 8.7c.966 0 1.453-.48 1.453-1.483v-3.407c0-.996-.487-1.483-1.453-1.483H6.452c-.965 0-1.452.487-1.452 1.483v3.407c0 1.004.487 1.483 1.452 1.483zm7.628 0c.965 0 1.452-.48 1.452-1.483v-3.407c0-.996-.487-1.483-1.452-1.483h-3.46c-.974 0-1.46.487-1.46 1.483v3.407c0 1.004.486 1.483 1.46 1.483zm-7.65-1.072h-3.43c-.266 0-.396-.137-.396-.41v-3.4c0-.282.13-.418.396-.418h3.43c.265 0 .402.136.402.418v3.4c0 .273-.137.41-.403.41zm7.634 0h-3.43c-.273 0-.402-.137-.402-.41v-3.4c0-.282.129-.418.403-.418h3.43c.265 0 .395.136.395.418v3.4c0 .273-.13.41-.396.41z"
+        },
+        "library": {
+          "view": [
+            24.0,
+            24.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M5.55 8.73H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1V5.5c0-.46-.12-.83-.37-1.08-.26-.26-.6-.39-1.06-.39H5.55c-.45 0-.8.13-1.06.39-.25.25-.37.62-.37 1.08v1.77c0 .47.12.83.37 1.09.26.25.6.38 1.06.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.07-.1-.2-.1-.35V5.63c0-.15.03-.27.1-.35.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.34.11.08.08.12.2.12.35v1.49c0 .16-.04.28-.12.35a.46.46 0 0 1-.34.12H5.7Zm5.62 1.14h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1V5.5c0-.46-.12-.83-.37-1.08a1.4 1.4 0 0 0-1.06-.39h-1.84c-.45 0-.8.13-1.05.39A1.5 1.5 0 0 0 9.9 5.5v1.77c0 .47.13.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.07-.11-.2-.11-.35V5.63c0-.15.04-.27.11-.35.08-.07.19-.11.34-.11h1.53c.14 0 .25.04.33.11.08.08.11.2.11.35v1.49c0 .16-.04.28-.11.35-.08.08-.2.12-.33.12h-1.53Zm5.63 1.14h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.1V5.5c0-.46-.13-.83-.38-1.08-.25-.26-.6-.39-1.06-.39h-1.84c-.45 0-.8.13-1.05.39-.26.25-.38.62-.38 1.08v1.77c0 .47.12.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.08-.07-.12-.2-.12-.35V5.63c0-.15.04-.27.12-.35.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.33.11.08.08.12.2.12.35v1.49c0 .16-.04.28-.12.35-.07.08-.18.12-.33.12h-1.52ZM5.55 14.35H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.08V11.1c0-.47-.12-.83-.37-1.09-.26-.25-.6-.38-1.06-.38H5.55c-.45 0-.8.13-1.06.38-.25.26-.37.62-.37 1.09v1.78c0 .46.12.82.37 1.08.26.25.6.38 1.06.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.08-.1-.2-.1-.35v-1.5c0-.15.03-.26.1-.34.08-.08.2-.12.34-.12h1.52c.14 0 .25.04.34.12.08.08.12.2.12.34v1.5c0 .15-.04.27-.12.35a.45.45 0 0 1-.34.12H5.7Zm5.62 1.14h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.08V11.1c0-.47-.12-.83-.37-1.09a1.4 1.4 0 0 0-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.25.26-.38.62-.38 1.09v1.78c0 .46.13.82.38 1.08.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12a.523.523 0 0 1-.11-.35v-1.5c0-.15.04-.26.11-.34.08-.08.19-.12.34-.12h1.53c.14 0 .25.04.33.12.08.08.11.2.11.34v1.5c0 .15-.04.27-.11.35-.08.08-.2.12-.33.12h-1.53Zm5.63 1.14h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.08V11.1c0-.47-.13-.83-.38-1.09-.25-.25-.6-.38-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.26.26-.38.62-.38 1.09v1.78c0 .46.12.82.38 1.08.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.08-.08-.12-.2-.12-.35v-1.5c0-.15.04-.26.12-.34.08-.08.2-.12.34-.12h1.52c.14 0 .25.04.33.12.08.08.12.2.12.34v1.5c0 .15-.04.27-.12.35-.07.08-.18.12-.33.12h-1.52ZM5.55 19.97H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1v-1.76c0-.47-.12-.83-.37-1.09-.26-.25-.6-.38-1.06-.38H5.55c-.45 0-.8.13-1.06.38-.25.26-.37.62-.37 1.09v1.77c0 .47.12.83.37 1.09.26.25.6.38 1.06.38Zm.16-1.15c-.15 0-.26-.04-.34-.11-.07-.08-.1-.2-.1-.35v-1.49c0-.16.03-.28.1-.36.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.34.11.08.08.12.2.12.36v1.49c0 .15-.04.27-.12.35a.46.46 0 0 1-.34.11H5.7Zm5.62 1.15h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1v-1.76c0-.47-.12-.83-.37-1.09a1.4 1.4 0 0 0-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.25.26-.38.62-.38 1.09v1.77c0 .47.13.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.15c-.15 0-.26-.04-.34-.11a.523.523 0 0 1-.11-.35v-1.49c0-.16.04-.28.11-.36.08-.07.19-.11.34-.11h1.53c.14 0 .25.04.33.11.08.08.11.2.11.36v1.49c0 .15-.04.27-.11.35-.08.07-.2.11-.33.11h-1.53Zm5.63 1.15h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.1v-1.76c0-.47-.13-.83-.38-1.09-.25-.25-.6-.38-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.26.26-.38.62-.38 1.09v1.77c0 .47.12.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.15c-.15 0-.26-.04-.34-.11-.08-.08-.12-.2-.12-.35v-1.49c0-.16.04-.28.12-.36.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.33.11.08.08.12.2.12.36v1.49c0 .15-.04.27-.12.35-.07.07-.18.11-.33.11h-1.52Z"
+        },
+        "next": {
+          "view": [
+            32.0,
+            28.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M18.14 20.68c.365 0 .672-.107 1.038-.323l8.508-4.997c.623-.365.938-.814.938-1.37 0-.564-.307-.988-.938-1.361l-8.508-4.997c-.366-.216-.68-.324-1.046-.324-.73 0-1.337.556-1.337 1.569v4.773c-.108-.399-.406-.73-.904-1.021L7.382 7.632c-.357-.216-.672-.324-1.037-.324-.73 0-1.345.556-1.345 1.569v10.235c0 1.013.614 1.569 1.345 1.569.365 0 .68-.108 1.037-.324l8.509-4.997c.49-.29.796-.631.904-1.038v4.79c0 1.013.615 1.569 1.345 1.569z"
+        },
+        "previous": {
+          "view": [
+            32.0,
+            28.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M18.14 20.68c.365 0 .672-.107 1.038-.323l8.508-4.997c.623-.365.938-.814.938-1.37 0-.564-.307-.988-.938-1.361l-8.508-4.997c-.366-.216-.68-.324-1.046-.324-.73 0-1.337.556-1.337 1.569v4.773c-.108-.399-.406-.73-.904-1.021L7.382 7.632c-.357-.216-.672-.324-1.037-.324-.73 0-1.345.556-1.345 1.569v10.235c0 1.013.614 1.569 1.345 1.569.365 0 .68-.108 1.037-.324l8.509-4.997c.49-.29.796-.631.904-1.038v4.79c0 1.013.615 1.569 1.345 1.569z",
+          "flip": true
+        }
+      },
+      "top_songs_cols": 2
+    }
+  },
+  {
+    "id": "burn",
+    "name": "Burn",
+    "creators": [
+      "semicolonhope"
+    ],
+    "blurb": "White lyrics that burn as they're sung: a fire-coloured band sweeps each word and leaves charred dark-red text with a thin red outline.",
+    "source": "Better Lyrics: ramansg/Burn-BlyricsTheme 0.3.5",
+    "background": {
+      "mode": "cover_fullbleed",
+      "np_dim": 0.22,
+      "crossfade_secs": 2.5,
+      "crossfade_delay": 2.5
+    },
+    "accent": "#ffffff",
+    "lyrics": {
+      "font": "Google Sans Flex",
+      "weight": "semibold",
+      "font_rem": [
+        [
+          0,
+          3
+        ]
+      ],
+      "fullscreen_scale": 1.4,
+      "line_height": 1.5,
+      "line_padding_rem": 1.35,
+      "anchor": 0.4,
+      "rest_scale": 1,
+      "active_scale": 1,
+      "wobble": false,
+      "letter_wave": {
+        "on": false
+      },
+      "glow_alpha": 0,
+      "long_glow_alpha": 0,
+      "fill": "sweep",
+      "dim_alpha": 1,
+      "sung_color": "#d9485f",
+      "sweep_band": [
+        "#fff2a3",
+        "#ffd23f",
+        "#ff8a00",
+        "#ff3d00",
+        "#d4143d"
+      ],
+      "sweep_band_width": 0.6,
+      "stroke_em": 0.03,
+      "stroke_color": "#f64258",
+      "past": [
+        [
+          0.6,
+          0
+        ]
+      ],
+      "upcoming": [
+        [
+          1,
+          0
+        ]
+      ],
+      "past_line_synced": [
+        [
+          0.6,
+          0
+        ]
+      ],
+      "upcoming_line_synced": [
+        [
+          0.35,
+          0
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.4,
+        "delay": 0
+      },
+      "scroll_opacity": 0.5,
+      "panel_reveal": true,
+      "scroll_secs": 0.7,
+      "scroll_ease": [
+        0.165,
+        0.84,
+        0.44,
+        1
+      ],
+      "scroll_offset": 0.3,
+      "instrumental_breathe": [
+        1.0,
+        1.05,
+        1.5
+      ],
+      "hover_opacity": 0.8,
+      "line_fade_secs": 0.4,
+      "line_ease": [
+        0.165,
+        0.84,
+        0.44,
+        1.0
+      ],
+      "scroll_transition": {
+        "secs": 0.3
+      },
+      "early_scroll": 0,
+      "edge_fade": [
+        0.06,
+        0.06
+      ],
+      "sweep_lead": 0.25,
+      "sweep_ratio": 1.9,
+      "sweep_end": [
+        1.7,
+        1.8
+      ],
+      "exit_fade": [
+        0.01,
+        0.5
+      ],
+      "instrumental": "glyph",
+      "instrumental_glow": 0.6,
+      "resume_look": [
+        10,
+        0.13,
+        0.2
+      ]
+    },
+    "cover": {
+      "radius_pct": 0.08,
+      "outline": [
+        1,
+        0.1
+      ]
+    },
+    "chrome": {
+      "play_button": "ghost",
+      "progress_color": "white",
+      "progress_thumb": false,
+      "progress_alpha": 0.6,
+      "progress_track": 0.1,
+      "time_alpha": 0.87,
+      "time_weight": "light",
+      "thumb_radius": 3.2,
+      "icon_alpha": 0.9,
+      "bar_cover_alpha": 0.22,
+      "tip_fill": "#ffffff",
+      "tip_text": "#000000"
+    },
+    "app": {
+      "font": "Google Sans Flex",
+      "page_bg": "solid",
+      "bar_alpha": 0,
+      "chip": "ghost",
+      "search_radius": 20,
+      "search_alpha": 0.1,
+      "search_border": 0.1,
+      "menu_radius": 13.92,
+      "text_dim": "#a3a3a3",
+      "squircle": true,
+      "scrollbar_home_hidden": true,
+      "queue_card": true,
+      "np_open_secs": 0.4,
+      "controls": {
+        "idle_alpha": 0.9,
+        "ghost_outline": 0.12
+      },
+      "nav_item": {
+        "hover": 0.1,
+        "selected": 0.1
+      },
+      "row_look": {
+        "radius": 13.92,
+        "hover": 0.1,
+        "hover_border": 0.15
+      },
+      "menu_look": {
+        "hover": 0.1,
+        "row_radius": 13.92
+      },
+      "search_look": {
+        "drop_radius": 20,
+        "open_color": "#212121",
+        "attached": true,
+        "item_radius": 20
+      },
+      "toast_look": {
+        "color": "#212121",
+        "alpha": 1,
+        "border": [
+          0.1,
+          1.5
+        ],
+        "radius": 20.88,
+        "secs": 2.5
+      },
+      "scrollbar": [
+        5,
+        0.3
+      ],
+      "immersive_header": 0.6
+    },
+    "now_playing": {
+      "no_lyrics_text": "No lyrics found",
+      "no_lyrics": {
+        "icon": true
+      },
+      "switch": {
+        "back": 0.1,
+        "selected": 0.15,
+        "stroke": 0.1
+      }
+    }
+  },
+  {
+    "id": "clarity-theme",
+    "name": "Clarity",
+    "creators": [
+      "Al Farrizi"
+    ],
+    "blurb": "Clean glassmorphism with heavy Figtree lyrics that slide away once sung, and a floating glass player bar with a spinning vinyl peeking out of the thumbnail.",
+    "source": "Better Lyrics: AlFarrizi-Studio/Clarity-Theme 1.0.5",
+    "accent": "#1db954",
+    "background": {
+      "mode": "cover_static"
+    },
+    "lyrics": {
+      "font": "Figtree",
+      "weight": "bold",
+      "font_rem": [
+        [
+          0,
+          3.3
+        ]
+      ],
+      "fullscreen_scale": 1.818,
+      "line_height": 1.25,
+      "line_padding_rem": 1.8,
+      "letter_spacing_em": 0.02,
+      "past": [
+        [
+          0,
+          0
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 1.6,
+        "delay": 0
+      },
+      "wobble_secs": 2.5,
+      "line_exit": [
+        -200,
+        1.6
+      ],
+      "fullscreen_padding_rem": 3,
+      "instrumental_rem": 4,
+      "line_exit_by_side": true
+    },
+    "cover": {
+      "radius": 20,
+      "disc_slide_secs": 0.7
+    },
+    "now_playing": {
+      "title_align": "left",
+      "video_lyrics": true,
+      "video_panel_frac": [
+        0.5,
+        0.6
+      ]
+    },
+    "chrome": {
+      "player_bar": "floating",
+      "bar_height": 92,
+      "bar_radius": 20,
+      "bar_color": "#0e0e12",
+      "bar_margin": [
+        16,
+        5
+      ],
+      "progress_at": "bottom",
+      "progress_px": 4,
+      "progress_color": "white",
+      "progress_thumb": true,
+      "play_button": "bare",
+      "disc_secs": 10,
+      "bar_title_px": 14,
+      "bar_title_weight": "semibold",
+      "bar_byline_px": 12,
+      "bar_byline_alpha": 0.7,
+      "bar_shadow": [
+        12,
+        40,
+        0.45
+      ],
+      "bar_border_alpha": 0.08,
+      "volume_on_hover": true,
+      "bar_pad": [
+        22,
+        8
+      ],
+      "transport_gap": 0.85,
+      "time_at": "under_transport",
+      "time_weight": "medium",
+      "time_alpha": 0.65,
+      "thumb_px": 56,
+      "thumb_radius": 4,
+      "progress_track": 0.14,
+      "progress_alpha": 0.96,
+      "progress_thumb_px": 5
+    },
+    "app": {
+      "sidebar": "glass",
+      "sidebar_alpha": 0.55,
+      "bar_alpha": 0.86,
+      "bar_border": false,
+      "panel_radius": 20,
+      "menu_radius": 14,
+      "menu_border": 0.08,
+      "menu_color": "#0e0e12",
+      "text_dim": "#b3b3b3",
+      "search_alpha": 0.55,
+      "search_border": 0.08,
+      "search_look": {
+        "max_px": 700,
+        "color": "#0e0e12",
+        "drop_alpha": 0.55
+      },
+      "nav_item": {
+        "hover": 0.12,
+        "selected": 0.1
+      },
+      "menu_look": {
+        "hover": 0.12,
+        "alpha": 0.86,
+        "row_radius": 8,
+        "shadow": [
+          12,
+          40,
+          0.45
+        ]
+      },
+      "toast_look": {
+        "secs": 1.5
+      },
+      "tabular_digits": true,
+      "glass": {
+        "top_bar": [
+          10,
+          1,
+          1
+        ],
+        "bar": [
+          28,
+          1.5,
+          1
+        ],
+        "menu": [
+          28,
+          1.5,
+          1
+        ],
+        "search_drop": [
+          24,
+          1.5,
+          1
+        ],
+        "dialog": [
+          28,
+          1.5,
+          1
+        ],
+        "search": [
+          24,
+          1,
+          1
+        ]
+      },
+      "icons": {
+        "up_next": {
+          "view": [
+            24,
+            24
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"
+        },
+        "lyrics": {
+          "view": [
+            24,
+            24
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
+        }
+      }
+    }
+  },
+  {
+    "id": "classic",
+    "name": "Classic",
+    "creators": [
+      "ytm-rs"
+    ],
+    "blurb": "Plain dark with red accents and no album-art colours.",
+    "source": "ytm-rs",
+    "accent": "#ff3048",
+    "background": {
+      "mode": "accent_gradient",
+      "solid": "#0c0a0e",
+      "scrim": 0.3
+    },
+    "lyrics": {
+      "rem": 16,
+      "opacity_transition": {
+        "secs": 0.195
+      },
+      "blur_transition": {
+        "secs": 0.35
+      }
+    },
+    "cover": {
+      "radius": 12,
+      "shadow": 0.55,
+      "shadow_blur": 60
+    },
+    "now_playing": {
+      "title_align": "left",
+      "title_px": 28,
+      "artist_px": 17
+    },
+    "chrome": {
+      "bar_height": 86,
+      "bar_radius": 18,
+      "bar_margin": [
+        14,
+        14
+      ]
+    },
+    "app": {
+      "page_bg": "accent",
+      "sidebar": "glass",
+      "bar_alpha": 0.55,
+      "card_radius": 8,
+      "thumb_radius": 5,
+      "panel_radius": 14,
+      "search_radius": 21,
+      "text_dim": "#b2acba"
+    }
+  },
+  {
+    "id": "colorful-vocals",
+    "name": "Colorful Vocals",
+    "creators": [
+      "adaliea"
+    ],
+    "blurb": "Each singer gets their own pastel colour, with a soft glow on sung words, over a dim, punchy reactive backdrop.",
+    "source": "Better Lyrics: adaliea/blyrics-colorful-vocals 1.0.0",
+    "background": {
+      "mode": "kawarp",
+      "np_dim": 0.26,
+      "intensity": 1.0,
+      "speed": 0.87,
+      "saturation": 1.5,
+      "reactive": 5.4,
+      "audio_speed": 7.4,
+      "scale": 1.25,
+      "beat_threshold": 0.125,
+      "crossfade_secs": 1.0,
+      "blur_passes": 8,
+      "dither": 0.008
+    },
+    "lyrics": {
+      "agent_align": "same",
+      "dim_from_agent": true,
+      "agent_colors": [
+        "#f0f0f0",
+        "#99ccff",
+        "#ff99cc",
+        "#cc99ff",
+        "#ffcc99",
+        "#99ffcc",
+        "#ccffcc",
+        "#ccff99",
+        "#ffccff",
+        "#ffffcc"
+      ],
+      "glow_color": "#f0f0f0",
+      "glow_alpha": 0.8,
+      "long_glow_alpha": 0.8,
+      "agent_glow": [
+        "#f0f0f0",
+        "#99ccff",
+        "#ff99cc",
+        "#cc99ff",
+        "#ffcc99",
+        "#99ffcc",
+        "#ccffcc",
+        "#ccff99",
+        "#ffccff",
+        "#ffffcc"
+      ]
+    }
+  },
+  {
+    "id": "darky",
+    "name": "Darky",
+    "creators": [
+      "ankit008-mishra"
+    ],
+    "blurb": "True-black frosted glass with Apple-style blurred lyrics, springy word bounces and a dark warped glow.",
+    "source": "Better Lyrics: ankit008-mishra/Darky 1.1.5",
+    "accent": "#fa586a",
+    "background": {
+      "mode": "kawarp",
+      "solid": "#000000",
+      "np_dim": 0.57,
+      "intensity": 1.0,
+      "speed": 1.0,
+      "saturation": 2.0,
+      "reactive": 1.1,
+      "audio_speed": 4.5,
+      "scale": 1.25,
+      "layer": {
+        "opacity": 0.3
+      },
+      "crossfade_secs": 1.0,
+      "beat_threshold": 0.01,
+      "blur_passes": 7,
+      "dither": 0.004
+    },
+    "lyrics": {
+      "font": "SF Pro Display",
+      "agent_align": "only_v1_left",
+      "font_rem": [
+        [
+          0,
+          3
+        ],
+        [
+          1279,
+          5
+        ]
+      ],
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0,
+          5
+        ]
+      ],
+      "upcoming": [
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          3.5
+        ],
+        [
+          1,
+          5
+        ],
+        [
+          1,
+          6.5
+        ],
+        [
+          1,
+          8
+        ],
+        [
+          1,
+          9.5
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "scale_secs": 0.4,
+      "wobble": false,
+      "word_bounce": {
+        "lift": 0.04,
+        "scale": 1.02,
+        "secs": 0.4,
+        "settle": 0.0,
+        "spring": true,
+        "from_alpha": 0.5
+      },
+      "glow_alpha": 0.0,
+      "long_glow_alpha": 1.0,
+      "glow_rem": 1.0,
+      "background_em": 0.65,
+      "scroll_secs": 0.8,
+      "scroll_ease": [
+        0.45,
+        0.0,
+        0.15,
+        1.0
+      ],
+      "scroll_offset": 0.6,
+      "word_rise_px": 3.0,
+      "word_rise_secs": 0.2,
+      "word_rise_ratio": 1.0,
+      "line_enter": [
+        1.0,
+        0.4
+      ],
+      "scale_ease": [
+        0.34,
+        1.56,
+        0.64,
+        1.0
+      ],
+      "word_rest_scale": 0.95,
+      "past_opacity_transition": {
+        "secs": 0.9
+      },
+      "past_blur_transition": {
+        "secs": 0.25
+      },
+      "active_blur_transition": {
+        "secs": 0.4
+      },
+      "resume_look": [
+        6,
+        0.15,
+        0
+      ],
+      "active_blur_from": 5,
+      "resume_height": 30,
+      "resume_text_px": 14
+    },
+    "cover": {
+      "radius": 12,
+      "shadow": 0.5,
+      "shadow_blur": 30,
+      "shadow_offset": 8,
+      "max_px": 400,
+      "fullscreen": {
+        "radius": 16,
+        "size_vh": 0.55,
+        "shadow": 0.4
+      },
+      "open_scale": 0.2,
+      "open_secs": 0.75,
+      "open_slide": 0.6,
+      "open_fade": true
+    },
+    "now_playing": {
+      "title_px": 20,
+      "artist_px": 20,
+      "video_panel_frac": [
+        0.63,
+        0.64
+      ],
+      "video_lyrics": true,
+      "video_max_frac": 0.6,
+      "panel_frac": [
+        0.5,
+        0.45
+      ]
+    },
+    "chrome": {
+      "bar_height": 64,
+      "bar_layout": "song_middle",
+      "bar_color": "#141414",
+      "progress_at": "top",
+      "progress_px": 8,
+      "progress_color": "white",
+      "progress_radius": 60,
+      "progress_thumb": false,
+      "play_button": "bare",
+      "track_block": [
+        0.1,
+        4
+      ],
+      "thumb_px": 47,
+      "transport_gap": 0.8,
+      "transport_scale": 1.12,
+      "play_scale": 0.8,
+      "side_alpha": 0.75
+    },
+    "app": {
+      "font": "SF Pro Display",
+      "page_bg": "solid",
+      "sidebar": "glass",
+      "sidebar_alpha": 0.0,
+      "sidebar_border": 0.1,
+      "bar_alpha": 0.2,
+      "chip": "pill",
+      "chip_radius": 30,
+      "card_radius": 12,
+      "thumb_radius": 10,
+      "panel_radius": 24,
+      "menu_radius": 16,
+      "menu_border": 0.1,
+      "search_radius": 12,
+      "search_alpha": 0.0,
+      "search_border": 0.1,
+      "hide_scrollbars": true,
+      "np_open_secs": 0.8,
+      "all_bold": true,
+      "menu_color": "#1e1e1e",
+      "controls": {
+        "press_scale": 0.92,
+        "hover_scale": 1.05,
+        "accent_primary": true,
+        "play_hover_scale": 1.15,
+        "press_chips": 0.95,
+        "press_rows": 0.98,
+        "arrow_hover": [
+          1.15,
+          5
+        ]
+      },
+      "nav_item": {
+        "radius": 12,
+        "hover": 0.1,
+        "selected": 0.15,
+        "slide": 8,
+        "hide_divider": true,
+        "playlists_label": "Playlists",
+        "playlists_plus": true,
+        "hover_zoom": 1.02
+      },
+      "card_look": {
+        "image_zoom": 0.06,
+        "image_dim": 0.0,
+        "hover_scale": 1.02,
+        "lift_px": 4,
+        "shadow": [
+          16,
+          32,
+          0.5
+        ],
+        "play_px": 40,
+        "play_alpha": 0.25,
+        "play_hover_accent": true,
+        "play_hover_scale": 1.1,
+        "menu_hover_accent": true
+      },
+      "row_look": {
+        "hover": 0.1,
+        "current": 0.08,
+        "thumb_radius": 10,
+        "image_zoom": 0.15,
+        "image_dim": 0.6,
+        "hover_lift": 4
+      },
+      "menu_look": {
+        "row_px": 32,
+        "hover": 0.15,
+        "alpha": 0.1,
+        "row_radius": 8,
+        "separator": 0.1,
+        "icon_right": true,
+        "shadow": [
+          10,
+          30,
+          0.5
+        ]
+      },
+      "search_look": {
+        "height": 36,
+        "drop_radius": 20,
+        "attached": true,
+        "drop_ring": 0.1,
+        "item_radius": 8
+      },
+      "top_bar": {
+        "band": [
+          0,
+          90
+        ]
+      },
+      "toast_look": {
+        "color": "#1e1e1e",
+        "alpha": 0.35,
+        "border": [
+          0.1,
+          1
+        ],
+        "radius": 12
+      },
+      "glass": {
+        "top_bar": [
+          25,
+          1,
+          1
+        ],
+        "menu": [
+          25,
+          1,
+          1
+        ],
+        "search_drop": [
+          25,
+          1,
+          1
+        ],
+        "toast": [
+          25,
+          1,
+          1
+        ],
+        "dialog": [
+          25,
+          1,
+          1
+        ],
+        "tabs": [
+          4,
+          1,
+          1
+        ]
+      },
+      "icons": {
+        "up_next": {
+          "view": [
+            18.0,
+            18.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M2.634 5.537a.906.906 0 1 0 0-1.813.906.906 0 1 0 0 1.813zm3.192-.325h9.865a.576.576 0 0 0 .585-.578.578.578 0 0 0-.585-.585H5.826a.574.574 0 0 0-.585.585c0 .325.253.578.585.578zM2.634 9.906c.506 0 .91-.404.91-.91a.906.906 0 0 0-.91-.91.906.906 0 0 0-.91.91c0 .506.405.91.91.91zm3.192-.325h9.865a.582.582 0 1 0 0-1.162H5.826a.572.572 0 0 0-.585.577c0 .325.253.585.585.585zm-3.192 4.694a.91.91 0 1 0-.001-1.82.91.91 0 0 0 0 1.82zm3.192-.332h9.865a.576.576 0 0 0 .585-.577.578.578 0 0 0-.585-.585H5.826a.574.574 0 0 0-.585.585c0 .324.253.577.585.577z"
+        },
+        "lyrics": {
+          "view": [
+            64.0,
+            64.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M18.53 62.724c1.764 0 3.115-.81 5.257-2.707l9.816-8.638h16.62c8.72 0 13.777-5.152 13.777-13.777V15.053c0-8.625-5.056-13.777-13.777-13.777H13.777C5.057 1.276 0 6.42 0 15.053v22.549c0 8.633 5.27 13.777 13.456 13.777h1.016v6.793c0 2.812 1.511 4.552 4.057 4.552zm1.57-7.16v-8.11c0-1.81-.805-2.485-2.486-2.485h-3.55c-5.165 0-7.654-2.603-7.654-7.654V15.34c0-5.033 2.489-7.632 7.654-7.632h35.872c5.149 0 7.654 2.599 7.654 7.632v21.975c0 5.051-2.505 7.654-7.654 7.654H33.188c-1.835 0-2.702.33-4.012 1.65zm-2.212-32.177c0 3.398 2.156 5.936 5.388 5.936 1.361 0 2.592-.302 3.372-1.263h.385c-.868 2.231-3 3.845-5.303 4.4-.95.243-1.327.737-1.327 1.425 0 .8.658 1.36 1.51 1.36 3.174 0 8.8-3.775 8.8-10.6 0-4.138-2.602-7.336-6.588-7.336-3.576 0-6.237 2.518-6.237 6.078zm15.663 0c0 3.398 2.134 5.936 5.387 5.936 1.34 0 2.593-.302 3.373-1.263h.39c-.865 2.231-3.023 3.845-5.308 4.4-.947.243-1.327.737-1.327 1.425 0 .8.636 1.36 1.51 1.36 3.178 0 8.779-3.775 8.779-10.6 0-4.138-2.577-7.336-6.567-7.336-3.577 0-6.237 2.518-6.237 6.078z"
+        },
+        "home": {
+          "view": [
+            24.0,
+            24.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M5.93 20.16a1.94 1.94 0 0 1-1.43-.502c-.334-.335-.502-.794-.502-1.393v-7.142c0-.362.062-.688.177-.953.123-.264.326-.529.6-.75l6.145-5.157c.176-.141.344-.247.52-.318.176-.07.362-.105.564-.105.194 0 .388.035.565.105.176.07.352.177.52.318l6.146 5.158c.273.23.467.476.59.75.124.264.177.59.177.96v7.134c0 .59-.159 1.058-.503 1.393-.335.335-.811.503-1.428.503H5.929Zm12.14-1.172c.221 0 .406-.07.547-.212a.688.688 0 0 0 .22-.511v-7.142c0-.177-.026-.344-.087-.459a.97.97 0 0 0-.265-.353l-6.154-5.149a.756.756 0 0 0-.177-.115.37.37 0 0 0-.15-.035.37.37 0 0 0-.158.035l-.177.115-6.145 5.15a.982.982 0 0 0-.274.352 1.13 1.13 0 0 0-.088.468v7.133c0 .203.08.379.23.511a.744.744 0 0 0 .546.212h12.133Zm-8.323-4.7c0-.176.062-.326.177-.432a.6.6 0 0 1 .423-.159h3.315c.176 0 .326.053.432.16s.159.255.159.431v4.973H9.756v-4.973Z"
+        },
+        "explore": {
+          "view": [
+            24.0,
+            24.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M9.92 11.354c.966 0 1.453-.487 1.453-1.49v-3.4c0-1.004-.487-1.483-1.453-1.483H6.452C5.487 4.981 5 5.46 5 6.464v3.4c0 1.003.487 1.49 1.452 1.49zm7.628 0c.965 0 1.452-.487 1.452-1.49v-3.4c0-1.004-.487-1.483-1.452-1.483h-3.46c-.974 0-1.46.479-1.46 1.483v3.4c0 1.003.486 1.49 1.46 1.49zm-7.65-1.073h-3.43c-.266 0-.396-.137-.396-.418v-3.4c0-.273.13-.41.396-.41h3.43c.265 0 .402.137.402.41v3.4c0 .281-.137.418-.403.418zm7.634 0h-3.43c-.273 0-.402-.137-.402-.418v-3.4c0-.273.129-.41.403-.41h3.43c.265 0 .395.137.395.41v3.4c0 .281-.13.418-.396.418zm-7.612 8.7c.966 0 1.453-.48 1.453-1.483v-3.407c0-.996-.487-1.483-1.453-1.483H6.452c-.965 0-1.452.487-1.452 1.483v3.407c0 1.004.487 1.483 1.452 1.483zm7.628 0c.965 0 1.452-.48 1.452-1.483v-3.407c0-.996-.487-1.483-1.452-1.483h-3.46c-.974 0-1.46.487-1.46 1.483v3.407c0 1.004.486 1.483 1.46 1.483zm-7.65-1.072h-3.43c-.266 0-.396-.137-.396-.41v-3.4c0-.282.13-.418.396-.418h3.43c.265 0 .402.136.402.418v3.4c0 .273-.137.41-.403.41zm7.634 0h-3.43c-.273 0-.402-.137-.402-.41v-3.4c0-.282.129-.418.403-.418h3.43c.265 0 .395.136.395.418v3.4c0 .273-.13.41-.396.41z"
+        },
+        "library": {
+          "view": [
+            24.0,
+            24.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M5.55 8.73H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1V5.5c0-.46-.12-.83-.37-1.08-.26-.26-.6-.39-1.06-.39H5.55c-.45 0-.8.13-1.06.39-.25.25-.37.62-.37 1.08v1.77c0 .47.12.83.37 1.09.26.25.6.38 1.06.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.07-.1-.2-.1-.35V5.63c0-.15.03-.27.1-.35.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.34.11.08.08.12.2.12.35v1.49c0 .16-.04.28-.12.35a.46.46 0 0 1-.34.12H5.7Zm5.62 1.14h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1V5.5c0-.46-.12-.83-.37-1.08a1.4 1.4 0 0 0-1.06-.39h-1.84c-.45 0-.8.13-1.05.39A1.5 1.5 0 0 0 9.9 5.5v1.77c0 .47.13.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.07-.11-.2-.11-.35V5.63c0-.15.04-.27.11-.35.08-.07.19-.11.34-.11h1.53c.14 0 .25.04.33.11.08.08.11.2.11.35v1.49c0 .16-.04.28-.11.35-.08.08-.2.12-.33.12h-1.53Zm5.63 1.14h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.1V5.5c0-.46-.13-.83-.38-1.08-.25-.26-.6-.39-1.06-.39h-1.84c-.45 0-.8.13-1.05.39-.26.25-.38.62-.38 1.08v1.77c0 .47.12.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.08-.07-.12-.2-.12-.35V5.63c0-.15.04-.27.12-.35.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.33.11.08.08.12.2.12.35v1.49c0 .16-.04.28-.12.35-.07.08-.18.12-.33.12h-1.52ZM5.55 14.35H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.08V11.1c0-.47-.12-.83-.37-1.09-.26-.25-.6-.38-1.06-.38H5.55c-.45 0-.8.13-1.06.38-.25.26-.37.62-.37 1.09v1.78c0 .46.12.82.37 1.08.26.25.6.38 1.06.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.08-.1-.2-.1-.35v-1.5c0-.15.03-.26.1-.34.08-.08.2-.12.34-.12h1.52c.14 0 .25.04.34.12.08.08.12.2.12.34v1.5c0 .15-.04.27-.12.35a.45.45 0 0 1-.34.12H5.7Zm5.62 1.14h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.08V11.1c0-.47-.12-.83-.37-1.09a1.4 1.4 0 0 0-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.25.26-.38.62-.38 1.09v1.78c0 .46.13.82.38 1.08.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12a.523.523 0 0 1-.11-.35v-1.5c0-.15.04-.26.11-.34.08-.08.19-.12.34-.12h1.53c.14 0 .25.04.33.12.08.08.11.2.11.34v1.5c0 .15-.04.27-.11.35-.08.08-.2.12-.33.12h-1.53Zm5.63 1.14h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.08V11.1c0-.47-.13-.83-.38-1.09-.25-.25-.6-.38-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.26.26-.38.62-.38 1.09v1.78c0 .46.12.82.38 1.08.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.08-.08-.12-.2-.12-.35v-1.5c0-.15.04-.26.12-.34.08-.08.2-.12.34-.12h1.52c.14 0 .25.04.33.12.08.08.12.2.12.34v1.5c0 .15-.04.27-.12.35-.07.08-.18.12-.33.12h-1.52ZM5.55 19.97H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1v-1.76c0-.47-.12-.83-.37-1.09-.26-.25-.6-.38-1.06-.38H5.55c-.45 0-.8.13-1.06.38-.25.26-.37.62-.37 1.09v1.77c0 .47.12.83.37 1.09.26.25.6.38 1.06.38Zm.16-1.15c-.15 0-.26-.04-.34-.11-.07-.08-.1-.2-.1-.35v-1.49c0-.16.03-.28.1-.36.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.34.11.08.08.12.2.12.36v1.49c0 .15-.04.27-.12.35a.46.46 0 0 1-.34.11H5.7Zm5.62 1.15h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1v-1.76c0-.47-.12-.83-.37-1.09a1.4 1.4 0 0 0-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.25.26-.38.62-.38 1.09v1.77c0 .47.13.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.15c-.15 0-.26-.04-.34-.11a.523.523 0 0 1-.11-.35v-1.49c0-.16.04-.28.11-.36.08-.07.19-.11.34-.11h1.53c.14 0 .25.04.33.11.08.08.11.2.11.36v1.49c0 .15-.04.27-.11.35-.08.07-.2.11-.33.11h-1.53Zm5.63 1.15h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.1v-1.76c0-.47-.13-.83-.38-1.09-.25-.25-.6-.38-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.26.26-.38.62-.38 1.09v1.77c0 .47.12.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.15c-.15 0-.26-.04-.34-.11-.08-.08-.12-.2-.12-.35v-1.49c0-.16.04-.28.12-.36.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.33.11.08.08.12.2.12.36v1.49c0 .15-.04.27-.12.35-.07.07-.18.11-.33.11h-1.52Z"
+        },
+        "next": {
+          "view": [
+            32.0,
+            28.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M18.14 20.68c.365 0 .672-.107 1.038-.323l8.508-4.997c.623-.365.938-.814.938-1.37 0-.564-.307-.988-.938-1.361l-8.508-4.997c-.366-.216-.68-.324-1.046-.324-.73 0-1.337.556-1.337 1.569v4.773c-.108-.399-.406-.73-.904-1.021L7.382 7.632c-.357-.216-.672-.324-1.037-.324-.73 0-1.345.556-1.345 1.569v10.235c0 1.013.614 1.569 1.345 1.569.365 0 .68-.108 1.037-.324l8.509-4.997c.49-.29.796-.631.904-1.038v4.79c0 1.013.615 1.569 1.345 1.569z"
+        },
+        "previous": {
+          "view": [
+            32.0,
+            28.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M18.14 20.68c.365 0 .672-.107 1.038-.323l8.508-4.997c.623-.365.938-.814.938-1.37 0-.564-.307-.988-.938-1.361l-8.508-4.997c-.366-.216-.68-.324-1.046-.324-.73 0-1.337.556-1.337 1.569v4.773c-.108-.399-.406-.73-.904-1.021L7.382 7.632c-.357-.216-.672-.324-1.037-.324-.73 0-1.345.556-1.345 1.569v10.235c0 1.013.614 1.569 1.345 1.569.365 0 .68-.108 1.037-.324l8.509-4.997c.49-.29.796-.631.904-1.038v4.79c0 1.013.615 1.569 1.345 1.569z",
+          "flip": true
+        }
+      },
+      "chip_look": {
+        "hover_lift": 2
+      }
+    }
+  },
+  {
+    "id": "dynamic-background",
+    "name": "Dynamic Background",
+    "creators": [
+      "chengggit"
+    ],
+    "blurb": "An animated cover backdrop across the whole app with frosted glass; every line but the one being sung is blurred, and sung words glow.",
+    "source": "Better Lyrics: chengggit/YouTube-Music-Dynamic-Theme 4.0.0",
+    "accent": "#ffffff",
+    "background": {
+      "mode": "kawarp",
+      "np_dim": 0.75,
+      "page_dim": 0.75,
+      "intensity": 1,
+      "speed": 6.66,
+      "saturation": 1.5,
+      "reactive": 0,
+      "audio_speed": 0,
+      "crossfade_secs": 1.5,
+      "beat_threshold": 0.75,
+      "auto_dim": 0.3,
+      "blur_passes": 10,
+      "dither": 0.008,
+      "video_backdrop": true
+    },
+    "lyrics": {
+      "font": "Inter",
+      "weight": "semibold",
+      "font_rem": [
+        [
+          0,
+          4.0
+        ]
+      ],
+      "past": [
+        [
+          0.4,
+          6
+        ]
+      ],
+      "upcoming": [
+        [
+          1,
+          6
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.6,
+        "delay": 0
+      },
+      "blur_transition": {
+        "frac": 0,
+        "secs": 0.8,
+        "delay": 0
+      },
+      "hover_reveal": true,
+      "glow_alpha": 1,
+      "long_glow_alpha": 1,
+      "scroll_ease": [
+        0.42,
+        0,
+        0.58,
+        1
+      ],
+      "pre_sharp_secs": 0.5,
+      "scroll_transition": {
+        "frac": 0,
+        "secs": 0.35,
+        "delay": 0
+      },
+      "resume_look": [
+        12,
+        0.1,
+        0
+      ],
+      "scroll_opacity_transition": {
+        "frac": 0,
+        "secs": 0.2,
+        "delay": 0
+      }
+    },
+    "cover": {
+      "radius": 20,
+      "shadow": 0.2,
+      "shadow_blur": 8,
+      "shadow_offset": 4,
+      "max_px": 400,
+      "fullscreen": {
+        "corner_layout": true
+      },
+      "open_scale": 0.2,
+      "open_secs": 0.75,
+      "open_slide": 0.6,
+      "open_fade": true,
+      "overlay_gradient": [
+        0.5,
+        0
+      ]
+    },
+    "now_playing": {
+      "title_align": "left",
+      "title_px": 25,
+      "artist_px": 20,
+      "title_max_px": 500,
+      "fullscreen_panel_frac": 0.4,
+      "header_autohide": true
+    },
+    "chrome": {},
+    "app": {
+      "font": "Inter",
+      "page_bg": "same",
+      "bar_alpha": 0,
+      "chip": "tonal",
+      "chip_radius": 12,
+      "card_radius": 20,
+      "thumb_radius": 8,
+      "panel_radius": 24,
+      "menu_radius": 24,
+      "text_dim": "#b3b3b3",
+      "search_radius": 12,
+      "search_alpha": 0.1,
+      "hide_scrollbars": true,
+      "controls": {
+        "hover_scale": 1.2,
+        "play_hover_scale": 1.2
+      },
+      "nav_item": {
+        "hover": 0.1,
+        "selected": 0.1,
+        "width": 256
+      },
+      "chip_look": {
+        "fill": 0.1,
+        "hover": 0.1,
+        "selected_fill": "white",
+        "selected_alpha": 0.2,
+        "selected_text": "accent"
+      },
+      "row_look": {
+        "height": 54,
+        "thumb_px": 38,
+        "hover": 0.1,
+        "hover_menu": true
+      },
+      "menu_look": {
+        "hover": 0.1,
+        "alpha": 0,
+        "shadow": [
+          4,
+          8,
+          0.2
+        ]
+      },
+      "toast_look": {
+        "alpha": 0,
+        "radius": 12
+      },
+      "card_look": {
+        "image_zoom": 0.01,
+        "play_px": 40,
+        "play_alpha": 0.6,
+        "play_hover_scale": 1.2
+      },
+      "search_look": {
+        "accent_icon": true,
+        "drop_radius": 12
+      },
+      "header_image_alpha": 0.8,
+      "header_gradient": [
+        0.5,
+        0
+      ],
+      "np_open_secs": 0.65,
+      "glass": {
+        "top_bar": [
+          8,
+          1,
+          1
+        ],
+        "menu": [
+          8,
+          1,
+          1
+        ],
+        "search_drop": [
+          8,
+          1,
+          1
+        ],
+        "toast": [
+          8,
+          1,
+          1
+        ],
+        "dialog": [
+          8,
+          1,
+          1
+        ]
+      },
+      "ui_fade_secs": 0.4
+    }
+  },
+  {
+    "id": "eblp",
+    "name": "Even Better Lyrics Plus",
+    "creators": [
+      "boidushya",
+      "noah"
+    ],
+    "blurb": "Large Switzer lyrics; sung lines fade back and blur while upcoming ones stay brighter, over a vivid cover warp with a slowly turning blurred cover behind it.",
+    "source": "Better Lyrics: better-lyrics/theme-eblp 1.0.7",
+    "background": {
+      "mode": "kawarp",
+      "np_dim": 0.75,
+      "auto_dim": 0.55,
+      "auto_dim_from": 0.5,
+      "intensity": 1.0,
+      "speed": 3.33,
+      "saturation": 2.0,
+      "reactive": 2.0,
+      "audio_speed": 4.0,
+      "scale": 1.25,
+      "layer": {
+        "opacity": 0.5,
+        "pulse_secs": 8,
+        "pulse": 0.05,
+        "rotate_secs": 30
+      },
+      "beat_threshold": 0.75,
+      "crossfade_secs": 1.0,
+      "blur_passes": 8,
+      "dither": 0.008
+    },
+    "lyrics": {
+      "font": "Switzer",
+      "weight": "semibold",
+      "font_rem": [
+        [
+          0,
+          3
+        ],
+        [
+          1400,
+          4
+        ],
+        [
+          1600,
+          5
+        ],
+        [
+          1800,
+          6
+        ]
+      ],
+      "line_padding_rem": 0.5,
+      "padding_inline": [
+        20,
+        10
+      ],
+      "past": [
+        [
+          0.33,
+          2.5
+        ]
+      ],
+      "upcoming": [
+        [
+          0.66,
+          0
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0.5,
+        "secs": 0,
+        "delay": 0.166
+      },
+      "blur_transition": {
+        "frac": 0.3333,
+        "secs": 0,
+        "delay": 0.4
+      },
+      "hover_reveal": true,
+      "hover_scale": 1.01,
+      "wobble": false,
+      "letter_wave": {
+        "on": true,
+        "crest": 0.04,
+        "settle": 0.015,
+        "secs": 0.75,
+        "emphasis": 1.09
+      },
+      "glow_alpha": 0.0001,
+      "long_glow_alpha": 1.0,
+      "background_em": 0.9,
+      "hide_instrumental_only": true,
+      "padding_top": 10
+    },
+    "cover": {
+      "max_px": 600,
+      "radius": 20,
+      "outline": [
+        1,
+        0.1
+      ]
+    },
+    "now_playing": {
+      "panel_frac": [
+        0.5,
+        0.45
+      ],
+      "switch": {
+        "back": 0.1,
+        "selected": 0.1
+      },
+      "video_lyrics": true,
+      "video_panel_frac": [
+        0.5,
+        0.45
+      ]
+    },
+    "chrome": {
+      "byline_marquee": true,
+      "marquee_fade": 15
+    }
+  },
+  {
+    "id": "expressive",
+    "name": "Expressive",
+    "creators": [
+      "decipher3114"
+    ],
+    "blurb": "Material You Expressive: Google Sans Flex type on solid black surfaces with thin outlined menus, dialogs and player bar.",
+    "source": "Better Lyrics: decipher3114/better-lyrics-expressive 1.3.4",
+    "lyrics": {
+      "font": "Google Sans Flex",
+      "weight": "semibold",
+      "credits_weight": "medium"
+    },
+    "cover": {
+      "radius": 12,
+      "max_frac": 0.6
+    },
+    "now_playing": {
+      "title_weight": "medium",
+      "artist_weight": "medium",
+      "fullscreen_title_weight": "semibold"
+    },
+    "chrome": {
+      "bar_color": "#000000",
+      "bar_np_alpha": 0,
+      "bar_border_alpha": 0.2,
+      "bar_np_border": false,
+      "time_weight": "medium",
+      "bar_edge_top": true
+    },
+    "app": {
+      "font": "Google Sans Flex",
+      "bar_border": true,
+      "panel_radius": 12,
+      "menu_radius": 10,
+      "menu_border": 0.2,
+      "menu_color": "#000000",
+      "heading_weight": "semibold",
+      "header_title_weight": "semibold",
+      "input": {
+        "fill": 0.06,
+        "radius": 6,
+        "focus_px": 2,
+        "focus_white": 0.12
+      },
+      "chip_look": {
+        "weight": "medium"
+      },
+      "row_look": {
+        "radius": 8,
+        "current": 0.12
+      },
+      "menu_look": {
+        "row_px": 32,
+        "hover": 0.1,
+        "row_radius": 6,
+        "shadow": [
+          8,
+          28,
+          0.7
+        ]
+      },
+      "toggle_look": {
+        "size": [
+          40,
+          22
+        ],
+        "knob": 16,
+        "outline": true,
+        "on_outline": true,
+        "off_outline": [
+          2,
+          1
+        ]
+      }
+    }
+  },
+  {
+    "id": "fluent",
+    "name": "Fluent",
+    "creators": [
+      "ytm-rs"
+    ],
+    "blurb": "Windows 11's Fluent look: Segoe UI Variable, your Windows accent colour, flat layered greys on a rounded sheet and small corners; now playing keeps a slow, calm cover backdrop.",
+    "source": "WinUI 3 Fluent design (Microsoft)",
+    "accent": "system",
+    "background": {
+      "mode": "kawarp",
+      "solid": "#202020",
+      "solid_light": "#f3f3f3",
+      "intensity": 0.6,
+      "speed": 0.5,
+      "saturation": 1.2,
+      "np_dim": 0.6,
+      "page_dim": 0.35,
+      "reactive": 0.3
+    },
+    "lyrics": {
+      "font": "Segoe UI Variable, Segoe UI",
+      "weight": "semibold",
+      "dim_alpha": 0.35
+    },
+    "cover": {
+      "radius": 8,
+      "shadow": 0.4
+    },
+    "now_playing": {
+      "title_px": 28,
+      "artist_px": 14,
+      "title_weight": "semibold"
+    },
+    "chrome": {
+      "radius": 4,
+      "progress_radius": 4,
+      "progress_px": 4,
+      "progress_color": "accent",
+      "progress_thumb_px": 10,
+      "progress_thumb_dot": true,
+      "progress_thumb_color": "#454545",
+      "progress_thumb_dot_color": "accent",
+      "progress_thumb_dot_frac": 0.6
+    },
+    "app": {
+      "font": "Segoe UI Variable, Segoe UI",
+      "page_bg": "solid",
+      "sidebar": "transparent",
+      "bar_alpha": 0.0,
+      "bar_border": true,
+      "nav": "bar",
+      "chip": "accent",
+      "chip_radius": 4,
+      "card_radius": 8,
+      "thumb_radius": 4,
+      "panel_radius": 8,
+      "menu_radius": 8,
+      "search_radius": 16,
+      "hover": 0.8,
+      "text_dim": "#c5c5c5",
+      "accent_controls": true,
+      "search_alpha": 0.06,
+      "search_border": 0.07,
+      "card_fill": 0.05,
+      "card_stroke": 0.07,
+      "menu_border": 0.08,
+      "menu_color": "#2c2c2c",
+      "heading_px": 20,
+      "heading_weight": "semibold",
+      "nav_item": {
+        "radius": 4,
+        "height": 40,
+        "hover": 0.06,
+        "selected": 0.06,
+        "press": 0.04,
+        "bar_px": 16,
+        "selected_fill": "#ffffff"
+      },
+      "controls": {
+        "focus": {
+          "color": "white",
+          "px": 2,
+          "inner_px": 1
+        }
+      },
+      "input": {
+        "fill": 0.06,
+        "radius": 4
+      },
+      "glass": {
+        "menu": [
+          30,
+          1,
+          1
+        ],
+        "search_drop": [
+          30,
+          1,
+          1
+        ]
+      },
+      "row_look": {
+        "radius": 4,
+        "hover": 0.06,
+        "current": 0.06,
+        "current_bar": 3
+      },
+      "menu_look": {
+        "alpha": 0.8,
+        "row_radius": 4,
+        "shadow": [
+          14,
+          48,
+          0.37
+        ]
+      },
+      "search_look": {
+        "height": 32,
+        "focus_color": "accent",
+        "underline": true,
+        "drop_radius": 8
+      },
+      "toggle_look": {
+        "size": [
+          40,
+          20
+        ],
+        "knob": 12,
+        "outline": true
+      },
+      "sheet": [
+        0.05,
+        8
+      ]
+    }
+  },
+  {
+    "id": "glassy-blur",
+    "name": "Glassy Blur",
+    "creators": [
+      "ankit008-mishra"
+    ],
+    "blurb": "Apple Music-style lyrics: sung lines vanish and upcoming lines blur progressively, over frosted glass and the song's own blurred cover on every page.",
+    "source": "Better Lyrics: ankit008-mishra/Glassyblur 1.1.2",
+    "accent": "#ffffff",
+    "background": {
+      "mode": "kawarp",
+      "np_dim": 0.57,
+      "auto_dim": 0.55,
+      "auto_dim_from": 0.5,
+      "intensity": 1.0,
+      "speed": 1.0,
+      "saturation": 2.0,
+      "reactive": 1.1,
+      "audio_speed": 4.5,
+      "scale": 1.25,
+      "crossfade_secs": 1.0,
+      "beat_threshold": 0.01,
+      "layer": {
+        "opacity": 0.8,
+        "brightness": 0.7,
+        "saturate": 1.5
+      },
+      "blur_passes": 7,
+      "dither": 0.004
+    },
+    "lyrics": {
+      "font": "SF Pro Display",
+      "font_rem": [
+        [
+          0,
+          5
+        ]
+      ],
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0,
+          5
+        ]
+      ],
+      "upcoming": [
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          3.5
+        ],
+        [
+          1,
+          5
+        ],
+        [
+          1,
+          6.5
+        ],
+        [
+          1,
+          8
+        ],
+        [
+          1,
+          9.5
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.9,
+        "delay": 0
+      },
+      "past_blur_transition": {
+        "frac": 0,
+        "secs": 0.25,
+        "delay": 0
+      },
+      "active_opacity_transition": {
+        "frac": 0,
+        "secs": 0.3,
+        "delay": 0
+      },
+      "active_blur_transition": {
+        "frac": 0,
+        "secs": 0.3,
+        "delay": 0
+      },
+      "scale_ease": [
+        0.0,
+        0.0,
+        0.58,
+        1.0
+      ],
+      "hover_opacity": 1.0,
+      "scale_secs": 0.3,
+      "wobble": false,
+      "glow_alpha": 0.0,
+      "long_glow_alpha": 1.0,
+      "glow_rem": 1.2,
+      "background_em": 0.65,
+      "scroll_secs": 0.5,
+      "scroll_ease": [
+        0.42,
+        0.0,
+        0.58,
+        1.0
+      ],
+      "scroll_offset": 0.6,
+      "early_scroll": 0.67,
+      "word_rise_px": 3.0,
+      "word_rise_secs": 0.2,
+      "word_rise_ratio": 1.0,
+      "line_stagger": 0,
+      "line_fade_secs": 0.5,
+      "scroll_scale": 0.95,
+      "scroll_transition": {
+        "frac": 0,
+        "secs": 0.3,
+        "delay": 0
+      },
+      "resume_look": [
+        12,
+        0.1,
+        0
+      ]
+    },
+    "cover": {
+      "radius": 16,
+      "size_vh": 0.55,
+      "shadow": 0.4,
+      "shadow_blur": 50,
+      "shadow_offset": 20
+    },
+    "now_playing": {
+      "video_lyrics": true,
+      "panel_frac": [
+        0.5,
+        0.45
+      ],
+      "video_panel_frac": [
+        0.63,
+        0.64
+      ],
+      "video_radius": 12,
+      "title_max_px": 500,
+      "switch": {
+        "back": 0.1,
+        "radius": 16
+      },
+      "no_lyrics_text": "No lyrics found",
+      "no_lyrics": {
+        "rem": 2.0,
+        "icon": true,
+        "center_after": 1.4,
+        "stays": true
+      }
+    },
+    "chrome": {
+      "bar_color": "#141414",
+      "progress_at": "top",
+      "progress_px": 8,
+      "progress_color": "white",
+      "progress_radius": 60,
+      "progress_thumb": false,
+      "progress_track": 0.15,
+      "play_button": "bare",
+      "bar_layout": "song_middle",
+      "bar_np_alpha": 0
+    },
+    "app": {
+      "page_bg": "static",
+      "page_dim": 0.7,
+      "sidebar": "glass",
+      "sidebar_alpha": 0.0,
+      "sidebar_border": 0.1,
+      "bar_alpha": 0.2,
+      "chip": "tonal",
+      "chip_radius": 12,
+      "card_radius": 20,
+      "thumb_radius": 1,
+      "panel_radius": 24,
+      "menu_radius": 16,
+      "menu_border": 0.15,
+      "text_dim": "#b3b3b3",
+      "menu_color": "#0a0a0a",
+      "menu_look": {
+        "row_px": 34,
+        "hover": 0.12,
+        "alpha": 0.25,
+        "icon_right": true,
+        "shadow": [
+          15,
+          50,
+          0.75
+        ],
+        "row_radius": 0
+      },
+      "search_look": {
+        "drop_radius": 12,
+        "attached": true,
+        "drop_ring": 0.08,
+        "item_radius": 8
+      },
+      "glass": {
+        "top_bar": [
+          25,
+          1,
+          1
+        ],
+        "menu": [
+          8,
+          2,
+          1.1
+        ],
+        "search_drop": [
+          25,
+          1,
+          1
+        ],
+        "dialog": [
+          25,
+          1,
+          1
+        ],
+        "toast": [
+          10,
+          1,
+          1
+        ],
+        "resume": [
+          10,
+          1,
+          1
+        ]
+      },
+      "top_bar": {
+        "band": [
+          0,
+          90
+        ]
+      },
+      "toast_look": {
+        "alpha": 0,
+        "radius": 12
+      },
+      "controls": {
+        "press_scale": 0.92,
+        "press_chips": 0.95,
+        "press_rows": 0.98
+      },
+      "nav_item": {
+        "radius": 12,
+        "hover": 0.1,
+        "selected": 0.15
+      },
+      "chip_look": {
+        "fill": 0.1,
+        "hover": 0.1
+      },
+      "card_look": {
+        "play_px": 40,
+        "play_alpha": 0.6
+      },
+      "row_look": {
+        "hover": 0.1,
+        "current": 0.08,
+        "image_zoom": 0.15,
+        "image_dim": 0.35
+      },
+      "header_image_alpha": 0.8,
+      "page_saturation": 1.5,
+      "page_scale": 1.2,
+      "search_radius": 12,
+      "search_alpha": 0.1,
+      "search_border": 0.1,
+      "hide_scrollbars": true,
+      "queue_look": {
+        "image_dim": 0.6,
+        "image_zoom": 0.15
+      },
+      "icons": {
+        "up_next": {
+          "view": [
+            24,
+            24
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M4 6L20 6M4 12L20 12M4 18L20 18",
+          "stroke": 2.5
+        },
+        "lyrics": {
+          "view": [
+            20,
+            20
+          ],
+          "origin": [
+            2,
+            2
+          ],
+          "d": "M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"
+        },
+        "explore": {
+          "view": [
+            24,
+            24
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M9.92 11.354c.966 0 1.453-.487 1.453-1.49v-3.4c0-1.004-.487-1.483-1.453-1.483H6.452C5.487 4.981 5 5.46 5 6.464v3.4c0 1.003.487 1.49 1.452 1.49zm7.628 0c.965 0 1.452-.487 1.452-1.49v-3.4c0-1.004-.487-1.483-1.452-1.483h-3.46c-.974 0-1.46.479-1.46 1.483v3.4c0 1.003.486 1.49 1.46 1.49zm-7.65-1.073h-3.43c-.266 0-.396-.137-.396-.418v-3.4c0-.273.13-.41.396-.41h3.43c.265 0 .402.137.402.41v3.4c0 .281-.137.418-.403.418zm7.634 0h-3.43c-.273 0-.402-.137-.402-.418v-3.4c0-.273.129-.41.403-.41h3.43c.265 0 .395.137.395.41v3.4c0 .281-.13.418-.396.418zm-7.612 8.7c.966 0 1.453-.48 1.453-1.483v-3.407c0-.996-.487-1.483-1.453-1.483H6.452c-.965 0-1.452.487-1.452 1.483v3.407c0 1.004.487 1.483 1.452 1.483zm7.628 0c.965 0 1.452-.48 1.452-1.483v-3.407c0-.996-.487-1.483-1.452-1.483h-3.46c-.974 0-1.46.487-1.46 1.483v3.407c0 1.004.486 1.483 1.46 1.483zm-7.65-1.072h-3.43c-.266 0-.396-.137-.396-.41v-3.4c0-.282.13-.418.396-.418h3.43c.265 0 .402.136.402.418v3.4c0 .273-.137.41-.403.41zm7.634 0h-3.43c-.273 0-.402-.137-.402-.41v-3.4c0-.282.129-.418.403-.418h3.43c.265 0 .395.136.395.418v3.4c0 .273-.13.41-.396.41z"
+        },
+        "library": {
+          "view": [
+            24,
+            24
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M5.55 8.73H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1V5.5c0-.46-.12-.83-.37-1.08-.26-.26-.6-.39-1.06-.39H5.55c-.45 0-.8.13-1.06.39-.25.25-.37.62-.37 1.08v1.77c0 .47.12.83.37 1.09.26.25.6.38 1.06.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.07-.1-.2-.1-.35V5.63c0-.15.03-.27.1-.35.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.34.11.08.08.12.2.12.35v1.49c0 .16-.04.28-.12.35a.46.46 0 0 1-.34.12H5.7Zm5.62 1.14h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1V5.5c0-.46-.12-.83-.37-1.08a1.4 1.4 0 0 0-1.06-.39h-1.84c-.45 0-.8.13-1.05.39A1.5 1.5 0 0 0 9.9 5.5v1.77c0 .47.13.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.07-.11-.2-.11-.35V5.63c0-.15.04-.27.11-.35.08-.07.19-.11.34-.11h1.53c.14 0 .25.04.33.11.08.08.11.2.11.35v1.49c0 .16-.04.28-.11.35-.08.08-.2.12-.33.12h-1.53Zm5.63 1.14h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.1V5.5c0-.46-.13-.83-.38-1.08-.25-.26-.6-.39-1.06-.39h-1.84c-.45 0-.8.13-1.05.39-.26.25-.38.62-.38 1.08v1.77c0 .47.12.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.08-.07-.12-.2-.12-.35V5.63c0-.15.04-.27.12-.35.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.33.11.08.08.12.2.12.35v1.49c0 .16-.04.28-.12.35-.07.08-.18.12-.33.12h-1.52ZM5.55 14.35H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.08V11.1c0-.47-.12-.83-.37-1.09-.26-.25-.6-.38-1.06-.38H5.55c-.45 0-.8.13-1.06.38-.25.26-.37.62-.37 1.09v1.78c0 .46.12.82.37 1.08.26.25.6.38 1.06.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.07-.08-.1-.2-.1-.35v-1.5c0-.15.03-.26.1-.34.08-.08.2-.12.34-.12h1.52c.14 0 .25.04.34.12.08.08.12.2.12.34v1.5c0 .15-.04.27-.12.35a.45.45 0 0 1-.34.12H5.7Zm5.62 1.14h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.08V11.1c0-.47-.12-.83-.37-1.09a1.4 1.4 0 0 0-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.25.26-.38.62-.38 1.09v1.78c0 .46.13.82.38 1.08.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12a.523.523 0 0 1-.11-.35v-1.5c0-.15.04-.26.11-.34.08-.08.19-.12.34-.12h1.53c.14 0 .25.04.33.12.08.08.11.2.11.34v1.5c0 .15-.04.27-.11.35-.08.08-.2.12-.33.12h-1.53Zm5.63 1.14h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.08V11.1c0-.47-.13-.83-.38-1.09-.25-.25-.6-.38-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.26.26-.38.62-.38 1.09v1.78c0 .46.12.82.38 1.08.25.25.6.38 1.05.38Zm.16-1.14c-.15 0-.26-.04-.34-.12-.08-.08-.12-.2-.12-.35v-1.5c0-.15.04-.26.12-.34.08-.08.2-.12.34-.12h1.52c.14 0 .25.04.33.12.08.08.12.2.12.34v1.5c0 .15-.04.27-.12.35-.07.08-.18.12-.33.12h-1.52ZM5.55 19.97H7.4c.45 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1v-1.76c0-.47-.12-.83-.37-1.09-.26-.25-.6-.38-1.06-.38H5.55c-.45 0-.8.13-1.06.38-.25.26-.37.62-.37 1.09v1.77c0 .47.12.83.37 1.09.26.25.6.38 1.06.38Zm.16-1.15c-.15 0-.26-.04-.34-.11-.07-.08-.1-.2-.1-.35v-1.49c0-.16.03-.28.1-.36.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.34.11.08.08.12.2.12.36v1.49c0 .15-.04.27-.12.35a.46.46 0 0 1-.34.11H5.7Zm5.62 1.15h1.84c.46 0 .8-.13 1.06-.38.25-.26.37-.62.37-1.1v-1.76c0-.47-.12-.83-.37-1.09a1.4 1.4 0 0 0-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.25.26-.38.62-.38 1.09v1.77c0 .47.13.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.15c-.15 0-.26-.04-.34-.11a.523.523 0 0 1-.11-.35v-1.49c0-.16.04-.28.11-.36.08-.07.19-.11.34-.11h1.53c.14 0 .25.04.33.11.08.08.11.2.11.36v1.49c0 .15-.04.27-.11.35-.08.07-.2.11-.33.11h-1.53Zm5.63 1.15h1.84c.45 0 .8-.13 1.06-.38.25-.26.38-.62.38-1.1v-1.76c0-.47-.13-.83-.38-1.09-.25-.25-.6-.38-1.06-.38h-1.84c-.45 0-.8.13-1.05.38-.26.26-.38.62-.38 1.09v1.77c0 .47.12.83.38 1.09.25.25.6.38 1.05.38Zm.16-1.15c-.15 0-.26-.04-.34-.11-.08-.08-.12-.2-.12-.35v-1.49c0-.16.04-.28.12-.36.08-.07.2-.11.34-.11h1.52c.14 0 .25.04.33.11.08.08.12.2.12.36v1.49c0 .15-.04.27-.12.35-.07.07-.18.11-.33.11h-1.52Z"
+        }
+      }
+    }
+  },
+  {
+    "id": "lucid",
+    "name": "Lucid",
+    "creators": [
+      "drago-oo"
+    ],
+    "blurb": "Minimal frosted glass with bold lyrics that blur in a cascade as they approach and dissolve once sung, over an animated backdrop on every page.",
+    "source": "Better Lyrics: drago-oo/lucid-theme 1.3.0",
+    "accent": "#ffffff",
+    "background": {
+      "mode": "kawarp",
+      "np_dim": 0.68,
+      "intensity": 1.0,
+      "speed": 3.33,
+      "saturation": 1.5,
+      "reactive": 2.0,
+      "audio_speed": 8.0,
+      "crossfade_secs": 1.0,
+      "beat_threshold": 0.875,
+      "auto_dim": 0.3,
+      "blur_passes": 8,
+      "dither": 0.004,
+      "video_backdrop": true,
+      "layer": {
+        "opacity": 0.3
+      }
+    },
+    "lyrics": {
+      "font": "SF Pro Display",
+      "font_rem": [
+        [
+          0,
+          3
+        ],
+        [
+          1279,
+          5
+        ]
+      ],
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0,
+          5
+        ]
+      ],
+      "upcoming": [
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          3.5
+        ],
+        [
+          1,
+          5
+        ],
+        [
+          1,
+          6.5
+        ],
+        [
+          1,
+          8
+        ],
+        [
+          1,
+          9.5
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.4,
+        "delay": 0
+      },
+      "blur_transition": {
+        "frac": 0,
+        "secs": 0.4,
+        "delay": 0
+      },
+      "active_opacity_transition": {
+        "frac": 0,
+        "secs": 0.3,
+        "delay": 0
+      },
+      "active_blur_transition": {
+        "frac": 0,
+        "secs": 0.3,
+        "delay": 0
+      },
+      "scale_ease": [
+        0.0,
+        0.0,
+        0.58,
+        1.0
+      ],
+      "scroll_scale": 0.95,
+      "credits_alpha": [
+        0.2,
+        1.0
+      ],
+      "credits_center": true,
+      "credits_weight": "semibold",
+      "credits_margin_rem": 4,
+      "hide_instrumental_only": true,
+      "line_stagger": 0.0,
+      "rest_scale": 0.95,
+      "active_scale": 1.0,
+      "scale_secs": 0.4,
+      "wobble": false,
+      "glow_alpha": 0.0,
+      "long_glow_alpha": 1.0,
+      "glow_rem": 1.0,
+      "background_em": 0.65,
+      "scroll_secs": 0.8,
+      "scroll_ease": [
+        0.45,
+        0.0,
+        0.15,
+        1.0
+      ],
+      "scroll_offset": 0.6,
+      "early_scroll": 0.67,
+      "line_ease": [
+        0.0,
+        0.0,
+        0.58,
+        1.0
+      ]
+    },
+    "cover": {
+      "open_scale": 0.2,
+      "open_secs": 0.75,
+      "radius": 16,
+      "size_vh": 0.55,
+      "shadow": 0.4,
+      "shadow_blur": 50,
+      "shadow_offset": 20,
+      "open_slide": 0.6,
+      "open_fade": true
+    },
+    "now_playing": {
+      "panel_frac": [
+        0.5,
+        0.45
+      ],
+      "video_lyrics": true,
+      "video_panel_frac": [
+        0.63,
+        0.64
+      ],
+      "video_max_frac": 0.6,
+      "video_pill": true,
+      "no_lyrics_text": "No lyrics found",
+      "no_lyrics": {
+        "rem": 3,
+        "icon": true,
+        "center_after": 1.4
+      }
+    },
+    "chrome": {
+      "bar_color": "#141414",
+      "progress_at": "top",
+      "progress_px": 8,
+      "progress_color": "white",
+      "progress_radius": 60,
+      "progress_track": 0.15,
+      "progress_thumb": false,
+      "play_button": "bare",
+      "bar_layout": "song_middle"
+    },
+    "app": {
+      "font": "SF Pro Display",
+      "all_bold": true,
+      "page_bg": "same",
+      "page_dim": 0.68,
+      "sidebar": "glass",
+      "sidebar_alpha": 0.0,
+      "sidebar_border": 0.1,
+      "bar_alpha": 0.2,
+      "chip": "pill",
+      "chip_radius": 30,
+      "card_radius": 12,
+      "thumb_radius": 10,
+      "panel_radius": 24,
+      "menu_radius": 16,
+      "menu_border": 0.1,
+      "menu_color": "#1e1e1e",
+      "menu_look": {
+        "row_px": 40,
+        "hover": 0.15,
+        "alpha": 0.35,
+        "shadow": [
+          10,
+          30,
+          0.5
+        ],
+        "row_radius": 8,
+        "dialog_alpha": 0.4
+      },
+      "search_look": {
+        "drop_radius": 20,
+        "attached": true,
+        "drop_ring": 0.1,
+        "item_radius": 8
+      },
+      "chip_look": {
+        "height": 36,
+        "fill": 0.08,
+        "hover": 0.07,
+        "selected_fill": "white",
+        "selected_text": "#000000",
+        "border": 0.05,
+        "selected_weight": "semibold"
+      },
+      "row_look": {
+        "hover": 0.1,
+        "current": 0.08,
+        "image_zoom": 0.15,
+        "image_dim": 0.6
+      },
+      "top_bar": {
+        "band": [
+          0,
+          90
+        ]
+      },
+      "toast_look": {
+        "color": "#1e1e1e",
+        "alpha": 0.1,
+        "border": [
+          0.1,
+          1
+        ],
+        "radius": 12,
+        "text_color": "#ffffff"
+      },
+      "glass": {
+        "top_bar": [
+          25,
+          1,
+          1
+        ],
+        "menu": [
+          25,
+          1,
+          1
+        ],
+        "search_drop": [
+          25,
+          1,
+          1
+        ],
+        "toast": [
+          25,
+          1,
+          1
+        ],
+        "dialog": [
+          25,
+          1,
+          1
+        ],
+        "resume": [
+          25,
+          1,
+          1
+        ]
+      },
+      "header_image_alpha": 0.8,
+      "header_gradient": [
+        0.05,
+        1.0
+      ],
+      "controls": {
+        "press_scale": 0.92,
+        "press_rows": 0.98
+      },
+      "nav_item": {
+        "radius": 12,
+        "hover": 0.1,
+        "selected": 0.15,
+        "side_margin": 8
+      },
+      "card_look": {
+        "shadow": [
+          16,
+          32,
+          0.5
+        ],
+        "image_zoom": 0.06
+      },
+      "search_radius": 12,
+      "search_alpha": 0.0,
+      "search_border": 0.1,
+      "hide_scrollbars": true
+    }
+  },
+  {
+    "id": "lyric-glow",
+    "name": "Lyric Glow",
+    "creators": [
+      "MatiuxXcd"
+    ],
+    "blurb": "An Apple Music-style dark stage: tight SF Pro lyrics, a four-step fade for the lines ahead, a soft glow behind the sung line and a faint cover warp.",
+    "source": "Better Lyrics: LMatiuxXcd/lyric-glow 1.4.1",
+    "accent": "#67d9ff",
+    "background": {
+      "mode": "kawarp",
+      "solid": "#09090b",
+      "np_dim": 0.52,
+      "intensity": 0.68,
+      "speed": 1.4,
+      "saturation": 1.35,
+      "reactive": 1.25,
+      "audio_speed": 2.0,
+      "scrim": 0.28,
+      "layer": {
+        "opacity": 0.12
+      },
+      "scrim_gradient": [
+        0.06,
+        0.58
+      ],
+      "overlays": [
+        {
+          "color": "#67d9ff",
+          "alpha": 0.075,
+          "x": 0.18,
+          "y": 0.36,
+          "rx": 0.44,
+          "ry": 0.34
+        },
+        {
+          "color": "#9b86ff",
+          "alpha": 0.065,
+          "x": 0.82,
+          "y": 0.46,
+          "rx": 0.49,
+          "ry": 0.32
+        }
+      ],
+      "crossfade_secs": 1.4,
+      "beat_threshold": 0.82,
+      "blur_passes": 6,
+      "dither": 0.006
+    },
+    "lyrics": {
+      "weight": "semibold",
+      "font": "SF Pro Display",
+      "font_vw": [
+        2.0,
+        3.02,
+        4.35
+      ],
+      "font_vw_steps": [
+        [
+          900,
+          1.75,
+          5.2,
+          2.9
+        ],
+        [
+          1280,
+          1.95,
+          3.35,
+          3.65
+        ],
+        [
+          1450,
+          1.9,
+          2.98,
+          3.95
+        ]
+      ],
+      "line_height": 1.085,
+      "letter_spacing_em": -0.037,
+      "line_padding_rem": 1.8,
+      "line_padding_vh": [
+        14,
+        1.55,
+        21
+      ],
+      "padding_inline": [
+        44,
+        44
+      ],
+      "padding_vw": [
+        34,
+        3.1,
+        58
+      ],
+      "anchor": 0.405,
+      "past": [
+        [
+          0.095,
+          0.85
+        ]
+      ],
+      "upcoming": [
+        [
+          0.56,
+          0.0
+        ],
+        [
+          0.42,
+          0.1
+        ],
+        [
+          0.32,
+          0.24
+        ],
+        [
+          0.24,
+          0.42
+        ],
+        [
+          0.34,
+          0.2
+        ]
+      ],
+      "opacity_transition": {
+        "secs": 0.3
+      },
+      "blur_transition": {
+        "secs": 0.38
+      },
+      "scroll_opacity": 0.61,
+      "hover_reveal": true,
+      "hover_opacity": 1.0,
+      "hover_box": [
+        0.05,
+        22
+      ],
+      "hover_box_pop": [
+        0.94,
+        0.58
+      ],
+      "edge_fade": [
+        0.17,
+        0.18
+      ],
+      "scale_ease": [
+        0.16,
+        1.0,
+        0.3,
+        1.0
+      ],
+      "scale_exit_ease": [
+        0.22,
+        0.78,
+        0.22,
+        1.0
+      ],
+      "line_fade_secs": 0.26,
+      "exit_fade": [
+        0.42,
+        0
+      ],
+      "sweep_lead": 0.065,
+      "sweep_ratio": 1.3,
+      "glow_ratio": 0.84,
+      "glow_min_secs": 0.52,
+      "rest_scale": 0.972,
+      "active_scale": 1.012,
+      "scale_secs": 0.41,
+      "wobble": false,
+      "word_bounce": {
+        "lift": 0.04,
+        "scale": 1.02,
+        "secs": 0.69,
+        "settle": 0.008
+      },
+      "glow_rem": 0.62,
+      "background_em": 0.54,
+      "background_alpha": 0.67,
+      "background_sung_alpha": 0.62,
+      "background_gap_em": 0.22,
+      "instrumental_chip": 0.055,
+      "resume_look": [
+        999,
+        0.1,
+        0.1
+      ],
+      "aura": [
+        0.09,
+        40
+      ],
+      "aura_colors": [
+        "#67d9ff",
+        "#9b86ff",
+        "#ff78ac"
+      ],
+      "marker_px": [
+        3,
+        14,
+        0.62,
+        18
+      ],
+      "marker_colors": [
+        "#67d9ff",
+        "#9b86ff",
+        "#ff78ac"
+      ],
+      "marker_hover": 0.38,
+      "active_glow": [
+        26,
+        0.055
+      ],
+      "active_glow_colors": [
+        "#67d9ff",
+        "#9b86ff"
+      ],
+      "rest_saturate": 0.98,
+      "column_overlays": [
+        {
+          "color": "#67d9ff",
+          "alpha": 0.035,
+          "x": 0.5,
+          "y": 0.44,
+          "rx": 0.5,
+          "ry": 0.24
+        },
+        {
+          "color": "#9b86ff",
+          "alpha": 0.028,
+          "x": 0.78,
+          "y": 0.62,
+          "rx": 0.385,
+          "ry": 0.21
+        },
+        {
+          "color": "#000000",
+          "alpha": 0.075,
+          "x": 0.0,
+          "y": 0.5,
+          "rx": 0.28,
+          "ry": 0.5
+        }
+      ],
+      "line_stagger": 0.022,
+      "scroll_secs": 0.69,
+      "scroll_ease": [
+        0.18,
+        0.82,
+        0.22,
+        1.0
+      ],
+      "scroll_offset": 0.5,
+      "rest_saturate_far": 0.8,
+      "marker_colors_alt": [
+        "#ff78ac",
+        "#9b86ff"
+      ],
+      "scroll_curve": [
+        620,
+        16,
+        650,
+        58,
+        12
+      ]
+    },
+    "cover": {
+      "radius": 18,
+      "size_vh": 0.54,
+      "shadow": 0.42,
+      "shadow_blur": 80,
+      "shadow_offset": 28,
+      "outline": [
+        1,
+        0.06
+      ],
+      "max_frac": 0.93,
+      "size_steps": [
+        [
+          0,
+          352
+        ],
+        [
+          900,
+          10000
+        ]
+      ]
+    },
+    "now_playing": {
+      "panel_frac": [
+        0.45,
+        0.41
+      ],
+      "video_lyrics": true,
+      "video_panel_frac": [
+        0.57,
+        0.58
+      ],
+      "no_lyrics_text": "Lyrics unavailable",
+      "no_lyrics": {
+        "rem": 2.15,
+        "icon": true,
+        "stays": true
+      }
+    },
+    "chrome": {
+      "bar_color": "#0c0c0e",
+      "progress_px": 3,
+      "progress_color": "#67d9ff",
+      "progress_radius": 1.5,
+      "progress_thumb": false,
+      "progress_track": 0.14,
+      "progress_gradient": [
+        "#67d9ff",
+        "#9b86ff",
+        "#ff78ac"
+      ],
+      "thumb_disc_secs": 14,
+      "thumb_px": 32,
+      "bar_border_alpha": 0.18,
+      "progress_inset": 12,
+      "bar_tint": [
+        "#67d9ff",
+        "#9b86ff"
+      ],
+      "bar_tint_alpha": 0.06,
+      "bar_edge_color": "#96cdff",
+      "bar_edge_top": true,
+      "bar_docked_shadow": [
+        40,
+        0.12
+      ],
+      "thumb_glow": [
+        14,
+        0.35
+      ],
+      "thumb_glow_color": "#67d9ff"
+    },
+    "app": {
+      "font": "SF Pro Display",
+      "sidebar": "glass",
+      "sidebar_alpha": 0.48,
+      "sidebar_border": 0.065,
+      "bar_alpha": 0.78,
+      "bar_border": true,
+      "card_radius": 14,
+      "thumb_radius": 14,
+      "panel_radius": 10,
+      "menu_radius": 20,
+      "menu_border": 0.1,
+      "menu_color": "#18181b",
+      "text_dim": "#a8a8a8",
+      "search_radius": 13,
+      "search_alpha": 0.075,
+      "search_border": 0.065,
+      "hide_scrollbars": true,
+      "np_solid": "#06070d",
+      "header_image_alpha": 0.78,
+      "header_gradient": [
+        0.18,
+        1.0
+      ],
+      "glass": {
+        "top_bar": [
+          30,
+          1.25,
+          1
+        ],
+        "menu": [
+          32,
+          1.2,
+          1
+        ],
+        "search_drop": [
+          34,
+          1.25,
+          1
+        ],
+        "toast": [
+          24,
+          1,
+          1
+        ],
+        "dialog": [
+          32,
+          1.2,
+          1
+        ],
+        "resume": [
+          22,
+          1,
+          1
+        ],
+        "instrumental": [
+          12,
+          1,
+          1
+        ]
+      },
+      "menu_look": {
+        "row_px": 40,
+        "hover": 0.09,
+        "alpha": 0.86,
+        "shadow": [
+          18,
+          60,
+          0.34
+        ],
+        "row_radius": 9
+      },
+      "controls": {
+        "press_scale": 0.92,
+        "press_rows": 0.992,
+        "focus": {
+          "color": "#fb5b70",
+          "px": 2
+        }
+      },
+      "nav_item": {
+        "radius": 11,
+        "height": 44,
+        "hover": 0.075,
+        "selected": 0.13,
+        "side_margin": 8
+      },
+      "chip_look": {
+        "height": 36,
+        "fill": 0.075,
+        "hover": 0.055,
+        "selected_fill": "white",
+        "selected_alpha": 0.94,
+        "selected_text": "#111111",
+        "border": 0.065,
+        "selected_weight": "semibold"
+      },
+      "card_look": {
+        "image_zoom": 0.035,
+        "image_dim": 0.0
+      },
+      "row_look": {
+        "thumb_px": 42,
+        "radius": 10,
+        "hover": 0.075,
+        "current": 0.105,
+        "thumb_radius": 7,
+        "image_zoom": 0.06,
+        "image_dim": 0.22
+      },
+      "search_look": {
+        "drop_radius": 16,
+        "focus_color": "#2a4a55",
+        "focus_ring": 3,
+        "drop_ring": 0.1,
+        "item_radius": 9,
+        "attached": true
+      },
+      "top_bar": {
+        "band": [
+          0.78,
+          82
+        ]
+      },
+      "toast_look": {
+        "color": "#18181b",
+        "alpha": 0.88,
+        "border": [
+          0.1,
+          1
+        ],
+        "radius": 14
+      }
+    }
+  },
+  {
+    "id": "material3",
+    "name": "Material 3",
+    "creators": [
+      "adidotzip"
+    ],
+    "blurb": "Google's Material 3 Expressive look: a warm dark palette, Google Sans Flex, pill search and rounded cards, with soft blurred past lines.",
+    "source": "Better Lyrics: adidotzip/Material3 1.2.0",
+    "accent": "#ffb4a9",
+    "background": {
+      "solid": "#1a1110"
+    },
+    "lyrics": {
+      "font": "Google Sans Flex",
+      "letter_spacing_em": -0.012,
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0.5,
+          2.5
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0.35
+      },
+      "past_blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0.35
+      },
+      "instrumental": "ring",
+      "balance": true,
+      "instrumental_rem": 5.6,
+      "ring_wave": true
+    },
+    "now_playing": {},
+    "chrome": {
+      "play_button": "bare"
+    },
+    "app": {
+      "font": "Google Sans Flex",
+      "bar_alpha": 0.0,
+      "card_radius": 20,
+      "hover": 0.0,
+      "search_radius": 28,
+      "menu_color": "#271d1c",
+      "page_rise_px": 8,
+      "morph_loader": true,
+      "text_dim": "#d8c2bf",
+      "glass": {
+        "top_bar": [
+          24,
+          1.4,
+          1
+        ]
+      },
+      "menu_look": {
+        "pop": [
+          0.98,
+          0.24
+        ],
+        "item_slide": 6
+      },
+      "row_look": {
+        "radius": 20
+      },
+      "page_wash": [
+        0.24,
+        900
+      ],
+      "page_wash_color": "#8b4b2e",
+      "search_alpha": 1.0,
+      "search_look": {
+        "height": 48,
+        "color": "#322826",
+        "drop_radius": 28,
+        "open_color": "#3d3231",
+        "attached": true
+      },
+      "nav_item": {
+        "radius": 24,
+        "height": 48,
+        "hover": 0.08,
+        "selected": 1,
+        "press": 0.12,
+        "selected_fill": "#5d3f3c"
+      },
+      "chip_look": {
+        "fill": 0.1,
+        "hover": 0.05,
+        "selected_fill": "#4b5429",
+        "selected_alpha": 1.0,
+        "selected_text": "#e1e4b9"
+      },
+      "text_color": "#f1dedc",
+      "top_bar": {
+        "band": [
+          0.78,
+          76
+        ],
+        "band_color": "#1a1110"
+      }
+    }
+  },
+  {
+    "id": "minimal",
+    "name": "Minimal",
+    "creators": [
+      "semicolonhope"
+    ],
+    "blurb": "Calm line-by-line lyrics with no karaoke wipe, over a dim, unblurred cover backdrop.",
+    "source": "Better Lyrics: ramansg/Minimal 3.0.5",
+    "background": {
+      "mode": "cover_fullbleed",
+      "np_dim": 0.22,
+      "crossfade_secs": 2.5,
+      "crossfade_delay": 2.5
+    },
+    "accent": "#ffffff",
+    "lyrics": {
+      "font": "Google Sans Flex",
+      "weight": "semibold",
+      "font_rem": [
+        [
+          0,
+          3
+        ]
+      ],
+      "fullscreen_scale": 1.4,
+      "line_height": 1.5,
+      "line_padding_rem": 1.35,
+      "anchor": 0.4,
+      "rest_scale": 1,
+      "active_scale": 1,
+      "wobble": false,
+      "letter_wave": {
+        "on": false
+      },
+      "glow_alpha": 0,
+      "long_glow_alpha": 0,
+      "fill": "line",
+      "dim_alpha": 1,
+      "past": [
+        [
+          0.6,
+          0
+        ]
+      ],
+      "upcoming": [
+        [
+          0.35,
+          0
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.4,
+        "delay": 0
+      },
+      "scroll_opacity": 0.5,
+      "scroll_secs": 0.7,
+      "scroll_ease": [
+        0.215,
+        0.61,
+        0.355,
+        1
+      ],
+      "scroll_offset": 0.133,
+      "instrumental": "glyph",
+      "instrumental_rem": 3.6,
+      "instrumental_glow": 0.6,
+      "instrumental_breathe": [
+        1.0,
+        1.05,
+        1.5
+      ],
+      "hover_opacity": 0.8
+    },
+    "cover": {
+      "radius_pct": 0.08,
+      "outline": [
+        1,
+        0.1
+      ]
+    },
+    "chrome": {
+      "play_button": "ghost",
+      "progress_color": "white",
+      "progress_thumb": false,
+      "progress_alpha": 0.6,
+      "progress_track": 0.1,
+      "time_alpha": 0.87,
+      "time_weight": "light",
+      "icon_alpha": 0.9,
+      "bar_cover_alpha": 0.22,
+      "tip_fill": "#ffffff",
+      "tip_text": "#000000"
+    },
+    "app": {
+      "font": "Google Sans Flex",
+      "page_bg": "solid",
+      "bar_alpha": 0,
+      "chip": "ghost",
+      "search_radius": 20,
+      "search_alpha": 0.1,
+      "search_border": 0.1,
+      "menu_radius": 13.92,
+      "text_dim": "#a3a3a3",
+      "controls": {
+        "idle_alpha": 0.9,
+        "ghost_outline": 0.12
+      },
+      "nav_item": {
+        "hover": 0.1,
+        "selected": 0.1
+      },
+      "row_look": {
+        "radius": 13.92,
+        "hover": 0.1,
+        "hover_border": 0.1
+      },
+      "menu_look": {
+        "hover": 0.1,
+        "row_radius": 13.92
+      },
+      "search_look": {
+        "drop_radius": 20,
+        "open_color": "#212121",
+        "attached": true,
+        "item_radius": 20
+      },
+      "toast_look": {
+        "color": "#212121",
+        "alpha": 1,
+        "border": [
+          0.1,
+          1.5
+        ],
+        "radius": 20.88,
+        "secs": 2.5
+      },
+      "scrollbar": [
+        5,
+        0.3
+      ],
+      "immersive_header": 0.6,
+      "squircle": true,
+      "scrollbar_home_hidden": true,
+      "queue_card": true
+    },
+    "now_playing": {
+      "switch": {
+        "back": 0.1,
+        "selected": 0.15,
+        "stroke": 0.1
+      }
+    }
+  },
+  {
+    "id": "minimalism-music",
+    "name": "Minimalism Music",
+    "creators": [
+      "notacoderlols"
+    ],
+    "blurb": "An Apple Music-inspired look: very large SF Pro lyrics, sung lines that vanish, a flat 75% for the lines ahead and a still, dimmed blurred cover behind.",
+    "source": "Better Lyrics: notacoderlols/Minimalisic-Music 1.0.0",
+    "background": {
+      "mode": "cover_static",
+      "np_dim": 0.5
+    },
+    "lyrics": {
+      "weight": "semibold",
+      "font": "SF Pro Display",
+      "font_rem": [
+        [
+          0,
+          3.0
+        ],
+        [
+          1400,
+          4.0
+        ],
+        [
+          1600,
+          5.0
+        ],
+        [
+          1800,
+          6.0
+        ]
+      ],
+      "line_padding_rem": 0.5,
+      "padding_inline": [
+        20,
+        10
+      ],
+      "past": [
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "upcoming": [
+        [
+          0.75,
+          0.0
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0.5,
+        "secs": 0.0,
+        "delay": 0.166
+      },
+      "blur_transition": {
+        "frac": 0.3333,
+        "secs": 0.0,
+        "delay": 0.4
+      },
+      "hover_reveal": true,
+      "hover_scale": 1.01,
+      "letter_wave": {
+        "on": false
+      },
+      "wobble": false,
+      "glow_alpha": 0.0,
+      "long_glow_alpha": 1.0,
+      "background_em": 1.0,
+      "background_alpha": 0.75,
+      "background_weight": "bold",
+      "instrumental": "dots",
+      "instrumental_breathe": [
+        1,
+        1.14,
+        3
+      ],
+      "line_fade_secs": 2.25,
+      "padding_top": 10,
+      "dot_em": [
+        0.36,
+        0.32
+      ]
+    },
+    "cover": {
+      "radius": 10,
+      "size_vh": 0.5,
+      "outline": [
+        1,
+        0.1
+      ],
+      "fullscreen": {
+        "size_vh": 0.6,
+        "enter": [
+          0.9,
+          1.1
+        ],
+        "leave": [
+          1.08,
+          0.9
+        ],
+        "enter_shift_vh": 0.015,
+        "leave_shift_vh": -0.01,
+        "settle_fade": 0.35
+      },
+      "open_scale": 0.9,
+      "open_secs": 0.9,
+      "open_fade": true
+    },
+    "now_playing": {
+      "switch": {
+        "back": 0,
+        "selected": 0.1,
+        "plain": true
+      },
+      "panel_frac": [
+        0.4,
+        0.4
+      ],
+      "video_lyrics": true,
+      "video_panel_frac": [
+        0.6,
+        0.6
+      ],
+      "no_lyrics_text": "You'll have to guess the lyrics for this one.",
+      "no_lyrics": {
+        "rem": 5,
+        "center_after": 1.4
+      }
+    },
+    "chrome": {
+      "hide_volume": true,
+      "progress_color": "white",
+      "progress_radius": 100,
+      "bar_layout": "song_left",
+      "byline_marquee": true,
+      "marquee_secs": 7
+    },
+    "app": {
+      "font": "SF Pro Display",
+      "all_bold": true,
+      "hide_scrollbars": true,
+      "icons": {
+        "up_next": {
+          "view": [
+            16,
+            16
+          ],
+          "d": "M12 13c0 1.105-1.12 2-2.5 2S7 14.105 7 13s1.12-2 2.5-2s2.5.895 2.5 2 M12 3v10h-1V3z M11 2.82a1 1 0 0 1 .804-.98l3-.6A1 1 0 0 1 16 2.22V4l-5 1z M0 11.5a.5.5 0 0 1 .5-.5H4a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5m0-4A.5.5 0 0 1 .5 7H8a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5m0-4A.5.5 0 0 1 .5 3H8a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5"
+        },
+        "lyrics": {
+          "view": [
+            56,
+            56
+          ],
+          "d": "M16.094 52.316c.937 0 1.594-.468 2.695-1.5l8.484-7.734l15.82.023c6.985.024 10.735-3.867 10.735-10.734V14.418c0-6.867-3.75-10.734-10.734-10.734H12.906c-6.96 0-10.734 3.843-10.734 10.734v17.953c0 6.89 3.773 10.734 10.734 10.711h1.102v6.82c0 1.453.773 2.414 2.086 2.414m.586-30.375c0-2.835 2.18-4.804 5.015-4.804c3.094 0 5.18 2.46 5.18 5.672c0 6.023-4.805 8.882-7.219 8.882c-.68 0-1.172-.492-1.172-1.101c0-.563.258-.938 1.149-1.195c1.547-.422 3.351-1.641 4.219-3.586h-.188c-.633.773-1.594.937-2.601.937c-2.672 0-4.383-2.11-4.383-4.805m12.797 0c0-2.835 2.18-4.804 5.015-4.804c3.094 0 5.18 2.46 5.18 5.672c0 6.023-4.805 8.882-7.219 8.882c-.68 0-1.172-.492-1.172-1.101c0-.563.258-.938 1.149-1.195c1.547-.422 3.351-1.641 4.218-3.586h-.187c-.633.773-1.594.937-2.602.937c-2.671 0-4.382-2.11-4.382-4.805"
+        }
+      }
+    }
+  },
+  {
+    "id": "modern-player",
+    "name": "ModernPlayer",
+    "creators": [
+      "snw-mint"
+    ],
+    "blurb": "Clean and cinematic: a 24px-rounded cover capped at 520px with a tight shadow, a faint blurred cover behind, and depth-of-field blur on sung lines.",
+    "source": "Better Lyrics: snw-mint/better-lyrics-modern-player 1.0.1",
+    "background": {
+      "mode": "cover_static",
+      "layer": {
+        "opacity": 0.3
+      },
+      "np_dim": 0.3,
+      "saturation": 1.5
+    },
+    "lyrics": {
+      "line_padding_rem": 1.6,
+      "padding_inline": [
+        10,
+        10
+      ],
+      "past": [
+        [
+          0.33,
+          2.5
+        ]
+      ],
+      "upcoming": [
+        [
+          0.66,
+          0
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0.5,
+        "secs": 0,
+        "delay": 0.166
+      },
+      "blur_transition": {
+        "frac": 0.3333,
+        "secs": 0,
+        "delay": 0.4
+      },
+      "hover_reveal": true,
+      "hover_scale": 1.01,
+      "padding_top": 10
+    },
+    "cover": {
+      "radius": 24,
+      "max_px": 520,
+      "shadow": 0.2,
+      "shadow_blur": 16,
+      "shadow_offset": 4,
+      "fullscreen": {}
+    },
+    "app": {
+      "font": "Google Sans",
+      "card_radius": 24,
+      "chip_radius": 5,
+      "scrollbar": [
+        6,
+        0.2
+      ],
+      "chip_look": {
+        "height": 26,
+        "fill": 0.15,
+        "text_color": "#d1d1d1"
+      }
+    },
+    "now_playing": {
+      "switch": {
+        "back": 0.1,
+        "radius": 16,
+        "plain": true
+      }
+    }
+  },
+  {
+    "id": "opacity-based-karaoke",
+    "name": "Opacity Based Karaoke",
+    "creators": [
+      "semicolonhope"
+    ],
+    "blurb": "Only the line being sung is visible: each word floats up and appears as it's sung over a dim full-cover backdrop.",
+    "source": "Better Lyrics: ramansg/Max-Performance-BlyricsTheme 3.1.29",
+    "background": {
+      "mode": "cover_fullbleed",
+      "np_dim": 0.22,
+      "crossfade_secs": 2.5,
+      "crossfade_delay": 5.0,
+      "fullbleed_fade": true
+    },
+    "accent": "#ffffff",
+    "lyrics": {
+      "font": "Google Sans Flex",
+      "weight": "semibold",
+      "font_rem": [
+        [
+          0,
+          3
+        ]
+      ],
+      "fullscreen_scale": 1.4,
+      "line_height": 1.5,
+      "line_padding_rem": 1.35,
+      "anchor": 0.4,
+      "rest_scale": 1,
+      "active_scale": 1,
+      "wobble": false,
+      "letter_wave": {
+        "on": false
+      },
+      "glow_alpha": 0,
+      "long_glow_alpha": 0,
+      "fill": "word",
+      "dim_alpha": 0.3,
+      "sung_fade": [
+        0.7,
+        0.2
+      ],
+      "word_bounce": {
+        "lift": 0.15,
+        "scale": 1.035,
+        "secs": 0.3,
+        "settle": 0,
+        "dur_ratio": 1,
+        "side_em": 0.15
+      },
+      "past": [
+        [
+          1,
+          0
+        ],
+        [
+          0.9,
+          0
+        ],
+        [
+          0.8,
+          0
+        ],
+        [
+          0.7,
+          0
+        ],
+        [
+          0.6,
+          0
+        ]
+      ],
+      "upcoming": [
+        [
+          1,
+          0
+        ],
+        [
+          0.9,
+          0
+        ],
+        [
+          0.8,
+          0
+        ],
+        [
+          0.7,
+          0
+        ],
+        [
+          0.6,
+          0
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.4,
+        "delay": 0
+      },
+      "scroll_secs": 0.8,
+      "scroll_ease": [
+        0.165,
+        0.84,
+        0.44,
+        1
+      ],
+      "scroll_offset": 0.4,
+      "reveal_dim_alpha": 0.7,
+      "instrumental": "glyph",
+      "instrumental_rem": 3.6,
+      "instrumental_glow": 0.6,
+      "instrumental_breathe": [
+        1.0,
+        1.05,
+        1.5
+      ],
+      "active_opacity_line_synced": 0.87,
+      "active_opacity_transition": {
+        "frac": 0,
+        "secs": 0.3,
+        "delay": 0
+      },
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.3,
+        "delay": 0.012
+      },
+      "hover_box": [
+        0.1,
+        8
+      ],
+      "hover_box_line": 0.1,
+      "hover_opacity": 1,
+      "hover_dim_alpha": 0.95,
+      "panel_reveal": true
+    },
+    "cover": {
+      "radius_pct": 0.08,
+      "outline": [
+        1,
+        0.1
+      ]
+    },
+    "chrome": {
+      "play_button": "ghost",
+      "progress_color": "white",
+      "progress_thumb": false,
+      "progress_alpha": 0.6,
+      "progress_track": 0.1,
+      "time_alpha": 0.87,
+      "time_weight": "light",
+      "icon_alpha": 0.9,
+      "bar_cover_alpha": 0.22,
+      "tip_fill": "#ffffff",
+      "tip_text": "#000000"
+    },
+    "app": {
+      "font": "Google Sans Flex",
+      "page_bg": "solid",
+      "squircle": true,
+      "scrollbar_home_hidden": true,
+      "queue_card": true,
+      "bar_alpha": 0,
+      "chip": "ghost",
+      "search_radius": 20,
+      "search_alpha": 0.1,
+      "search_border": 0.1,
+      "menu_radius": 13.92,
+      "text_dim": "#a3a3a3",
+      "controls": {
+        "idle_alpha": 0.9,
+        "ghost_outline": 0.12
+      },
+      "nav_item": {
+        "hover": 0.1,
+        "selected": 0.1
+      },
+      "row_look": {
+        "radius": 13.92,
+        "hover": 0.1,
+        "hover_border": 0.15
+      },
+      "menu_look": {
+        "hover": 0.1,
+        "row_radius": 13.92
+      },
+      "search_look": {
+        "drop_radius": 20,
+        "open_color": "#212121",
+        "attached": true,
+        "item_radius": 20
+      },
+      "toast_look": {
+        "color": "#212121",
+        "alpha": 1,
+        "border": [
+          0.1,
+          1.5
+        ],
+        "radius": 20.88,
+        "secs": 2.5
+      },
+      "scrollbar": [
+        5,
+        0.3
+      ],
+      "immersive_header": 0.6
+    },
+    "now_playing": {
+      "switch": {
+        "back": 0.1,
+        "selected": 0.15,
+        "stroke": 0.1
+      }
+    }
+  },
+  {
+    "id": "recover-theme",
+    "name": "reCover",
+    "creators": [
+      "mukeenanyafiq"
+    ],
+    "blurb": "The album cover fills the screen's height on the left and fades toward the lyrics, with a small card for the song in the corner and sung lines blurred away.",
+    "source": "Better Lyrics: mukeenanyafiq/recover-theme 1.3.8",
+    "background": {
+      "fullscreen_fullbleed": 1,
+      "fade": [
+        0,
+        1
+      ]
+    },
+    "lyrics": {
+      "font_rem": [
+        [
+          0,
+          3.3
+        ]
+      ],
+      "line_height": 1.25,
+      "line_padding_rem": 1.8,
+      "past": [
+        [
+          0.1,
+          5
+        ]
+      ],
+      "hover_scale": 1,
+      "wobble_secs": 2.5,
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.75,
+        "delay": 0.75
+      },
+      "past_blur_transition": {
+        "frac": 0,
+        "secs": 1.5,
+        "delay": 0.5
+      },
+      "word_shadow": [
+        3,
+        0.15
+      ],
+      "word_shadow_blur": 1.5,
+      "word_shadow_unsung": true,
+      "instrumental_rem": 4
+    },
+    "cover": {
+      "radius": 10,
+      "max_frac": 0.8,
+      "fullscreen": {
+        "radius": 0,
+        "layout": "lyrics_only"
+      }
+    },
+    "now_playing": {
+      "info_card": true,
+      "info_card_fullscreen_only": true,
+      "info_card_text_only": true,
+      "info_card_look": [
+        0.5,
+        5
+      ],
+      "title_weight": "medium",
+      "artist_weight": "medium",
+      "title_shadow": [
+        0,
+        0.5
+      ],
+      "fullscreen_panel_frac": 0.55,
+      "info_card_top": true,
+      "info_card_margin": 20,
+      "info_card_weights": [
+        "medium",
+        "medium"
+      ]
+    },
+    "app": {
+      "page_bg": "solid",
+      "glass": {
+        "title_card": [
+          10,
+          1,
+          1
+        ]
+      }
+    }
+  },
+  {
+    "id": "spicy-for-ytm",
+    "name": "Spicy for YouTube Music",
+    "creators": [
+      "olafix52"
+    ],
+    "blurb": "The Spicy Lyrics look: bold lyrics that blur with distance, a springy word bounce, three-dot breaks, and a vivid, fast cover warp behind every page.",
+    "source": "Better Lyrics: olafix52/spicy-for-youtube-music 1.5.0",
+    "accent": "#ffffff",
+    "background": {
+      "mode": "kawarp",
+      "np_dim": 0.65,
+      "page_dim": 0.65,
+      "intensity": 1.0,
+      "saturation": 3.75,
+      "speed": 2.5,
+      "reactive": 0.0,
+      "audio_speed": 3.3,
+      "crossfade_secs": 1.0,
+      "beat_threshold": 0.75,
+      "blur_passes": 8,
+      "dither": 0.008,
+      "video_backdrop": true
+    },
+    "lyrics": {
+      "agent_align": "only_v1_left",
+      "font": "SF Pro Display",
+      "font_rem": [
+        [
+          0,
+          3.8
+        ]
+      ],
+      "font_vw_full": [
+        2.4,
+        2.2,
+        7.2
+      ],
+      "line_height": 1.2,
+      "line_padding_rem": 1.5,
+      "padding_inline": [
+        28.5,
+        28.5
+      ],
+      "anchor": 0.5,
+      "dim_alpha": 0.5,
+      "past": [
+        [
+          0.96,
+          1.1
+        ],
+        [
+          0.96,
+          2.2
+        ],
+        [
+          0.96,
+          3.3
+        ],
+        [
+          0.96,
+          4.4
+        ]
+      ],
+      "upcoming": [
+        [
+          0.76,
+          1.1
+        ],
+        [
+          0.76,
+          2.2
+        ],
+        [
+          0.76,
+          3.3
+        ],
+        [
+          0.76,
+          4.4
+        ]
+      ],
+      "opacity_transition": {
+        "secs": 0.6
+      },
+      "blur_transition": {
+        "secs": 0.6
+      },
+      "hover_reveal": true,
+      "hover_dim_alpha": 0.75,
+      "hover_box": [
+        0.1,
+        16
+      ],
+      "hover_box_pop": [
+        0.94,
+        0.4
+      ],
+      "active_alpha": 0.85,
+      "sweep_lead": 0.0,
+      "sweep_ratio": 1.0,
+      "sweep_soft": 0.2,
+      "sweep_end": [
+        1.0,
+        1.2
+      ],
+      "word_rest_scale": 0.95,
+      "word_rest_em": 0.01,
+      "word_gap_em": 0.06,
+      "glow_ratio": 1.5,
+      "glow_min_secs": 0.9,
+      "glow_ease": [
+        0.55,
+        0.05,
+        0.7,
+        0.4
+      ],
+      "glow_fade_secs": 0.8,
+      "exit_fade": [
+        0.8,
+        0
+      ],
+      "scale_ease": [
+        0.34,
+        1.3,
+        0.64,
+        1.0
+      ],
+      "scale_exit_ease": [
+        0.25,
+        0.8,
+        0.25,
+        1.0
+      ],
+      "background_alpha": 0.6,
+      "background_sung_alpha": 0.5,
+      "background_gap_em": 0.05,
+      "background_weight": "semibold",
+      "credits_alpha": [
+        0.55,
+        1.0
+      ],
+      "credits_weight": "semibold",
+      "rest_scale": 0.98,
+      "active_scale": 1.0,
+      "scale_secs": 0.45,
+      "letter_wave": {
+        "crest": 0.07,
+        "emphasis": 1.12,
+        "secs": 1.05,
+        "min_secs": 0.7,
+        "max_letters": 8,
+        "rest_scale": 0.95,
+        "glow_rem": 1.6,
+        "long_secs": 0.7
+      },
+      "wobble": false,
+      "word_bounce": {
+        "lift": 0.034,
+        "scale": 1.0505,
+        "secs": 1.0,
+        "dur_ratio": 1.5,
+        "spring": true
+      },
+      "glow_alpha": 0.35,
+      "long_glow_alpha": 1.0,
+      "glow_rem": 0.6,
+      "instrumental": "dots",
+      "instrumental_rem": 5.3,
+      "instrumental_breathe": [
+        0.92,
+        1.08,
+        2.4
+      ],
+      "scroll_secs": 0.7,
+      "scroll_ease": [
+        0.16,
+        1.0,
+        0.3,
+        1.0
+      ],
+      "scroll_offset": 0.0,
+      "early_scroll": 0.0,
+      "line_ease": [
+        0.25,
+        0.8,
+        0.25,
+        1.0
+      ],
+      "resume_look": [
+        22,
+        0.08,
+        0.12
+      ],
+      "hover_glow": [
+        1.4,
+        0.5
+      ],
+      "hover_glow_sung_only": true,
+      "hover_unsung_alpha": 0.95,
+      "background_lit_alpha": 0.7
+    },
+    "cover": {
+      "fullscreen": {
+        "size_vh": 0.572,
+        "radius_pct": 0.02
+      },
+      "shadow": 0.271,
+      "shadow_blur": 20,
+      "shadow_offset": 9,
+      "opacity": 0.95,
+      "hover_dim": 0.4
+    },
+    "now_playing": {
+      "title_px": 33,
+      "artist_px": 23,
+      "title_alpha": 0.95,
+      "artist_alpha": 0.7,
+      "title_weight": "bold",
+      "artist_weight": "regular",
+      "cover_controls": true,
+      "cover_progress": true,
+      "cover_buttons": [
+        46,
+        0,
+        1.1
+      ],
+      "cover_play_px": 90,
+      "cover_play_bare": true,
+      "title_max_px": 525,
+      "title_edge_fade": 14,
+      "panel_frac": [
+        0.42,
+        0.47
+      ]
+    },
+    "chrome": {
+      "progress_color": "white",
+      "progress_alpha": 0.85,
+      "progress_track": 0.2,
+      "bar_title_weight": "bold",
+      "bar_byline_alpha": 0.7,
+      "bar_border_alpha": 0.08,
+      "like_hover_scale": 1.28
+    },
+    "app": {
+      "font": "SF Pro Display",
+      "page_bg": "same",
+      "sidebar": "glass",
+      "sidebar_alpha": 0.35,
+      "bar_alpha": 0.35,
+      "bar_border": true,
+      "card_radius": 10,
+      "thumb_radius": 10,
+      "controls": {
+        "hover_scale": 1.08,
+        "spring": true
+      },
+      "nav_item": {
+        "width": 240
+      },
+      "heading_tracking_em": -0.02,
+      "heading_px": 26,
+      "heading_weight": "extra_bold",
+      "strap_alpha": 0.6,
+      "card_look": {
+        "hover_scale": 1.03,
+        "shadow": [
+          6,
+          16,
+          0.3
+        ],
+        "subtitle_alpha": 0.75,
+        "title_weight": "semibold",
+        "play_px": 48,
+        "play_alpha": 0,
+        "image_dim": 0.5,
+        "image_zoom": 0,
+        "shadow_rest": true,
+        "play_center": true,
+        "play_bare": true,
+        "play_glyph_px": 24
+      },
+      "top_bar": {
+        "band": [
+          0.35,
+          64
+        ]
+      },
+      "menu_look": {
+        "pop": [
+          0.94,
+          0.28
+        ],
+        "item_slide": 4
+      },
+      "search_look": {
+        "drop_grow": true
+      },
+      "glass": {
+        "top_bar": [
+          30,
+          1.6,
+          1
+        ],
+        "tabs": [
+          16,
+          1.7,
+          1
+        ],
+        "resume": [
+          16,
+          1.7,
+          1
+        ]
+      },
+      "icons": {
+        "up_next": {
+          "view": [
+            24,
+            24
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M3 6.2a.9.9 0 0 1 1.38-.76l3.4 2.13a.9.9 0 0 1 0 1.52l-3.4 2.13A.9.9 0 0 1 3 10.46V6.2Zm8.5 1.1a1 1 0 0 1 1-1h7.5a1 1 0 1 1 0 2h-7.5a1 1 0 0 1-1-1Zm0 5.2a1 1 0 0 1 1-1h7.5a1 1 0 1 1 0 2h-7.5a1 1 0 0 1-1-1Zm-7.5 5.2a1 1 0 0 1 1-1h15a1 1 0 1 1 0 2H5a1 1 0 0 1-1-1Z"
+        },
+        "lyrics": {
+          "view": [
+            24,
+            24
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M12 3a3.5 3.5 0 0 0-3.5 3.5v5a3.5 3.5 0 0 0 7 0v-5A3.5 3.5 0 0 0 12 3ZM6.5 10.5a1 1 0 0 1 1 1 4.5 4.5 0 0 0 9 0 1 1 0 1 1 2 0 6.5 6.5 0 0 1-5.5 6.42V20h2.5a1 1 0 1 1 0 2h-7a1 1 0 1 1 0-2H11v-2.08A6.5 6.5 0 0 1 5.5 11.5a1 1 0 0 1 1-1Z"
+        }
+      }
+    }
+  },
+  {
+    "id": "spinning-record",
+    "name": "Spinning Record",
+    "creators": [
+      "Xtremerspro"
+    ],
+    "blurb": "The album art becomes a huge, darkened disc that spins without stopping and bleeds off the top-left of the window, beside softly blurred lyrics.",
+    "source": "Better Lyrics: Xtremerspro/spinning-record 1.0.0",
+    "lyrics": {
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0.5,
+          1.5
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0.35
+      },
+      "past_blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0.35
+      },
+      "credits_alpha": [
+        -1,
+        -1
+      ]
+    },
+    "cover": {
+      "shape": "record",
+      "spin_secs": 60,
+      "spin_when_paused": true,
+      "record_details": false,
+      "brightness": 0.6,
+      "size_vh": 0.92,
+      "max_frac": 0.98,
+      "offset_vh": [
+        0,
+        -0.015
+      ],
+      "shadow": 0.4,
+      "shadow_blur": 52,
+      "fullscreen": {
+        "plain_shape": true,
+        "width_frac": 0.82,
+        "padding": [
+          0,
+          16
+        ],
+        "shadow": 0,
+        "brightness": 1
+      }
+    },
+    "now_playing": {
+      "panel_frac": [
+        0.5,
+        0.42
+      ],
+      "show_title": false,
+      "fullscreen_show_title": true,
+      "show_video_switch": false
+    },
+    "chrome": {
+      "progress_color": "#c4c4c4"
+    },
+    "app": {
+      "toast_look": {
+        "color": "#ffffff",
+        "alpha": 0.1
+      },
+      "glass": {
+        "toast": [
+          30,
+          1.8,
+          1
+        ]
+      }
+    }
+  },
+  {
+    "id": "spotifont",
+    "name": "Spotifont",
+    "creators": [
+      "mukeenanyafiq"
+    ],
+    "blurb": "Lyrics in Spotify's title font, a little larger and tighter, with past lines blurred and faded and everything else stock.",
+    "source": "Better Lyrics: mukeenanyafiq/spotifont-theme 1.0.0",
+    "lyrics": {
+      "font": "Spotify Mix UI Title",
+      "font_rem": [
+        [
+          0,
+          3.25
+        ]
+      ],
+      "line_height": 1.25,
+      "line_padding_rem": 1.5,
+      "past": [
+        [
+          0.5,
+          5
+        ]
+      ],
+      "wobble_secs": 2.0,
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0.3
+      },
+      "past_blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0.3
+      }
+    },
+    "cover": {
+      "radius": 7.5,
+      "size": 1.04,
+      "max_frac": 0.85,
+      "fullscreen": {
+        "width_frac": 1.0
+      }
+    },
+    "now_playing": {
+      "title_lyric_font": true,
+      "panel_frac": [
+        0.42,
+        0.4
+      ]
+    }
+  },
+  {
+    "id": "spotlight",
+    "name": "Spotlight",
+    "creators": [
+      "boidushya"
+    ],
+    "blurb": "Focused lyrics: dim unsung text, with already-sung lines softly blurred out.",
+    "source": "Better Lyrics: better-lyrics/theme-spotlight 1.0.0",
+    "lyrics": {
+      "dim_alpha": 0.2,
+      "past": [
+        [
+          0.5,
+          2.5
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0
+      },
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0.35
+      },
+      "past_blur_transition": {
+        "frac": 0,
+        "secs": 0.5,
+        "delay": 0.35
+      }
+    }
+  },
+  {
+    "id": "sustain",
+    "name": "Sustain",
+    "creators": [
+      "boidushya"
+    ],
+    "blurb": "Calm and minimal: DM Sans lyrics on the left over a saturated, audio-reactive backdrop. Sung lines vanish and the next four fade out and blur away.",
+    "source": "Better Lyrics: better-lyrics/theme-sustain 1.0.31",
+    "background": {
+      "mode": "kawarp",
+      "np_dim": 0.75,
+      "auto_dim": 0.55,
+      "auto_dim_from": 0.5,
+      "intensity": 1,
+      "speed": 3.33,
+      "saturation": 2,
+      "reactive": 2,
+      "audio_speed": 4,
+      "scale": 1.25,
+      "crossfade_secs": 1.0,
+      "beat_threshold": 0.75,
+      "blur_passes": 8,
+      "dither": 0.008,
+      "layer": {
+        "opacity": 0.5,
+        "pulse_secs": 8,
+        "pulse": 0.05,
+        "rotate_secs": 30
+      }
+    },
+    "lyrics": {
+      "font": "DM Sans",
+      "weight": "semibold",
+      "font_rem": [
+        [
+          0,
+          3
+        ],
+        [
+          1400,
+          4.5
+        ],
+        [
+          1600,
+          5
+        ],
+        [
+          1800,
+          6
+        ]
+      ],
+      "line_padding_rem": 0.5,
+      "padding_inline": [
+        20,
+        20
+      ],
+      "padding_top": 10,
+      "anchor": 0.5,
+      "hide_instrumental_only": true,
+      "past": [
+        [
+          0,
+          0
+        ]
+      ],
+      "upcoming": [
+        [
+          0.88,
+          1.125
+        ],
+        [
+          0.72,
+          2.5
+        ],
+        [
+          0.52,
+          4.125
+        ],
+        [
+          0.28,
+          6
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "opacity_transition": {
+        "frac": 0.5,
+        "secs": 0,
+        "delay": 0.166
+      },
+      "blur_transition": {
+        "frac": 0.333,
+        "secs": 0,
+        "delay": 0.4
+      },
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.4,
+        "delay": 0
+      },
+      "past_blur_transition": {
+        "frac": 0.333,
+        "secs": 0,
+        "delay": 0.4
+      },
+      "active_opacity_transition": {
+        "frac": 0,
+        "secs": 0.4,
+        "delay": 0.166
+      },
+      "active_blur_transition": {
+        "frac": 0,
+        "secs": 0.1,
+        "delay": 0
+      },
+      "hover_reveal": true,
+      "hover_scale": 1.01,
+      "letter_wave": {
+        "on": true,
+        "crest": 0.04,
+        "settle": 0.015,
+        "secs": 0.75,
+        "emphasis": 1.09
+      },
+      "wobble": true,
+      "wobble_secs": 1,
+      "glow_alpha": 0,
+      "long_glow_alpha": 1,
+      "background_em": 0.9,
+      "scroll_secs": 0.582,
+      "scroll_ease": [
+        0.4,
+        1.3,
+        0.0,
+        1.0
+      ]
+    },
+    "cover": {
+      "fullscreen": {
+        "side": "right",
+        "max_px": 576
+      },
+      "radius": 20,
+      "max_px": 576,
+      "shadow": 0.1,
+      "shadow_blur": 55,
+      "shadow_offset": 54,
+      "outline": [
+        1,
+        0.1
+      ],
+      "shadow2": [
+        12,
+        13,
+        0.09
+      ],
+      "shadow3": [
+        4,
+        6,
+        0.2
+      ],
+      "shadow4": [
+        -12,
+        30,
+        0.06
+      ],
+      "shadow5": [
+        -3,
+        5,
+        0.04
+      ]
+    },
+    "now_playing": {
+      "title_align": "left",
+      "title_px": 25,
+      "artist_alpha": 0.75,
+      "panel_frac": [
+        0.5,
+        0.45
+      ],
+      "video_panel_frac": [
+        0.5,
+        0.45
+      ],
+      "fullscreen_progress_px": 24,
+      "switch": {
+        "back": 0.1,
+        "selected": 0.1
+      },
+      "fullscreen_progress_radius": 6,
+      "fullscreen_cover_buttons": [
+        36,
+        0,
+        1
+      ]
+    },
+    "chrome": {
+      "bar_color": "#141414",
+      "byline_marquee": true,
+      "marquee_fade": 18,
+      "transport_shift": 0,
+      "transport_shift_frac": 0
+    },
+    "app": {
+      "font": "DM Sans",
+      "page_bg": "solid",
+      "bar_alpha": 0.2,
+      "card_radius": 20,
+      "thumb_radius": 10,
+      "chip_radius": 3.75,
+      "chip_look": {
+        "segmented": [
+          10,
+          3.75,
+          3
+        ]
+      },
+      "nav_item": {
+        "radius": 15,
+        "hover": 0.085,
+        "selected": 0.085,
+        "hide_divider": true
+      },
+      "card_look": {
+        "image_outline": 0.1
+      },
+      "top_bar": {
+        "band": [
+          0.05,
+          64
+        ]
+      },
+      "glass": {
+        "top_bar": [
+          25,
+          1,
+          1
+        ]
+      },
+      "queue_look": {
+        "thumb_radius": 5
+      }
+    }
+  },
+  {
+    "id": "thejosueps-equal-tweaks-id",
+    "name": "EqualTweaks",
+    "creators": [
+      "thejosuep"
+    ],
+    "blurb": "The base look with frosted-glass bars and menus, rounder covers and thumbnails, a thin outline on the cover, and larger lyrics in full screen.",
+    "source": "Better Lyrics: TheJosuep/better-lyrics-equal-tweaks-theme 1.2.0",
+    "background": {
+      "mode": "cover_static"
+    },
+    "lyrics": {
+      "fullscreen_scale": 1.333,
+      "fullscreen_inline": [
+        0,
+        5
+      ],
+      "resume_look": [
+        50,
+        0.1,
+        0.2
+      ],
+      "resume_black": true,
+      "resume_shadow": [
+        10,
+        10,
+        0.25
+      ],
+      "resume_text_px": 15,
+      "resume_fullscreen": [
+        200,
+        0.1
+      ]
+    },
+    "cover": {
+      "radius": 25,
+      "shadow": 0.15,
+      "shadow_blur": 5,
+      "shadow_offset": 3,
+      "padding": [
+        20,
+        10
+      ],
+      "outline": [
+        1,
+        0.5
+      ],
+      "fullscreen": {
+        "radius": 0,
+        "no_outline": true
+      }
+    },
+    "now_playing": {
+      "video_radius": 13,
+      "fullscreen_padding": [
+        125,
+        20
+      ],
+      "switch": {
+        "back": 0.35,
+        "back_black": true,
+        "stroke": 0.2,
+        "shadow": [
+          4,
+          10,
+          0.15
+        ],
+        "y_offset_full": 30
+      }
+    },
+    "app": {
+      "sidebar": "glass",
+      "sidebar_alpha": 0.5,
+      "bar_alpha": 0.5,
+      "chip_radius": 12,
+      "card_radius": 15,
+      "thumb_radius": 8,
+      "panel_radius": 10,
+      "menu_radius": 15,
+      "menu_border": 0.2,
+      "search_radius": 13,
+      "hide_scrollbars": true,
+      "glass": {
+        "top_bar": [
+          23,
+          1,
+          1
+        ],
+        "menu": [
+          30,
+          1,
+          1
+        ],
+        "search_drop": [
+          10,
+          1,
+          1
+        ],
+        "toast": [
+          15,
+          1,
+          1
+        ],
+        "dialog": [
+          30,
+          1,
+          1
+        ],
+        "card_play": [
+          15,
+          1,
+          1
+        ],
+        "switch": [
+          5,
+          1,
+          1
+        ],
+        "resume": [
+          20,
+          1,
+          1
+        ]
+      },
+      "top_bar": {
+        "band": [
+          0.5,
+          76
+        ],
+        "band_on_scroll": true
+      },
+      "dialog_bottom_line": true,
+      "controls": {
+        "press_cards": 0.95,
+        "press_chips": 0.95,
+        "press_rows": 0.93
+      },
+      "nav_item": {
+        "hover": 0.07,
+        "width": 256,
+        "scroll_fill": true
+      },
+      "search_look": {
+        "drop_radius": 13,
+        "drop_ring": 0.2,
+        "item_radius": 10
+      },
+      "menu_color": "#000000",
+      "menu_look": {
+        "alpha": 0.5,
+        "hover": 0.1
+      },
+      "toast_look": {
+        "color": "#ffffff",
+        "alpha": 0.75,
+        "border": [
+          1,
+          1
+        ],
+        "text_color": "#656565"
+      },
+      "chip_look": {
+        "fill": 0.05,
+        "hover": 0.18
+      },
+      "card_look": {
+        "play_alpha": 0.4,
+        "play_ring": 0.2,
+        "play_hover_scale": 1.15,
+        "play_hover_alpha": 0.75
+      },
+      "row_look": {
+        "hover": 0.03,
+        "radius": 10,
+        "pad": 5,
+        "byline_alpha": 0.75
+      },
+      "strap_alpha": 0.75,
+      "queue_look": {
+        "thumb_radius": 5,
+        "pad": 15,
+        "hover_border": 0.13,
+        "current_gap": 10
+      }
+    }
+  },
+  {
+    "id": "wolfthee-theme-bytm",
+    "name": "Better-YTM",
+    "creators": [
+      "WolftheE"
+    ],
+    "blurb": "Roomy, bouncy lyrics where the sung line is large and every other line shrinks, white highlights on black, a bright reactive background and a floating player bar.",
+    "source": "Better Lyrics: WolftheE/better-ytm 5.0.0",
+    "accent": "#ffffff",
+    "background": {
+      "mode": "kawarp",
+      "solid": "#030303",
+      "intensity": 1.0,
+      "saturation": 1.1,
+      "speed": 3.33,
+      "np_dim": 1.0,
+      "reactive": 2.0,
+      "audio_speed": 4.0,
+      "crossfade_secs": 1.0,
+      "beat_threshold": 0.75,
+      "auto_dim": 0.3,
+      "blur_passes": 6,
+      "video_backdrop": true,
+      "video": {
+        "saturation": 1.5,
+        "dither": 0.008,
+        "auto_dim": 0.3,
+        "blur_passes": 8
+      }
+    },
+    "lyrics": {
+      "weight": "semibold",
+      "font_rem": [
+        [
+          0,
+          4.25
+        ]
+      ],
+      "line_height": 1.33,
+      "line_padding_rem": 2.76,
+      "padding_inline": [
+        12.75,
+        12.75
+      ],
+      "past_dim_alpha": 1.0,
+      "past_color": "white",
+      "rest_scale": 0.58,
+      "active_scale": 1.0,
+      "scale_secs": 0.3,
+      "wobble_secs": 1.75,
+      "letter_wave": {
+        "secs": 1.5,
+        "emphasis": 1.05
+      },
+      "word_bounce": {
+        "lift": 0.05,
+        "scale": 1.0,
+        "secs": 1.75,
+        "settle": 0.085
+      },
+      "word_shadow": [
+        3,
+        0.15
+      ],
+      "word_shadow_unsung": true,
+      "background_weight": "medium",
+      "edge_fade": [
+        0.07,
+        0.07
+      ],
+      "glow_alpha": 0.1,
+      "long_glow_alpha": 1.0,
+      "background_em": 0.65,
+      "instrumental": "dots"
+    },
+    "cover": {
+      "radius": 6,
+      "shadow": 0.25,
+      "shadow_blur": 16,
+      "shadow_offset": 5
+    },
+    "now_playing": {
+      "cover_controls": true,
+      "cover_buttons": [
+        42,
+        0.5,
+        1.2
+      ],
+      "cover_play_bare": true,
+      "fullscreen_panel_frac": 0.55,
+      "cover_play_hover": 1.2
+    },
+    "chrome": {
+      "radius": 6,
+      "player_bar": "floating",
+      "bar_height": 90,
+      "bar_radius": 6,
+      "bar_color": "#050505",
+      "bar_layout": "song_left",
+      "thumb_px": 60,
+      "thumb_radius": 6,
+      "bar_byline_px": 12.5,
+      "bar_np_alpha": 0.2,
+      "bar_margin": [
+        16,
+        8
+      ],
+      "progress_px": 5,
+      "progress_color": "white",
+      "progress_radius": 100,
+      "progress_at": "above_transport",
+      "progress_thumb_px": 5,
+      "time_at": "above_progress",
+      "play_scale": 0.87,
+      "bar_border_alpha": 0.1,
+      "progress_width_frac": 0.2,
+      "progress_thumb_pill": [
+        12,
+        6
+      ],
+      "bar_np_no_edge": true
+    },
+    "app": {
+      "page_bg": "solid",
+      "sidebar": "solid",
+      "sidebar_border": 0.1,
+      "bar_alpha": 0.7,
+      "bar_border": true,
+      "nav": "inverse",
+      "chip_radius": 6,
+      "card_radius": 6,
+      "thumb_radius": 6,
+      "panel_radius": 6,
+      "menu_radius": 6,
+      "menu_border": 0.1,
+      "menu_color": "#101010",
+      "menu_look": {
+        "hover": 0.1,
+        "shadow": [
+          3,
+          15,
+          0.5
+        ],
+        "row_radius": 6,
+        "pop": [
+          0.85,
+          0.3
+        ],
+        "min_px": 305,
+        "row_slide": 4,
+        "item_slide": 0
+      },
+      "search_look": {
+        "drop_radius": 6,
+        "attached": true,
+        "drop_grow": true
+      },
+      "nav_item": {
+        "radius": 6,
+        "hover": 0.1,
+        "slide": 4,
+        "press": 0.3,
+        "cover_tint": [
+          0.18,
+          800
+        ]
+      },
+      "row_look": {
+        "height": 64,
+        "radius": 6,
+        "hover": 0.1,
+        "current": 0.1,
+        "current_bar": 4,
+        "hover_scale": 1.02
+      },
+      "card_look": {
+        "image_zoom": 0.04,
+        "image_dim": 0.5,
+        "play_color": "#ffffff",
+        "play_glyph_color": "#000000"
+      },
+      "controls": {
+        "button_fill": 0.05,
+        "button_hover": 0.05,
+        "press_fill": 0.3,
+        "shadow": [
+          3,
+          7,
+          0.1
+        ],
+        "play_hover_scale": 1.1,
+        "spring": true
+      },
+      "text_dim": "#bcbcbc",
+      "search_radius": 6,
+      "search_alpha": 0.1,
+      "header_gradient": [
+        0,
+        1
+      ],
+      "np_open_secs": 0.5,
+      "glass": {
+        "bar": [
+          16,
+          1,
+          1
+        ]
+      },
+      "ui_fade_secs": 0.25,
+      "icons": {
+        "up_next": {
+          "view": [
+            18.0,
+            18.0
+          ],
+          "origin": [
+            0,
+            0
+          ],
+          "d": "M2.634 5.537a.906.906 0 1 0 0-1.813.906.906 0 1 0 0 1.813zm3.192-.325h9.865a.576.576 0 0 0 .585-.578.578.578 0 0 0-.585-.585H5.826a.574.574 0 0 0-.585.585c0 .325.253.578.585.578zM2.634 9.906c.506 0 .91-.404.91-.91a.906.906 0 0 0-.91-.91.906.906 0 0 0-.91.91c0 .506.405.91.91.91zm3.192-.325h9.865a.582.582 0 1 0 0-1.162H5.826a.572.572 0 0 0-.585.577c0 .325.253.585.585.585zm-3.192 4.694a.91.91 0 1 0-.001-1.82.91.91 0 0 0 0 1.82zm3.192-.332h9.865a.576.576 0 0 0 .585-.577.578.578 0 0 0-.585-.585H5.826a.574.574 0 0 0-.585.585c0 .324.253.577.585.577z"
+        },
+        "lyrics": {
+          "view": [
+            960.0,
+            960.0
+          ],
+          "origin": [
+            0.0,
+            -960.0
+          ],
+          "d": "M640.06-151.87q-51.97 0-88.41-36.38-36.43-36.38-36.43-88.35 0-51.97 36.39-88.28 36.4-36.32 88.39-36.32 9.3 0 17.76 1.15 8.46 1.14 16.26 5.18v-333.02h214.11v90.76H764.78v360.48q0 51.99-36.38 88.39-36.37 36.39-88.34 36.39ZM111.87-295.61v-90.76h324.54v90.76H111.87Zm0-170.76v-90.76h482.15v90.76H111.87Zm0-170.76v-90.76h482.15v90.76H111.87Z"
+        }
+      },
+      "queue_look": {
+        "side_pad": 12
+      }
+    }
+  },
+  {
+    "id": "youtube-tv-theme",
+    "name": "YouTube TV",
+    "creators": [
+      "mukeenanyafiq"
+    ],
+    "blurb": "YouTube TV-style: big lyrics on the left, a large rounded cover on the right with the song centred beneath it, sung lines vanish, and the sidebar and bar are transparent.",
+    "source": "Better Lyrics: mukeenanyafiq/youtube-tv-theme 1.1.1",
+    "background": {
+      "mode": "cover_static"
+    },
+    "lyrics": {
+      "font_rem": [
+        [
+          0,
+          3.3
+        ]
+      ],
+      "fullscreen_scale": 1.818,
+      "line_height": 1.25,
+      "line_padding_rem": 1.8,
+      "past": [
+        [
+          0,
+          0
+        ]
+      ],
+      "wobble_secs": 2.5,
+      "past_opacity_transition": {
+        "frac": 0,
+        "secs": 0.2,
+        "delay": 0.4
+      },
+      "fullscreen_padding_rem": 3,
+      "word_shadow": [
+        2,
+        0.05
+      ],
+      "word_shadow_unsung": true,
+      "instrumental_rem": 4
+    },
+    "cover": {
+      "radius": 20,
+      "fullscreen": {
+        "width_frac": 1,
+        "side": "right"
+      }
+    },
+    "now_playing": {
+      "title_align": "center",
+      "fullscreen_text_px": [
+        24,
+        24
+      ],
+      "video_lyrics": true,
+      "video_max_frac": 0.6,
+      "title_shadow": [
+        0,
+        0.2
+      ],
+      "fullscreen_padding": [
+        192,
+        0
+      ],
+      "fullscreen_panel_inset": [
+        -48,
+        6
+      ]
+    },
+    "app": {
+      "bar_alpha": 0,
+      "glass": {
+        "top_bar": [
+          10,
+          1,
+          1
+        ]
+      }
+    }
+  },
+  {
+    "id": "ytm-rs",
+    "name": "ytm-rs",
+    "creators": [
+      "ytm-rs"
+    ],
+    "blurb": "The app's own look: animated album-art background, left-aligned karaoke lyrics.",
+    "source": "ytm-rs",
+    "accent": "cover",
+    "background": {
+      "mode": "kawarp",
+      "solid": "#0c0a0e",
+      "np_dim": 0.85,
+      "scrim": 0.3
+    },
+    "lyrics": {
+      "rem": 16,
+      "opacity_transition": {
+        "secs": 0.195
+      },
+      "blur_transition": {
+        "secs": 0.35
+      }
+    },
+    "cover": {
+      "radius": 12,
+      "shadow": 0.55,
+      "shadow_blur": 60
+    },
+    "now_playing": {
+      "title_align": "left",
+      "title_px": 28,
+      "artist_px": 17
+    },
+    "chrome": {
+      "bar_height": 86,
+      "bar_radius": 18,
+      "bar_margin": [
+        14,
+        14
+      ]
+    },
+    "app": {
+      "page_bg": "same",
+      "sidebar": "glass",
+      "bar_alpha": 0.55,
+      "card_radius": 8,
+      "thumb_radius": 5,
+      "panel_radius": 14,
+      "search_radius": 21,
+      "text_dim": "#b2acba"
+    }
+  }
+]

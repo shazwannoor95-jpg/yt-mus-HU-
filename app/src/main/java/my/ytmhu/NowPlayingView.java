@@ -35,6 +35,7 @@ final class NowPlayingView extends LinearLayout {
     private final TextView title, artist;
     private final Button lyricsTab, queueTab;
     private final ImageView cover;
+    private final FrostedBackdrop frost;
     private final ScrollView scroll;
     private final LinearLayout rows;
     private final List<TextView> lines = new ArrayList<>();
@@ -57,19 +58,30 @@ final class NowPlayingView extends LinearLayout {
         this.menu = menu;
         setOrientation(HORIZONTAL);
         setPadding(dp(20), dp(14), dp(18), dp(8));
+        frost = appearance.glass ? new FrostedBackdrop(appearance.start,
+                prefs.flag("flat", false) ? appearance.start : appearance.end, appearance.scrim, prefs.number("brightness", 100)) : null;
         background(appearance.start);
 
         LinearLayout left = column();
         cover = new ImageView(context);
         cover.setScaleType(ImageView.ScaleType.FIT_CENTER);
         cover.setContentDescription("Album artwork");
+        android.graphics.drawable.GradientDrawable mask = new android.graphics.drawable.GradientDrawable();
+        mask.setColor(android.graphics.Color.TRANSPARENT);
+        mask.setCornerRadius(dp(appearance.coverRadius));
+        cover.setBackground(mask);
+        cover.setClipToOutline(true);
         left.addView(cover, new LayoutParams(-1, 0, 1));
-        title = text("Now playing", 24, FOREGROUND);
+        title = text("Now playing", appearance.titleSize, FOREGROUND);
         title.setTypeface(appearance.font, Typeface.BOLD);
         title.setMaxLines(2);
         left.addView(title);
-        artist = text("", 16, MUTED);
+        artist = text("", appearance.artistSize, MUTED);
         left.addView(artist);
+        if (appearance.centerNowPlaying) {
+            title.setGravity(Gravity.CENTER);
+            artist.setGravity(Gravity.CENTER);
+        }
         addView(left, new LayoutParams(0, -1, 0.83f));
 
         LinearLayout right = column();
@@ -104,15 +116,20 @@ final class NowPlayingView extends LinearLayout {
             lastIndex = -2;
             cover.setTag(null);
             cover.setImageDrawable(null);
+            if (frost != null) frost.setAlbum(null);
             background(appearance.start);
             title.setText(track == null ? "Now playing" : track.title);
             artist.setText(track == null ? "" : track.artist);
             if (track != null) {
                 artwork.load(cover, track.artwork, bitmap -> {
                     if (track == current && !closed && appearance.albumTint && prefs.flag("coverColors", true)) {
-                        int tone = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() / 2);
-                        background(Color.rgb(32 + Color.red(tone) / 3, 18 + Color.green(tone) / 3,
-                                24 + Color.blue(tone) / 3));
+                        if (frost != null && !prefs.flag("flat", false)) {
+                            frost.setAlbum(bitmap);
+                        } else {
+                            int tone = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() / 2);
+                            background(Color.rgb(32 + Color.red(tone) / 3, 18 + Color.green(tone) / 3,
+                                    24 + Color.blue(tone) / 3));
+                        }
                     }
                 });
             }
@@ -252,7 +269,8 @@ final class NowPlayingView extends LinearLayout {
             });
             row.addView(names, new LayoutParams(0, -2, 1));
             Button options = new Button(getContext());
-            options.setText("⋮");
+            options.setText(Icons.MORE);
+            options.setTypeface(appearance.icons);
             options.setContentDescription("Actions for " + song.title);
             options.setOnClickListener(view -> menu.show(view, song, position));
             row.addView(options, new LayoutParams(dp(48), dp(48)));
@@ -273,14 +291,15 @@ final class NowPlayingView extends LinearLayout {
     }
 
     private TextView lyricsLine(String line, int color) {
-        TextView view = text(line, 24 * prefs.number("lyricsSize", 100) / 100, color);
+        TextView view = text(line, appearance.lyricsSize * prefs.number("lyricsSize", 100) / 100, color);
         if ("classic".equals(prefs.text("lyricsStyle", "theme"))) view.setGravity(Gravity.CENTER);
         if ("bold".equals(prefs.text("lyricsWeight", "theme"))) view.setTypeface(view.getTypeface(), Typeface.BOLD);
         return view;
     }
 
     private void background(int tone) {
-        setBackground(Appearance.background(prefs, GradientDrawable.Orientation.TR_BL, tone, appearance.solid ? tone : appearance.end));
+        if (frost != null) setBackground(frost);
+        else setBackground(Appearance.background(prefs, GradientDrawable.Orientation.TR_BL, tone, appearance.solid ? tone : appearance.end));
     }
 
     private LinearLayout column() {

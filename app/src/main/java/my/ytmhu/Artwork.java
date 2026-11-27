@@ -31,6 +31,21 @@ final class Artwork {
 
     void load(ImageView view, String url, java.util.function.Consumer<Bitmap> preview) {
         view.setTag(url);
+        WeakReference<ImageView> target = new WeakReference<>(view);
+        acquire(url, () -> target.get() != null, bitmap -> {
+            ImageView image = target.get();
+            if (image == null || !url.equals(image.getTag())) return;
+            image.setImageBitmap(bitmap);
+            if (preview != null) preview.accept(bitmap);
+        });
+    }
+
+    void acquire(String url, java.util.function.Consumer<Bitmap> receive) {
+        acquire(url, () -> true, receive);
+    }
+
+    private void acquire(String url, java.util.function.BooleanSupplier wanted,
+                         java.util.function.Consumer<Bitmap> receive) {
         URI uri;
         try {
             uri = URI.create(url);
@@ -43,24 +58,18 @@ final class Artwork {
                 || host.equals("yt3.ggpht.com"))) return;
         Bitmap stored = cache.get(url);
         if (stored != null) {
-            view.setImageBitmap(stored);
-            if (preview != null) preview.accept(stored);
+            receive.accept(stored);
             return;
         }
-        WeakReference<ImageView> target = new WeakReference<>(view);
         downloads.execute(() -> {
-            if (closed || target.get() == null) return;
+            if (closed || !wanted.getAsBoolean()) return;
             Bitmap bitmap = cache.get(url);
             if (bitmap == null) bitmap = download(uri);
             if (bitmap == null || closed) return;
             cache.put(url, bitmap);
             Bitmap ready = bitmap;
             main.post(() -> {
-                ImageView image = target.get();
-                if (!closed && image != null && url.equals(image.getTag())) {
-                    image.setImageBitmap(ready);
-                    if (preview != null) preview.accept(ready);
-                }
+                if (!closed) receive.accept(ready);
             });
         });
     }

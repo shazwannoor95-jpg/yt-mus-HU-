@@ -43,6 +43,9 @@ final class SettingsView extends LinearLayout {
     private final Typeface font;
     private final Appearance appearance;
     private final LinearLayout navigation, contents;
+    private final Viewport viewport;
+    private final EditText search;
+    private Button compactTab;
     private final List<Entry> entries = new ArrayList<>();
     private final ScrollView scroller;
     private String tab, filter = "";
@@ -62,7 +65,7 @@ final class SettingsView extends LinearLayout {
     }
 
     SettingsView(Context context, AppSettings prefs, Host host, String selected,
-                 int ink, int muted, int surface, int accent, Appearance appearance) {
+                 int ink, int muted, int surface, int accent, Appearance appearance, Viewport viewport) {
         super(context);
         this.prefs = prefs;
         this.host = host;
@@ -73,11 +76,9 @@ final class SettingsView extends LinearLayout {
         this.appearance = appearance;
         this.font = appearance.font;
         this.tab = selected;
-        setOrientation(HORIZONTAL);
-        LinearLayout left = column();
-        left.setPadding(0, 0, dp(12), 0);
-        left.addView(label("Settings", 25, ink, true));
-        EditText search = new EditText(context);
+        this.viewport = viewport;
+        setOrientation(viewport.splitSettings ? HORIZONTAL : VERTICAL);
+        search = new EditText(context);
         search.setSingleLine();
         search.setTextSize(15);
         search.setTypeface(font);
@@ -86,18 +87,42 @@ final class SettingsView extends LinearLayout {
         search.setHintTextColor(muted);
         search.setPadding(dp(11), 0, dp(7), 0);
         search.setBackground(card(9));
-        left.addView(search, new LayoutParams(-1, dp(43)));
         navigation = column();
-        left.addView(navigation);
-        ScrollView navScroll = new ScrollView(context);
-        navScroll.addView(left);
-        addView(navScroll, new LayoutParams(dp(158), -1));
+
+        if (viewport.splitSettings) {
+            LinearLayout left = column();
+            left.setPadding(0, 0, dp(10), 0);
+            left.addView(label("Settings", 23, ink, true));
+            left.addView(search, new LayoutParams(-1, dp(44)));
+            ScrollView navScroll = new ScrollView(context);
+            navScroll.addView(navigation);
+            left.addView(navScroll, new LayoutParams(-1, 0, 1));
+            addView(left, new LayoutParams(dp(150), -1));
+        } else {
+            LinearLayout header = new LinearLayout(context);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            TextView title = label("Settings", 19, ink, true);
+            header.addView(title, new LayoutParams(-2, -2));
+            header.addView(search, new LayoutParams(0, dp(44), 1));
+            addView(header, new LayoutParams(-1, -2));
+            compactTab = button(tab + "  ▾");
+            compactTab.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            compactTab.setMinHeight(dp(44));
+            compactTab.setContentDescription("Settings section, " + tab);
+            compactTab.setOnClickListener(view -> new AlertDialog.Builder(context).setTitle("Settings section")
+                    .setSingleChoiceItems(TABS, java.util.Arrays.asList(TABS).indexOf(tab), (dialog, index) -> {
+                        dialog.dismiss();
+                        select(TABS[index]);
+                    }).setNegativeButton("Cancel", null).show());
+            addView(compactTab, new LayoutParams(-1, -2));
+        }
 
         contents = column();
-        contents.setPadding(0, 0, dp(4), dp(8));
+        contents.setPadding(0, 0, dp(3), dp(12));
         scroller = new ScrollView(context);
         scroller.addView(contents);
-        addView(scroller, new LayoutParams(0, -1, 1));
+        if (viewport.splitSettings) addView(scroller, new LayoutParams(0, -1, 1));
+        else addView(scroller, new LayoutParams(-1, 0, 1));
         defineControls();
         showNav();
         render();
@@ -152,16 +177,15 @@ final class SettingsView extends LinearLayout {
                 new String[]{"LRCLIB first", "YouTube Music first"}, new String[]{"lrclib", "youtube"});
 
         if (!appearance.themes.isEmpty()) {
-            int count = appearance.themes.size();
-            String[] names = new String[count];
-            String[] ids = new String[count];
-            for (int i = 0; i < count; i++) {
-                names[i] = appearance.themes.get(i).optString("name");
-                ids[i] = appearance.themes.get(i).optString("id");
-            }
-            choice("Appearance", "Colours", "Theme", "Upstream colour palettes adapted for the Android player.",
-                    "theme", "ytm-rs", names, ids);
+            add("Appearance", "Colours", "Theme", "Browse the upstream themes and previews.",
+                    () -> {
+                        Button choose = button(appearance.themeName);
+                        choose.setOnClickListener(view -> showThemes());
+                        row("Theme", "Browse the upstream themes and previews.", choose);
+                    });
         }
+        choice("Appearance", "Background", "Frosted glass", "Use blurred album artwork behind translucent panels.", "glass",
+                "theme", new String[]{"Theme default", "On", "Off"}, new String[]{"theme", "on", "off"});
         choice("Appearance", "Colours", "Accent colour", null, "accent", "theme",
                 new String[]{"Theme default", "Red", "Amber", "Blue", "Green"}, new String[]{"theme", "red", "amber", "blue", "green"});
         toggle("Appearance", "Colours", "Accent coloured controls", "Colour active player and filter controls with the accent.", "accentControls", true);
@@ -196,7 +220,7 @@ final class SettingsView extends LinearLayout {
 
         action("About", "Updates", "Check now", "Check GitHub for a newer Android APK. Updates are installed through Android.", "Check", "updates");
         action("About", "Updates", "What’s new in " + BuildVersion.VERSION,
-                "Google verification navigation and private sign-in diagnostics.", null, "");
+                "Responsive Settings, full album covers, a compact player and frosted glass.", null, "");
         action("About", "About", "YTM Head Unit " + BuildVersion.VERSION, "Android port of parts of ytm-rs. Android API 27 and newer.", null, "");
         action("About", "About", "Lyrics", "LRCLIB and YouTube Music.", null, "");
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");
@@ -204,19 +228,38 @@ final class SettingsView extends LinearLayout {
         action("About", "About", "Upstream ytm-rs", "Desktop project, releases and credits.", "Open GitHub", "upstream");
     }
 
+    void focusSearch() {
+        search.requestFocus();
+        getContext().getSystemService(android.view.inputmethod.InputMethodManager.class)
+                .showSoftInput(search, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+    }
+
+    private void select(String name) {
+        tab = name;
+        host.tabChanged(tab);
+        if (!filter.isEmpty()) search.setText("");
+        showNav();
+        render();
+    }
+
     private void showNav() {
-        navigation.removeAllViews();
-        for (String name : TABS) {
-            Button button = button(name);
-            button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            button.setBackground(name.equals(tab) ? card(7) : null);
-            button.setOnClickListener(view -> {
-                tab = name;
-                host.tabChanged(tab);
-                showNav();
-                render();
-            });
-            navigation.addView(button, new LayoutParams(-1, dp(42)));
+        if (!viewport.splitSettings) {
+            compactTab.setText(tab + "  ▾");
+            compactTab.setContentDescription("Settings section, " + tab);
+            return;
+        }
+        if (navigation.getChildCount() == 0) {
+            for (String name : TABS) {
+                Button button = button(name);
+                button.setMinHeight(dp(44));
+                button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                button.setOnClickListener(view -> select(name));
+                navigation.addView(button, new LayoutParams(-1, -2));
+            }
+        }
+        for (int i = 0; i < TABS.length; i++) {
+            View item = navigation.getChildAt(i);
+            item.setBackground(TABS[i].equals(tab) ? card(7) : null);
         }
     }
 
@@ -302,6 +345,46 @@ final class SettingsView extends LinearLayout {
         });
     }
 
+    private void showThemes() {
+        AlertDialog picker = new AlertDialog.Builder(getContext()).setTitle("Theme")
+                .setNegativeButton("Cancel", null).create();
+        ScrollView scroll = new ScrollView(getContext());
+        LinearLayout choices = column();
+        choices.setPadding(dp(8), dp(4), dp(8), dp(8));
+        for (org.json.JSONObject theme : appearance.themes) {
+            String id = theme.optString("id");
+            LinearLayout row = new LinearLayout(getContext());
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(dp(58));
+            android.widget.ImageView preview = new android.widget.ImageView(getContext());
+            preview.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            try (java.io.InputStream file = getContext().getAssets().open("theme-covers/" + id + ".jpg")) {
+                android.graphics.BitmapFactory.Options scale = new android.graphics.BitmapFactory.Options();
+                scale.inSampleSize = 2;
+                preview.setImageBitmap(android.graphics.BitmapFactory.decodeStream(file, null, scale));
+            } catch (java.io.IOException missing) {
+                preview.setBackground(card(7));
+            }
+            row.addView(preview, new LayoutParams(dp(72), dp(42)));
+            LinearLayout text = column();
+            text.addView(label(theme.optString("name"), 15, ink, true));
+            String credit = theme.optString("source");
+            if (!credit.isEmpty()) text.addView(label(credit, 11, muted, false));
+            row.addView(text, new LayoutParams(0, -2, 1));
+            if (id.equals(appearance.themeId)) row.addView(label("✓", 18, accent, true));
+            row.setOnClickListener(view -> {
+                picker.dismiss();
+                prefs.set("theme", id);
+                host.changed("theme");
+            });
+            row.setFocusable(true);
+            choices.addView(row);
+        }
+        scroll.addView(choices);
+        picker.setView(scroll);
+        picker.show();
+    }
+
     private void action(String tab, String group, String title, String detail, String caption, String id) {
         add(tab, group, title, detail, () -> {
             Button control = caption == null ? null : button(caption);
@@ -316,15 +399,19 @@ final class SettingsView extends LinearLayout {
 
     private void row(String title, String detail, View control) {
         LinearLayout row = new LinearLayout(getContext());
-        row.setGravity(Gravity.CENTER_VERTICAL);
+        boolean stacked = viewport.stackedSettingsRows && control != null && !(control instanceof Switch);
+        row.setOrientation(stacked ? VERTICAL : HORIZONTAL);
+        row.setGravity(stacked ? Gravity.START : Gravity.CENTER_VERTICAL);
         row.setPadding(dp(9), dp(4), dp(8), dp(4));
         row.setBackground(card(8));
         LinearLayout text = column();
         text.addView(label(title, 15, ink, true));
         if (detail != null) text.addView(label(detail, 13, muted, false));
-        row.addView(text, new LayoutParams(0, -2, 1));
+        if (stacked) row.addView(text, new LayoutParams(-1, -2));
+        else row.addView(text, new LayoutParams(0, -2, 1));
         if (control != null) {
-            int width = control instanceof Switch ? -2 : dp(132);
+            int width = control instanceof Switch ? -2 : stacked ? -1 : dp(156);
+            control.setMinimumHeight(dp(44));
             row.addView(control, new LayoutParams(width, -2));
         }
         LayoutParams params = new LayoutParams(-1, -2);
@@ -355,7 +442,10 @@ final class SettingsView extends LinearLayout {
         button.setTextColor(ink);
         button.setTextSize(14);
         button.setTypeface(font);
-        button.setPadding(dp(8), 0, dp(8), 0);
+        button.setPadding(dp(8), dp(3), dp(8), dp(3));
+        button.setMinHeight(dp(42));
+        button.setSingleLine(false);
+        button.setMaxLines(3);
         button.setBackground(card(8));
         return button;
     }

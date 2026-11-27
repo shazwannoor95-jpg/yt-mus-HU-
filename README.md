@@ -13,14 +13,24 @@ from the same upstream revision.
   On return, the app verifies the YouTube Music account before displaying the
   account name. Its YouTube session stays in the app's WebView cookie store.
   Signed-in requests use that session for the home feed and saved playlists.
-- The player supports queue playback, shuffle, repeat, seek and background
-  media controls. The signed-in player can use directly available AAC
-  sources. The upstream desktop signature solver and further playback
-  fallbacks have yet to be ported. YouTube can still deny playback, and its
-  refusal is displayed in the player.
-- Lyrics, Listen together, downloads and the remainder of the desktop
-  settings are pending. Google sign-in and playback must still be verified
-  on the target head unit. Google can reject login in an embedded WebView.
+- Now Playing displays album art, lyrics with line-by-line sync from LRCLIB
+  and a plain-text YouTube Music fallback. The app sends song title and
+  artist to LRCLIB only when lyrics are opened.
+- Up Next includes queue editing, play next, ratings, saved playlists,
+  radio and links. The player also includes media volume and an Android
+  route selector for outputs exposed by the firmware.
+- Download exports a complete direct AAC stream to an Android document
+  chosen by the user. HLS-only tracks, tags and an in-app offline library
+  are pending.
+- The signed-in player can use directly available AAC sources. The upstream
+  signature solver and additional playback fallbacks have yet to be ported.
+  YouTube refusals are displayed in the player.
+- Google sign-in and device audio routes still need testing on the target
+  head unit. Sign-in supports the dedicated Google and YouTube account
+  pages in WebView. If Google rejects the flow, **Open separately** opens
+  YouTube Music outside the APK and leaves its browser session separate.
+- Word-by-word lyric providers, Listen together and the remainder of
+  desktop settings are pending.
 
 The debug APK targets the TEST9278B head unit's reported API 27. It contains
 DEX only, so it can install on ARM 32-bit without a native library. It runs

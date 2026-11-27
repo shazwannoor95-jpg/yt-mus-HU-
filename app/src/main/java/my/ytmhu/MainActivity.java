@@ -2,7 +2,11 @@
 package my.ytmhu;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.MediaRouteButton;
 import android.app.Dialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -10,6 +14,9 @@ import android.content.ServiceConnection;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
+import android.media.AudioManager;
+import android.media.MediaRouter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -21,12 +28,15 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupMenu;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONObject;
 
@@ -37,6 +47,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 public final class MainActivity extends Activity {
+    private static final int SAVE_AUDIO = 21;
     private static final int INK = 0xfff4eef4;
     private static final int MUTED = 0xffc6b8cc;
     private static final int PANEL = 0xff211721;
@@ -48,6 +59,10 @@ public final class MainActivity extends Activity {
     private final MusicApi api = new MusicApi();
     private final Artwork artwork = new Artwork();
     private PlaybackService playback;
+    private MusicApi.Track pendingDownload;
+    private final ExecutorService downloads = Executors.newSingleThreadExecutor();
+    private LinearLayout browser;
+    private NowPlayingView expanded;
     private boolean bound;
     private boolean refreshingAccount;
     private Future<?> pageTask;
@@ -71,7 +86,10 @@ public final class MainActivity extends Activity {
     private final Runnable clock = new Runnable() {
         @Override public void run() {
             renderProgress();
-            main.postDelayed(this, 750);
+            if (expanded.getVisibility() == View.VISIBLE) {
+                expanded.tick(playback == null ? 0 : playback.position());
+            }
+            main.postDelayed(this, 250);
         }
     };
 
@@ -94,8 +112,15 @@ public final class MainActivity extends Activity {
         root.setFocusableInTouchMode(true);
         setContentView(root);
 
+        FrameLayout stage = new FrameLayout(this);
+        root.addView(stage, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout body = new LinearLayout(this);
-        root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1));
+        browser = body;
+        stage.addView(body, new FrameLayout.LayoutParams(-1, -1));
+        expanded = new NowPlayingView(this, artwork, this::showSongMenu, this::closePlayer);
+        expanded.setVisibility(View.GONE);
+        stage.addView(expanded, new FrameLayout.LayoutParams(-1, -1));
+        setVolumeControlStream(AudioManager.STREAM_MUSIC);
         LinearLayout side = column();
         side.setPadding(dp(10), dp(12), dp(10), dp(8));
         side.setBackgroundColor(0xff1b111d);
@@ -163,6 +188,9 @@ public final class MainActivity extends Activity {
             collectionId = savedState.getString("collectionId", "");
             mood = savedState.getString("mood", "");
             searchType = Browse.Search.valueOf(savedState.getString("searchType", "Songs"));
+            Bundle song = savedState.getBundle("download");
+            if (song != null) pendingDownload = new MusicApi.Track(song.getString("id"), song.getString("title"),
+                    song.getString("artist"), "", "");
         }
         if (MusicApi.hasSession(GoogleSignIn.cookies())) verifyAccount();
         else loadPage();
@@ -177,6 +205,7 @@ public final class MainActivity extends Activity {
         nowPlaying = label("Now playing", 16, INK);
         playerStatus = label("", 13, MUTED);
         playerStatus.setMaxLines(2);
+        nowPlaying.setOnClickListener(view -> openPlayer(false));
         information.addView(nowPlaying);
         information.addView(playerStatus);
         bar.addView(information, new LinearLayout.LayoutParams(0, -2, 1.25f));
@@ -199,7 +228,10 @@ public final class MainActivity extends Activity {
         bar.addView(seek, new LinearLayout.LayoutParams(0, dp(48), 1f));
         playbackTime = label("", 13, MUTED);
         playbackTime.setGravity(Gravity.CENTER);
-        bar.addView(playbackTime, new LinearLayout.LayoutParams(dp(96), -2));
+        bar.addView(playbackTime, new LinearLayout.LayoutParams(dp(86), -2));
+        transport(bar, "◉", "Volume and audio output", this::showAudio);
+        transport(bar, "♫", "Lyrics", () -> openPlayer(true));
+        transport(bar, "☰", "Up next", () -> openPlayer(false));
         return bar;
     }
 
@@ -222,6 +254,8 @@ public final class MainActivity extends Activity {
         ++generation;
         if (signInDialog != null && signInDialog.isShowing()) signInDialog.dismiss();
         network.shutdownNow();
+        downloads.shutdownNow();
+        expanded.close();
         artwork.close();
         super.onDestroy();
     }
@@ -232,6 +266,13 @@ public final class MainActivity extends Activity {
         state.putString("collectionId", collectionId);
         state.putString("mood", mood);
         state.putString("searchType", searchType.name());
+        if (pendingDownload != null) {
+            Bundle song = new Bundle();
+            song.putString("id", pendingDownload.id);
+            song.putString("title", pendingDownload.title);
+            song.putString("artist", pendingDownload.artist);
+            state.putBundle("download", song);
+        }
         super.onSaveInstanceState(state);
     }
 
@@ -243,7 +284,8 @@ public final class MainActivity extends Activity {
 
     @SuppressWarnings("deprecation")
     @Override public void onBackPressed() {
-        if (!"Home".equals(page)) navigate("Home");
+        if (expanded.getVisibility() == View.VISIBLE) closePlayer();
+        else if (!"Home".equals(page)) navigate("Home");
         else super.onBackPressed();
     }
 
@@ -442,6 +484,10 @@ public final class MainActivity extends Activity {
             Button row = navigation(results, track.title + (track.artist.isEmpty() ? "" : " · " + track.artist),
                     () -> playTracks(tracks, index));
             row.setMaxLines(2);
+            row.setOnLongClickListener(view -> {
+                showSongMenu(view, track, -1);
+                return true;
+            });
         }
     }
 
@@ -524,6 +570,10 @@ public final class MainActivity extends Activity {
         row.setContentDescription(card.title);
         row.setFocusable(true);
         row.setOnClickListener(view -> playTracks(tracks, index));
+        row.setOnLongClickListener(view -> {
+            showSongMenu(view, card.track, -1);
+            return true;
+        });
         row.addView(cover(card.image), new LinearLayout.LayoutParams(dp(40), dp(40)));
         LinearLayout text = column();
         text.setPadding(dp(6), 0, 0, 0);
@@ -560,6 +610,217 @@ public final class MainActivity extends Activity {
         return row;
     }
 
+    private void openPlayer(boolean lyrics) {
+        browser.setVisibility(View.GONE);
+        expanded.setVisibility(View.VISIBLE);
+        expanded.show(playback, lyrics);
+    }
+
+    private void closePlayer() {
+        expanded.setVisibility(View.GONE);
+        browser.setVisibility(View.VISIBLE);
+    }
+
+    private void showAudio() {
+        AudioManager audio = getSystemService(AudioManager.class);
+        LinearLayout body = column();
+        body.setPadding(dp(16), dp(8), dp(16), dp(8));
+        SeekBar volume = new SeekBar(this);
+        volume.setContentDescription("Media volume");
+        volume.setMax(audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+        volume.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));
+        volume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) {
+                if (user && !audio.isVolumeFixed()) audio.setStreamVolume(AudioManager.STREAM_MUSIC, progress, 0);
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) {}
+        });
+        volume.setEnabled(!audio.isVolumeFixed());
+        body.addView(volume, new LinearLayout.LayoutParams(-1, dp(48)));
+        MediaRouter router = getSystemService(MediaRouter.class);
+        MediaRouter.RouteInfo route = router.getSelectedRoute(MediaRouter.ROUTE_TYPE_LIVE_AUDIO);
+        body.addView(label(route == null ? "Android default output" : route.getName().toString(), 16, MUTED));
+        MediaRouteButton routes = new MediaRouteButton(this);
+        routes.setRouteTypes(MediaRouter.ROUTE_TYPE_LIVE_AUDIO);
+        routes.setContentDescription("Choose Android audio output");
+        LinearLayout selector = new LinearLayout(this);
+        selector.setGravity(Gravity.CENTER_VERTICAL);
+        selector.addView(routes, new LinearLayout.LayoutParams(dp(54), dp(54)));
+        selector.addView(label("Android audio routes", 16, INK));
+        body.addView(selector);
+        new AlertDialog.Builder(this).setTitle("Volume and audio output").setView(body)
+                .setPositiveButton("Done", null).show();
+    }
+
+    private void showSongMenu(View anchor, MusicApi.Track track, int queueIndex) {
+        PopupMenu popup = new PopupMenu(this, anchor);
+        addAction(popup, "Like song", () -> react(track, "like", "Liked"));
+        addAction(popup, "Dislike song", () -> react(track, "dislike", "Disliked"));
+        addAction(popup, "Clear rating", () -> react(track, "removelike", "Rating cleared"));
+        addAction(popup, "Add to playlist", () -> pickPlaylist(track));
+        addAction(popup, "Copy link", () -> {
+            ClipboardManager clipboard = getSystemService(ClipboardManager.class);
+            clipboard.setPrimaryClip(ClipData.newPlainText("YouTube Music", MusicApi.MUSIC + "/watch?v=" + track.id));
+            toast("Link copied");
+        });
+        addAction(popup, "Download", () -> selectDownload(track));
+        addAction(popup, "Play next", () -> { if (playback != null) playback.enqueue(track, true); });
+        addAction(popup, "Add to queue", () -> { if (playback != null) playback.enqueue(track, false); });
+        addAction(popup, "Start radio", () -> startRadio(track));
+        if (!track.artistId.isEmpty()) {
+            addAction(popup, "Go to artist", () -> {
+                closePlayer();
+                collectionId = track.artistId;
+                navigate("Collection");
+            });
+        }
+        if (queueIndex >= 0 && playback != null) {
+            if (queueIndex > Math.max(0, playback.queueIndex() + 1)) {
+                addAction(popup, "Move up", () -> { if (isQueueEntry(track, queueIndex)) playback.moveAt(queueIndex, -1); });
+            }
+            if (queueIndex + 1 < playback.queueSnapshot().size() && queueIndex != playback.queueIndex()) {
+                addAction(popup, "Move down", () -> { if (isQueueEntry(track, queueIndex)) playback.moveAt(queueIndex, 1); });
+            }
+            if (queueIndex != playback.queueIndex()) {
+                addAction(popup, "Remove from queue", () -> { if (isQueueEntry(track, queueIndex)) playback.removeAt(queueIndex); });
+            }
+        }
+        popup.show();
+    }
+
+    private boolean isQueueEntry(MusicApi.Track track, int index) {
+        if (playback == null) return false;
+        List<MusicApi.Track> current = playback.queueSnapshot();
+        return index < current.size() && track == current.get(index);
+    }
+
+    private void addAction(PopupMenu popup, String label, Runnable action) {
+        popup.getMenu().add(label).setOnMenuItemClickListener(item -> {
+            action.run();
+            return true;
+        });
+    }
+
+    private void selectDownload(MusicApi.Track track) {
+        if (pendingDownload != null) return;
+        Intent picker = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("audio/mp4").putExtra(Intent.EXTRA_TITLE, MusicDownload.fileName(track.title));
+        pendingDownload = track;
+        try {
+            startActivityForResult(picker, SAVE_AUDIO);
+        } catch (android.content.ActivityNotFoundException missing) {
+            pendingDownload = null;
+            toast("No Android file picker is installed.");
+        }
+    }
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != SAVE_AUDIO) return;
+        MusicApi.Track track = pendingDownload;
+        pendingDownload = null;
+        if (result != RESULT_OK || data == null || data.getData() == null || track == null) return;
+        Uri destination = data.getData();
+        if (!"content".equals(destination.getScheme())) return;
+        String cookies = account.isEmpty() ? "" : GoogleSignIn.cookies();
+        toast("Downloading " + track.title);
+        downloads.execute(() -> {
+            String status;
+            try {
+                MusicDownload.save(getApplicationContext(), track, cookies, destination);
+                status = "Download saved.";
+            } catch (Exception error) {
+                status = error.getMessage() == null ? "Download failed." : error.getMessage();
+            }
+            String feedback = status;
+            runOnUiThread(() -> { if (!isDestroyed()) toast(feedback); });
+        });
+    }
+
+    private void startRadio(MusicApi.Track track) {
+        String cookies = account.isEmpty() ? "" : GoogleSignIn.cookies();
+        network.execute(() -> {
+            try {
+                api.setSession(cookies);
+                List<MusicApi.Track> songs = api.radio(track);
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    if (songs.size() > 1) playTracks(songs, 0);
+                    else toast("No station was returned for this song.");
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> { if (!isDestroyed()) toast("Radio could not load."); });
+            }
+        });
+    }
+
+    private boolean requireAccount() {
+        if (!refreshingAccount && !account.isEmpty()) return true;
+        toast("Sign in to use this action.");
+        openAccount();
+        return false;
+    }
+
+    private void react(MusicApi.Track track, String action, String feedback) {
+        if (!requireAccount()) return;
+        network.execute(() -> {
+            try {
+                api.setSession(GoogleSignIn.cookies());
+                api.react(track, action);
+                runOnUiThread(() -> { if (!isDestroyed()) toast(feedback); });
+            } catch (Exception error) {
+                runOnUiThread(() -> { if (!isDestroyed()) toast("YouTube rejected or could not save the rating."); });
+            }
+        });
+    }
+
+    private void pickPlaylist(MusicApi.Track track) {
+        if (!requireAccount()) return;
+        String selectedAccount = account;
+        network.execute(() -> {
+            try {
+                api.setSession(GoogleSignIn.cookies());
+                List<Browse.Card> playlists = new ArrayList<>();
+                for (Browse.Shelf shelf : Browse.shelves(api.browse(new JSONObject().put("continuation", Browse.SAVED_PLAYLISTS)))) {
+                    for (Browse.Card card : shelf.cards) {
+                        if (card.browseId.startsWith("VLPL")) playlists.add(card);
+                    }
+                }
+                runOnUiThread(() -> {
+                    if (isDestroyed() || refreshingAccount || !selectedAccount.equals(account)) return;
+                    if (playlists.isEmpty()) {
+                        toast("No playlists were found.");
+                        return;
+                    }
+                    String[] titles = new String[playlists.size()];
+                    for (int i = 0; i < titles.length; i++) titles[i] = playlists.get(i).title;
+                    new AlertDialog.Builder(this).setTitle("Add to playlist").setNegativeButton("Cancel", null)
+                            .setItems(titles, (dialog, which) -> saveToPlaylist(track, playlists.get(which))).show();
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> { if (!isDestroyed()) toast("Playlists could not load."); });
+            }
+        });
+    }
+
+    private void saveToPlaylist(MusicApi.Track song, Browse.Card playlist) {
+        if (!requireAccount()) return;
+        network.execute(() -> {
+            try {
+                api.setSession(GoogleSignIn.cookies());
+                api.addToPlaylist(song, playlist.browseId.substring(2));
+                runOnUiThread(() -> { if (!isDestroyed()) toast("Saved to " + playlist.title); });
+            } catch (Exception error) {
+                runOnUiThread(() -> { if (!isDestroyed()) toast("YouTube could not edit this playlist."); });
+            }
+        });
+    }
+
+    private void toast(String text) {
+        Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
+    }
+
     private void renderPlayer() {
         nowPlaying.setText(playback == null ? "Now playing" : playback.title());
         playerStatus.setText(playback == null ? "" : playback.status());
@@ -576,6 +837,7 @@ public final class MainActivity extends Activity {
         } else {
             playerStatus.setOnClickListener(null);
         }
+        if (expanded.getVisibility() == View.VISIBLE) expanded.update(playback);
         renderProgress();
     }
 

@@ -26,6 +26,11 @@ final class Artwork {
     private volatile boolean closed;
 
     void load(ImageView view, String url) {
+        load(view, url, null);
+    }
+
+    void load(ImageView view, String url, java.util.function.Consumer<Bitmap> preview) {
+        view.setTag(url);
         URI uri;
         try {
             uri = URI.create(url);
@@ -39,6 +44,7 @@ final class Artwork {
         Bitmap stored = cache.get(url);
         if (stored != null) {
             view.setImageBitmap(stored);
+            if (preview != null) preview.accept(stored);
             return;
         }
         WeakReference<ImageView> target = new WeakReference<>(view);
@@ -51,7 +57,10 @@ final class Artwork {
             Bitmap ready = bitmap;
             main.post(() -> {
                 ImageView image = target.get();
-                if (!closed && image != null) image.setImageBitmap(ready);
+                if (!closed && image != null && url.equals(image.getTag())) {
+                    image.setImageBitmap(ready);
+                    if (preview != null) preview.accept(ready);
+                }
             });
         });
     }

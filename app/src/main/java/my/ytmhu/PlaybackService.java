@@ -31,12 +31,12 @@ public final class PlaybackService extends Service {
     private final Binder binder = new LocalBinder();
     private final ExecutorService network = Executors.newSingleThreadExecutor();
     private final MusicApi api = new MusicApi();
-    private List<MusicApi.Track> queue = Collections.emptyList();
+    private List<MusicApi.Track> queue = new ArrayList<>();
     private int index = -1;
     private int generation;
     private boolean shuffle;
     private boolean repeat;
-    private List<MusicApi.Track> originalQueue = Collections.emptyList();
+    private List<MusicApi.Track> originalQueue = new ArrayList<>();
     private MediaSession session;
     private MediaPlayer player;
     private AudioManager audio;
@@ -116,6 +116,40 @@ public final class PlaybackService extends Service {
         }
     }
 
+    List<MusicApi.Track> queueSnapshot() { return new ArrayList<>(queue); }
+    int queueIndex() { return index; }
+    MusicApi.Track currentTrack() { return index >= 0 ? queue.get(index) : null; }
+
+    void playAt(int position) {
+        if (position >= 0 && position < queue.size()) select(position);
+    }
+
+    void enqueue(MusicApi.Track track, boolean next) {
+        MusicApi.Track entry = new MusicApi.Track(track.id, track.title, track.artist, track.artwork, track.artistId);
+        int at = next && index >= 0 ? index + 1 : queue.size();
+        queue.add(at, entry);
+        int original = next && index >= 0 ? originalQueue.indexOf(queue.get(index)) + 1 : originalQueue.size();
+        originalQueue.add(original, entry);
+        publish(state, message);
+    }
+
+    void removeAt(int position) {
+        if (position < 0 || position >= queue.size() || position == index) return;
+        originalQueue.remove(queue.remove(position));
+        if (position < index) index--;
+        publish(state, message);
+    }
+
+    void moveAt(int position, int delta) {
+        int target = position + delta;
+        if (position < 0 || position >= queue.size() || target < 0 || target >= queue.size()) return;
+        Collections.swap(queue, position, target);
+        if (!shuffle) Collections.swap(originalQueue, position, target);
+        if (index == position) index = target;
+        else if (index == target) index = position;
+        publish(state, message);
+    }
+
     void skip(int delta) {
         int next = index + delta;
         if (!canSkip(delta)) return;
@@ -124,12 +158,13 @@ public final class PlaybackService extends Service {
 
     void toggle() {
         if (state == PlaybackState.STATE_PLAYING) pause();
+        else if (index < 0 && !queue.isEmpty()) playAt(0);
         else resume();
     }
 
     boolean requiresSignIn() { return signInRequired; }
     boolean playing() { return state == PlaybackState.STATE_PLAYING; }
-    boolean canPlay() { return index >= 0 && state != PlaybackState.STATE_BUFFERING; }
+    boolean canPlay() { return !queue.isEmpty() && state != PlaybackState.STATE_BUFFERING; }
     boolean canSkip(int delta) {
         return index >= 0 && queue.size() > 1 && (repeat || (index + delta >= 0 && index + delta < queue.size()));
     }
@@ -167,6 +202,9 @@ public final class PlaybackService extends Service {
 
     void stopForSignOut() {
         stopPlayback();
+        queue.clear();
+        originalQueue.clear();
+        publish(state, message);
     }
 
     private void select(int selected) {
@@ -243,7 +281,11 @@ public final class PlaybackService extends Service {
     }
 
     private void resume() {
-        if (index < 0 || playing()) return;
+        if (playing()) return;
+        if (index < 0) {
+            if (!queue.isEmpty()) playAt(0);
+            return;
+        }
         if (!prepared) {
             if (state == PlaybackState.STATE_ERROR) {
                 select(index);

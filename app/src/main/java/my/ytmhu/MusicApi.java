@@ -136,12 +136,14 @@ final class MusicApi {
     }
 
     static final class Track {
-        final String id, title, artist;
+        final String id, title, artist, artwork, artistId;
 
-        Track(String id, String title, String artist) {
+        Track(String id, String title, String artist, String artwork, String artistId) {
             this.id = id;
             this.title = title;
             this.artist = artist;
+            this.artwork = artwork;
+            this.artistId = artistId;
         }
     }
 
@@ -153,23 +155,96 @@ final class MusicApi {
         return web("search", new JSONObject().put("query", query).put("params", filter));
     }
 
+    String plainLyrics(String videoId) throws Exception {
+        JSONObject page = web("next", new JSONObject().put("videoId", videoId));
+        JSONObject results = find(page, "watchNextTabbedResultsRenderer", 0);
+        if (results == null) return "";
+        JSONArray tabs = array(results, "tabs");
+        for (int i = 0; i < tabs.length(); i++) {
+            JSONObject endpoint = child(child(item(tabs, i), "tabRenderer"), "endpoint");
+            String id = child(endpoint, "browseEndpoint").optString("browseId");
+            if (!id.startsWith("MPLY")) continue;
+            JSONObject lyrics = browse(new JSONObject().put("browseId", id));
+            JSONObject description = find(lyrics, "musicDescriptionShelfRenderer", 0);
+            return description == null ? "" : displayText(description.optJSONObject("description")).trim();
+        }
+        return "";
+    }
+
+    List<Track> radio(Track seed) throws Exception {
+        JSONObject body = new JSONObject().put("playlistId", "RDAMVM" + seed.id)
+                .put("params", "wAEB8gECeAE%3D").put("enablePersistentPlaylistPanel", true)
+                .put("isAudioOnly", true).put("tunerSettingValue", "AUTOMIX_SETTING_NORMAL");
+        JSONObject response = web("next", body);
+        JSONObject queue = find(response, "playlistPanelRenderer", 0);
+        if (queue == null) return java.util.Collections.emptyList();
+        JSONArray entries = array(queue, "contents");
+        Map<String, Track> tracks = new LinkedHashMap<>();
+        tracks.put(seed.id, seed);
+        for (int i = 0; i < entries.length() && tracks.size() < 40; i++) {
+            JSONObject song = child(item(entries, i), "playlistPanelVideoRenderer");
+            String id = song.optString("videoId");
+            String title = displayText(song.optJSONObject("title"));
+            if (!id.matches("[A-Za-z0-9_-]{11}") || title.isEmpty()) continue;
+            JSONObject artist = item(array(child(song, "shortBylineText"), "runs"), 0);
+            String artistId = child(child(artist, "navigationEndpoint"), "browseEndpoint").optString("browseId");
+            tracks.putIfAbsent(id, new Track(id, title, artist.optString("text"),
+                    Browse.thumbnail(song.optJSONObject("thumbnail")), artistId));
+        }
+        return new ArrayList<>(tracks.values());
+    }
+
+    void react(Track track, String action) throws Exception {
+        if (!hasSession(cookies)) throw new IOException("Sign in to rate a song.");
+        checkWrite(web("like/" + action, new JSONObject().put("target", new JSONObject().put("videoId", track.id))));
+    }
+
+    void addToPlaylist(Track track, String id) throws Exception {
+        if (!hasSession(cookies)) throw new IOException("Sign in to edit playlists.");
+        JSONObject edit = new JSONObject().put("action", "ACTION_ADD_VIDEO").put("addedVideoId", track.id)
+                .put("dedupeOption", "DEDUPE_OPTION_DROP_DUPLICATE");
+        checkWrite(web("browse/edit_playlist", new JSONObject().put("playlistId", id)
+                .put("actions", new JSONArray().put(edit))));
+    }
+
+    private static void checkWrite(JSONObject result) throws IOException {
+        String status = result.optString("status");
+        if (!status.isEmpty() && !status.contains("SUCCEEDED")) throw new IOException("YouTube rejected the change.");
+        JSONArray tracking = array(child(result, "responseContext"), "serviceTrackingParams");
+        for (int i = 0; i < tracking.length(); i++) {
+            JSONArray params = array(item(tracking, i), "params");
+            for (int j = 0; j < params.length(); j++) {
+                JSONObject param = item(params, j);
+                if ("logged_in".equals(param.optString("key")) && "0".equals(param.optString("value"))) {
+                    throw new IOException("YouTube ended the account session.");
+                }
+            }
+        }
+    }
+
     static final class AudioSource {
         final String url, agent;
+        final long bytes;
 
-        AudioSource(String url, String agent) {
+        AudioSource(String url, String agent, long bytes) {
             this.url = url;
             this.agent = agent;
+            this.bytes = bytes;
         }
     }
 
     List<AudioSource> audio(Track track) throws Exception {
+        return audio(track, false);
+    }
+
+    List<AudioSource> audio(Track track, boolean download) throws Exception {
         try {
-            return anonymousAudio(track);
+            return anonymousAudio(track, download);
         } catch (SignInRequired blocked) {
             if (!hasSession(cookies)) throw blocked;
             List<AudioSource> urls;
             try {
-                urls = signedAudio(track);
+                urls = signedAudio(track, download);
             } catch (IOException | org.json.JSONException unavailable) {
                 throw blocked;
             }
@@ -178,7 +253,7 @@ final class MusicApi {
         }
     }
 
-    private List<AudioSource> signedAudio(Track track) throws Exception {
+    private List<AudioSource> signedAudio(Track track, boolean download) throws Exception {
         String watch = landingPage(MUSIC + "/watch?v=" + track.id);
         int timestamp = signatureTimestamp(watch);
         if (timestamp == 0) {
@@ -193,7 +268,7 @@ final class MusicApi {
         if (!"OK".equals(child(result, "playabilityStatus").optString("status"))) {
             return java.util.Collections.emptyList();
         }
-        return audioUrls(child(result, "streamingData"), WEB_UA);
+        return audioUrls(child(result, "streamingData"), WEB_UA, download);
     }
 
     static int signatureTimestamp(String source) {
@@ -201,7 +276,7 @@ final class MusicApi {
         return timestamp.find() ? Integer.parseInt(timestamp.group(1)) : 0;
     }
 
-    private List<AudioSource> anonymousAudio(Track track) throws Exception {
+    private List<AudioSource> anonymousAudio(Track track, boolean download) throws Exception {
         refreshVisitor();
         JSONObject client = client("VISIONOS", "1.02")
                 .put("deviceMake", "Apple").put("deviceModel", "RealityDevice17,1")
@@ -215,19 +290,20 @@ final class MusicApi {
             if ("LOGIN_REQUIRED".equals(status.optString("status"))) throw new SignInRequired(reason);
             throw new IOException(reason);
         }
-        List<AudioSource> urls = audioUrls(child(result, "streamingData"), PLAYER_UA);
-        if (urls.isEmpty()) throw new IOException("No AAC audio stream is available.");
+        List<AudioSource> urls = audioUrls(child(result, "streamingData"), PLAYER_UA, download);
+        if (urls.isEmpty()) throw new IOException(download ? "YouTube did not offer a downloadable AAC file."
+                : "No AAC audio stream is available.");
         return urls;
     }
 
-    private static List<AudioSource> audioUrls(JSONObject data, String agent) {
+    private static List<AudioSource> audioUrls(JSONObject data, String agent, boolean download) {
         List<AudioSource> urls = new ArrayList<>();
         String master = data.optString("hlsManifestUrl");
-        if (isHttps(master)) {
+        if (!download && isHttps(master)) {
             try {
                 String playlist = get(master, agent, false);
                 String hls = audioPlaylist(master, playlist);
-                if (hls != null) urls.add(new AudioSource(hls, agent));
+                if (hls != null) urls.add(new AudioSource(hls, agent, 0));
             } catch (IOException ignored) {
                 // A progressive AAC stream can still be available.
             }
@@ -237,7 +313,10 @@ final class MusicApi {
             for (int index = 0; index < formats.length(); index++) {
                 JSONObject format = item(formats, index);
                 String url = format.optString("url");
-                if (format.optInt("itag") == itag && isHttps(url)) urls.add(new AudioSource(url, agent));
+                long bytes = format.optLong("contentLength");
+                if (format.optInt("itag") == itag && isHttps(url) && (!download || bytes > 0)) {
+                    urls.add(new AudioSource(url, agent, bytes));
+                }
             }
         }
         return urls;
@@ -289,7 +368,9 @@ final class MusicApi {
         if (id.isEmpty()) id = child(child(row, "navigationEndpoint"), "watchEndpoint").optString("videoId");
         String name = title.optString("text").trim();
         if (!id.matches("[A-Za-z0-9_-]{11}") || name.isEmpty()) return null;
-        return new Track(id, name, item(column(columns, 1), 0).optString("text").trim());
+        JSONObject artist = item(column(columns, 1), 0);
+        String artistId = child(child(artist, "navigationEndpoint"), "browseEndpoint").optString("browseId");
+        return new Track(id, name, artist.optString("text").trim(), Browse.image(row.optJSONObject("thumbnail")), artistId);
     }
 
     private static JSONArray column(JSONArray columns, int index) {
@@ -405,7 +486,7 @@ final class MusicApi {
         return connection;
     }
 
-    private static String read(HttpsURLConnection connection) throws IOException {
+    static String read(HttpsURLConnection connection) throws IOException {
         int status = connection.getResponseCode();
         if (status != 200) throw new IOException("YouTube HTTP " + status);
         try (InputStream input = connection.getInputStream()) {

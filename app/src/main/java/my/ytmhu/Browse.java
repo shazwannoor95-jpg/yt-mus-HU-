@@ -128,7 +128,8 @@ final class Browse {
         String id = child(nav, "watchEndpoint").optString("videoId");
         if (title.isEmpty()) return null;
         if (id.matches("[A-Za-z0-9_-]{11}")) {
-            return new Card(title, subtitle, art, "", new MusicApi.Track(id, title, subtitle));
+            return new Card(title, subtitle, art, "", new MusicApi.Track(id, title, subtitle, art,
+                    child(child(item(array(child(tile, "subtitle"), "runs"), 0), "navigationEndpoint"), "browseEndpoint").optString("browseId")));
         }
         String browseId = child(nav, "browseEndpoint").optString("browseId");
         if (browseId.isEmpty()) {
@@ -143,9 +144,14 @@ final class Browse {
         return displayText(column.optJSONObject("text"));
     }
 
-    private static String image(JSONObject object) {
+    static String image(JSONObject object) {
         if (object == null) return "";
-        JSONArray thumbs = array(child(child(object, "musicThumbnailRenderer"), "thumbnail"), "thumbnails");
+        return thumbnail(child(child(object, "musicThumbnailRenderer"), "thumbnail"));
+    }
+
+    static String thumbnail(JSONObject object) {
+        if (object == null) return "";
+        JSONArray thumbs = array(object, "thumbnails");
         for (int i = 0; i < thumbs.length(); i++) {
             JSONObject thumbnail = item(thumbs, i);
             String url = thumbnail.optString("url");

@@ -351,6 +351,7 @@ public final class PlaybackService extends Service {
             endVideo();
             return;
         }
+        main.postDelayed(candidate.checkSurface, 500);
         seekRevision++;
         publish(state, message);
     }
@@ -388,6 +389,7 @@ public final class PlaybackService extends Service {
         VideoSwitch discarded = video;
         video = null;
         main.removeCallbacks(discarded.timeout);
+        main.removeCallbacks(discarded.checkSurface);
         discarded.player.release();
     }
 
@@ -397,6 +399,13 @@ public final class PlaybackService extends Service {
         final Surface surface;
         final int generation;
         final Runnable timeout = () -> { if (waiting()) discardVideo(); };
+        final Runnable checkSurface = new Runnable() {
+            @Override public void run() {
+                if (video != VideoSwitch.this || !videoActive()) return;
+                if (!surface.isValid()) endVideo();
+                else main.postDelayed(this, 500);
+            }
+        };
         int attempts, lastPosition;
 
         VideoSwitch(MediaPlayer song, int generation, Surface surface) {

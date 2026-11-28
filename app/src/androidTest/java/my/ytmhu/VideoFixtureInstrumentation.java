@@ -61,6 +61,8 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
         int width = format.getInteger(MediaFormat.KEY_WIDTH);
         int height = format.getInteger(MediaFormat.KEY_HEIGHT);
         require(width == 320 && height == 180, "Fixture dimensions");
+        require(!VideoRenditions.rank(Collections.singletonList(format), PerformancePolicy.Profile.ULTRA_LITE,
+                height, 0, VideoRenditions::platformDecoder).isEmpty(), "Platform advertises a compatible local decoder");
 
         Context target = getTargetContext();
         File localAudio = File.createTempFile("ytm-video-fixture-", ".m4a", target.getCacheDir());

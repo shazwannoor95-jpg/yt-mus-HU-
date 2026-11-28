@@ -26,3 +26,7 @@ Use the tracked parity matrix and implementation status in docs/ as the handoff 
 Target Android API 27+, ARM32/ARM64, GLES 2.0 and the reference 1024 × 600 head unit. Auto performance is the default, with Ultra Lite and Lite fallbacks, Balanced for 512 MB–2 GB and High Quality for capable 2–4 GB and larger devices. Prioritize uninterrupted audio and bounded background work. Prefer a 10–20 MB APK and do not exceed 30 MB without explicit approval. Song is the startup mode. Video requires reliable permitted parked-use state and must obey OEM restrictions. Preserve the authentication lock above across all port phases.
 
 Develop and exercise independent video components with authorized media in an emulator or permitted non-driver-display environment. Driver-display video requires an OEM-supported, reliable parked signal. An unknown state keeps driver-display playback unavailable.
+
+## Continuous checkpoint development
+
+Continue compatible parity work independently through meaningful, verified checkpoints. Preserve existing work, record the exact next unfinished task, and keep working on independent features when another feature requires unavailable hardware, authorization, or provider access. Revisit a known blocker when there is new evidence. Report each verification limit and obtain the required authorization for irreversible actions.

@@ -14,16 +14,25 @@ import android.os.SystemClock;
 import android.view.PixelCopy;
 import android.view.Surface;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+
 /** Draws a dimmed sample of the current video only. It never drives playback. */
 final class VideoAmbientLight extends Drawable {
     private static final int WIDTH = 12, HEIGHT = 8;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
+    private final Executor readback;
     private Bitmap capture, backdrop;
     private int[] incoming, smoothed;
     private long nextSample;
-    private int generation, failures;
+    private volatile int generation;
+    private int failures;
     private boolean visible, pending;
+
+    VideoAmbientLight(Executor readback) {
+        this.readback = readback;
+    }
 
     static int intervalMs(PerformancePolicy.Profile profile) {
         if (profile == PerformancePolicy.Profile.HIGH_QUALITY) return 375;
@@ -43,11 +52,24 @@ final class VideoAmbientLight extends Drawable {
         nextSample = now + interval;
         pending = true;
         int requested = generation;
+        Bitmap destination = capture;
         try {
-            PixelCopy.request(surface, capture, result -> finishSample(requested, result), main);
-        } catch (IllegalArgumentException unavailable) {
+            readback.execute(() -> copyFrame(surface, destination, requested));
+        } catch (RejectedExecutionException closed) {
             finishSample(requested, PixelCopy.ERROR_SOURCE_INVALID);
         }
+    }
+
+    private void copyFrame(Surface surface, Bitmap destination, int requested) {
+        if (requested == generation && surface.isValid()) {
+            try {
+                PixelCopy.request(surface, destination, result -> finishSample(requested, result), main);
+                return;
+            } catch (IllegalArgumentException | IllegalStateException unavailable) {
+                // A released output can race the validation above.
+            }
+        }
+        main.post(() -> finishSample(requested, PixelCopy.ERROR_SOURCE_INVALID));
     }
 
     private void finishSample(int requested, int result) {

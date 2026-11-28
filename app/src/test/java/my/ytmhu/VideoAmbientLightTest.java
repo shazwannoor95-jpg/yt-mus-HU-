@@ -3,8 +3,14 @@ package my.ytmhu;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.robolectric.Shadows.shadowOf;
 
 import android.graphics.Color;
+import android.graphics.ImageFormat;
+import android.media.ImageReader;
+import android.os.Looper;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
@@ -29,5 +35,23 @@ public final class VideoAmbientLightTest {
         assertTrue(Color.blue(next) > Color.red(next));
         for (int i = 0; i < 20; i++) next = VideoAmbientLight.dimAndBlend(next, Color.WHITE);
         assertTrue(Color.red(next) <= 114 && Color.green(next) <= 114 && Color.blue(next) <= 114);
+    }
+
+    @Test public void queuesAtMostOneBackgroundCopyAndDiscardsAResetBeforeItRuns() {
+        List<Runnable> queuedCopies = new ArrayList<>();
+        VideoAmbientLight light = new VideoAmbientLight(queuedCopies::add);
+        try (ImageReader reader = ImageReader.newInstance(32, 32, ImageFormat.PRIVATE, 2)) {
+            light.sample(reader.getSurface(), PerformancePolicy.Profile.BALANCED);
+            light.sample(reader.getSurface(), PerformancePolicy.Profile.HIGH_QUALITY);
+            assertEquals(1, queuedCopies.size());
+            light.reset();
+            queuedCopies.remove(0).run();
+            shadowOf(Looper.getMainLooper()).idle();
+            light.sample(reader.getSurface(), PerformancePolicy.Profile.BALANCED);
+            assertEquals(1, queuedCopies.size());
+            light.reset();
+            queuedCopies.remove(0).run();
+            shadowOf(Looper.getMainLooper()).idle();
+        }
     }
 }

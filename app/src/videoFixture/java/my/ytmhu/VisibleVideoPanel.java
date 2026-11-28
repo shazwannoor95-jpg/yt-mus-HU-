@@ -41,7 +41,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     private final DemoMedia media;
     private final ExecutorService loading;
     private final DevicePerformance performance;
-    private final VideoAmbientLight ambient = new VideoAmbientLight();
+    private final VideoAmbientLight ambient;
     private final Button light;
     private final FrameLayout frame;
     private final TextureView picture;
@@ -74,6 +74,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         this.media = media;
         this.loading = loading;
         this.performance = performance;
+        ambient = new VideoAmbientLight(loading);
         setOrientation(VERTICAL);
         setBackgroundColor(0xff18131b);
         LinearLayout modes = new LinearLayout(activity);

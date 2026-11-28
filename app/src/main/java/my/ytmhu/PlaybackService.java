@@ -331,7 +331,7 @@ public final class PlaybackService extends Service {
             next.setOnPreparedListener(ready -> {
                 if (!candidate.waiting()) return;
                 if (ready.getVideoWidth() <= 0 || ready.getVideoHeight() <= 0
-                        || Math.abs((long) ready.getDuration() - duration()) > 1000) {
+                        || !VideoPairing.equalDuration(duration(), ready.getDuration())) {
                     discardVideo();
                     return;
                 }

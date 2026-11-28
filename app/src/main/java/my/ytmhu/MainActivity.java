@@ -115,6 +115,10 @@ public final class MainActivity extends Activity {
     private int browseRow, browseOffset;
     private String browseKey = "";
     private final Map<String, BrowsePage> pages = new LinkedHashMap<>(6, 0.75f, true);
+    private final BrowseHistory musicHistory = new BrowseHistory();
+    private Button historyBack, historyForward;
+    private boolean restoringBrowseHistory;
+    private boolean restoreHistoryScroll;
 
     private static final class BrowsePage {
         final List<Browse.Shelf> shelves;
@@ -308,6 +312,7 @@ public final class MainActivity extends Activity {
         LinearLayout searchBar = new LinearLayout(this);
         musicSearchBar = searchBar;
         searchBar.setGravity(Gravity.CENTER_VERTICAL);
+        addBrowseControls(searchBar);
         query = new EditText(this);
         query.setSingleLine();
         query.setTextSize(viewport.songSp);
@@ -767,7 +772,11 @@ public final class MainActivity extends Activity {
     @Override public void onBackPressed() {
         if (miniPlayer.getVisibility() == View.VISIBLE) miniPlayer.setVisibility(View.GONE);
         else if (expanded.getVisibility() == View.VISIBLE) closePlayer();
-        else if (!"Home".equals(page)) navigate("Home");
+        else if (musicHistory.canMove(-1)) moveBrowseHistory(-1);
+        else if (!"Home".equals(page)) {
+            musicHistory.visit(null);
+            navigate("Home");
+        }
         else super.onBackPressed();
     }
 
@@ -952,6 +961,13 @@ public final class MainActivity extends Activity {
     }
 
     private void loadPage(boolean refresh, String continuation) {
+        if (!restoringBrowseHistory && restoreHistoryScroll) {
+            restoreHistoryScroll = false;
+            browseRow = browseOffset = 0;
+        }
+        if (!restoringBrowseHistory && !browseKey.isEmpty()) {
+            musicHistory.capture(scroll.getFirstVisiblePosition(), scroll.rowOffset());
+        }
         BrowsePage previous = pages.get(browseKey);
         if (previous != null) {
             previous.row = scroll.getFirstVisiblePosition();
@@ -968,6 +984,12 @@ public final class MainActivity extends Activity {
             settingsView = null;
         }
         boolean settingsPage = "Account".equals(page);
+        if (!restoringBrowseHistory) {
+            musicHistory.visit(BrowseHistory.Route.publicRoute(page, collectionId, collectionTitle,
+                    query.getText().toString().trim(), mood, searchType));
+        }
+        if (historyBack != null) historyBack.setEnabled(musicHistory.canMove(-1));
+        if (historyForward != null) historyForward.setEnabled(musicHistory.canMove(1));
         musicSearchBar.setVisibility(settingsPage ? View.GONE : View.VISIBLE);
         scroll.setVisibility(settingsPage ? View.GONE : View.VISIBLE);
         if (settingsPage) {
@@ -1027,8 +1049,11 @@ public final class MainActivity extends Activity {
             renderBrowsePage(key, cached);
             return;
         }
-        results.add(() -> label("Loading…", viewport.songSp, MUTED));
-        publishRows(0, 0);
+        if (refresh && cached != null) renderBrowsePage(key, cached);
+        else {
+            results.add(() -> label("Loading…", viewport.songSp, MUTED));
+            publishRows(0, 0);
+        }
         pageTask = network.submit(() -> {
             try {
                 api.setSession(cookies);
@@ -1060,6 +1085,11 @@ public final class MainActivity extends Activity {
                 }
                 runOnUiThread(() -> {
                     if (generation != current || isDestroyed()) return;
+                    if (refresh && cached != null) {
+                        loaded.row = scroll.getFirstVisiblePosition();
+                        loaded.offset = scroll.rowOffset();
+                        loaded.filter = cached.filter;
+                    }
                     pages.put(destination, loaded);
                     while (pages.size() > (performance.profile().workers == 1 ? 2 : 4)) {
                         pages.remove(pages.keySet().iterator().next());
@@ -1082,6 +1112,60 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void addBrowseControls(LinearLayout row) {
+        if (viewport.width >= 860) {
+            historyBack = browseButton(row, "‹", "Back", () -> moveBrowseHistory(-1));
+            historyForward = browseButton(row, "›", "Forward", () -> moveBrowseHistory(1));
+            browseButton(row, "↻", "Refresh", this::refreshBrowse);
+        } else {
+            Button actions = transport(row, Icons.MORE, "Browse navigation", null);
+            actions.setOnClickListener(anchor -> {
+                PopupMenu menu = new PopupMenu(this, anchor);
+                if (musicHistory.canMove(-1)) addAction(menu, "Back", () -> moveBrowseHistory(-1));
+                if (musicHistory.canMove(1)) addAction(menu, "Forward", () -> moveBrowseHistory(1));
+                addAction(menu, "Refresh", this::refreshBrowse);
+                menu.show();
+            });
+        }
+    }
+
+    private Button browseButton(LinearLayout row, String glyph, String label, Runnable action) {
+        Button button = transport(row, glyph, label, action);
+        button.setTypeface(appearance.font);
+        return button;
+    }
+
+    private void moveBrowseHistory(int delta) {
+        if (!browseKey.isEmpty()) musicHistory.capture(scroll.getFirstVisiblePosition(), scroll.rowOffset());
+        BrowseHistory.Route route = musicHistory.move(delta);
+        if (route == null) return;
+        page = route.page;
+        mood = route.mood;
+        collectionId = route.id;
+        collectionTitle = route.title;
+        searchType = route.scope;
+        if ("Search".equals(route.page)) query.setText(route.query);
+        browseRow = route.row;
+        browseOffset = route.offset;
+        restoreHistoryScroll = true;
+        restoringBrowseHistory = true;
+        try {
+            loadPage();
+        } finally {
+            restoringBrowseHistory = false;
+        }
+    }
+
+    private void refreshBrowse() {
+        BrowseHistory.Route route = musicHistory.current();
+        if (route != null && "Search".equals(route.page)) {
+            CharSequence draft = query.getText().toString();
+            query.setText(route.query);
+            loadPage(true);
+            query.setText(draft);
+        } else loadPage(true);
+    }
+
     private void finishPlaylistPage(String destination, BrowsePage content) {
         content.loadingMore = false;
         content.row = scroll.getFirstVisiblePosition();
@@ -1094,8 +1178,9 @@ public final class MainActivity extends Activity {
         results.clear();
         if (content.tracks != null) showTracks(content.tracks);
         else showBrowse(content);
-        publishRows(browseRow != 0 || browseOffset != 0 ? browseRow : content.row,
-                browseRow != 0 || browseOffset != 0 ? browseOffset : content.offset);
+        boolean restorePosition = restoreHistoryScroll || browseRow != 0 || browseOffset != 0;
+        publishRows(restorePosition ? browseRow : content.row, restorePosition ? browseOffset : content.offset);
+        restoreHistoryScroll = false;
         browseRow = browseOffset = 0;
     }
 

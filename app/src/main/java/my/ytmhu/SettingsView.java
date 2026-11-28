@@ -236,7 +236,7 @@ final class SettingsView extends LinearLayout {
         toggle("Lyrics", "Lyrics sources", "LRCLIB", "Line-synced and plain text.", "lrclib", true);
         toggle("Lyrics", "Lyrics sources", "YouTube Music", "Plain text.", "ytLyrics", true);
         toggle("Lyrics", "Lyrics sources", "Unison", "Line timing and translations supplied with the lyrics when available.", "unisonLyrics", false);
-        choice("Lyrics", "Lyrics sources", "Source priority", null, "lyricsFirst", "lrclib",
+        choice("Lyrics", "Lyrics sources", "Source priority", "Matched timed lyrics take precedence over plain lyrics.", "lyricsFirst", "lrclib",
                 new String[]{"LRCLIB first", "YouTube Music first", "Unison first"}, new String[]{"lrclib", "youtube", "unison"});
 
         choice("Appearance", "Background", "Frosted glass", "Use blurred album artwork behind translucent panels.", "glass",

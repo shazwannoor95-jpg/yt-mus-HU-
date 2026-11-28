@@ -57,33 +57,67 @@ final class Lyrics {
         this.source = source;
     }
 
+    interface Source {
+        Lyrics fetch(String provider) throws Exception;
+    }
+
     static Lyrics load(MusicApi.Track track, int duration, AppSettings prefs) throws Exception {
-        boolean lrclib = prefs.flag("lrclib", true);
-        boolean youtube = prefs.flag("ytLyrics", true);
-        boolean youtubeFirst = "youtube".equals(prefs.text("lyricsFirst", "lrclib"));
-        boolean unison = prefs.flag("unisonLyrics", false);
-        if (!lrclib && !youtube && !unison) return new Lyrics(Collections.emptyList(), "", "");
-        boolean failed = false;
         String first = prefs.text("lyricsFirst", "lrclib");
         String[] order = "unison".equals(first) ? new String[]{"unison", "lrclib", "youtube"}
-                : youtubeFirst ? new String[]{"youtube", "lrclib", "unison"} : new String[]{"lrclib", "youtube", "unison"};
-        for (String provider : order) {
+                : "youtube".equals(first) ? new String[]{"youtube", "lrclib", "unison"}
+                : new String[]{"lrclib", "youtube", "unison"};
+        return select(order, duration, provider -> {
+            switch (provider) {
+                case "unison": return prefs.flag("unisonLyrics", false) ? unison(track, duration) : null;
+                case "youtube": return prefs.flag("ytLyrics", true)
+                        ? new Lyrics(Collections.emptyList(), new MusicApi(prefs).plainLyrics(track.id), "YouTube Music") : null;
+                default: return prefs.flag("lrclib", true) ? lrclib(track, duration) : null;
+            }
+        });
+    }
+
+    // Provider priority orders timed candidates and, separately, plain fallbacks.
+    // YouTube Music only supplies plain text, so it cannot win before timed checks finish.
+    static Lyrics select(String[] order, int duration, Source source) throws Exception {
+        Lyrics[] fallback = new Lyrics[order.length];
+        boolean failed = false;
+        for (int i = 0; i < order.length; i++) {
             if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
-            if ("youtube".equals(provider) ? !youtube : "unison".equals(provider) ? !unison : !lrclib) continue;
+            if ("youtube".equals(order[i])) continue;
             try {
-                Lyrics result;
-                switch (provider) {
-                    case "youtube": result = new Lyrics(Collections.emptyList(), new MusicApi(prefs).plainLyrics(track.id), "YouTube Music"); break;
-                    case "unison": result = unison(track, duration); break;
-                    default: result = lrclib(track, duration);
+                Lyrics result = source.fetch(order[i]);
+                if (result != null && result.timedFor(duration)) return result;
+                if (result != null && !result.plain.trim().isEmpty()) {
+                    fallback[i] = new Lyrics(Collections.emptyList(), result.plain, result.source, result.language);
                 }
-                if (result != null && (!result.lines.isEmpty() || !result.plain.isEmpty())) return result;
+            } catch (InterruptedException cancelled) {
+                throw cancelled;
+            } catch (Exception unavailable) {
+                failed = true;
+            }
+        }
+        for (int i = 0; i < order.length; i++) {
+            if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+            if (fallback[i] != null) return fallback[i];
+            if (!"youtube".equals(order[i])) continue;
+            try {
+                Lyrics result = source.fetch(order[i]);
+                if (result != null && !result.plain.trim().isEmpty()) return result;
+            } catch (InterruptedException cancelled) {
+                throw cancelled;
             } catch (Exception unavailable) {
                 failed = true;
             }
         }
         if (failed) throw new IOException("A lyrics source could not be reached.");
         return new Lyrics(Collections.emptyList(), "", "");
+    }
+
+    boolean timed() { return !lines.isEmpty(); }
+
+    private boolean timedFor(int duration) {
+        if (!timed() || !lines.stream().anyMatch(line -> !line.text.trim().isEmpty())) return false;
+        return duration <= 0 || lines.get(lines.size() - 1).millis <= (long) duration + 1000;
     }
 
     private static Lyrics unison(MusicApi.Track track, int duration) throws Exception {
@@ -99,6 +133,8 @@ final class Lyrics {
             if (connection.getResponseCode() == 404) return null;
             JSONObject data = new JSONObject(MusicApi.read(connection)).optJSONObject("data");
             if (data == null) return null;
+            String recordingId = data.optString("videoId", "");
+            if (!recordingId.isEmpty() && !track.id.equals(recordingId)) return null;
             String text = data.optString("lyrics");
             if (text.length() > 512_000) return null;
             switch (data.optString("format")) {
@@ -132,10 +168,11 @@ final class Lyrics {
             JSONArray results = new JSONArray(MusicApi.read(connection));
             JSONObject match = bestMatch(results, track.title, track.artist, duration);
             if (match != null) {
-                List<Line> lines = parse(match.optString("syncedLyrics", ""));
+                int matchedDuration = durationMillis(match);
+                List<Line> lines = duration > 0 && matchedDuration > 0
+                        ? parse(match.optString("syncedLyrics", "")) : Collections.emptyList();
                 String plain = match.isNull("plainLyrics") ? "" : match.optString("plainLyrics");
-                if (!lines.isEmpty()) return new Lyrics(lines, plain, "LRCLIB");
-                if (!plain.isEmpty()) return new Lyrics(lines, plain, "LRCLIB");
+                return new Lyrics(lines, plain, "LRCLIB");
             }
         } finally {
             connection.disconnect();
@@ -150,17 +187,25 @@ final class Lyrics {
             JSONObject entry = options.optJSONObject(i);
             if (entry == null || entry.optBoolean("instrumental")) continue;
             if (!same(entry.optString("trackName"), title) || !same(entry.optString("artistName"), artist)) continue;
-            int ms = (int) (entry.optDouble("duration", 0) * 1000);
-            int difference = duration > 0 && ms > 0 ? Math.abs(duration - ms) : 0;
-            if (difference > 15000) continue;
-            String synced = entry.optString("syncedLyrics", "");
-            long score = (synced.isEmpty() || "null".equals(synced) ? 0 : 20000) - difference;
+            int ms = durationMillis(entry);
+            int difference = duration > 0 && ms > 0 ? Math.abs(duration - ms) : 4001;
+            if (duration > 0 && ms > 0 && difference > 4000) continue;
+            String plain = entry.isNull("plainLyrics") ? "" : entry.optString("plainLyrics");
+            List<Line> lines = difference <= 4000 ? parse(entry.optString("syncedLyrics", "")) : Collections.emptyList();
+            boolean timed = new Lyrics(lines, "", "LRCLIB").timedFor(duration);
+            if (!timed && plain.trim().isEmpty()) continue;
+            long score = (timed ? 8002 : 0) - difference;
             if (score > bestScore) {
                 best = entry;
                 bestScore = score;
             }
         }
         return best;
+    }
+
+    private static int durationMillis(JSONObject entry) {
+        double millis = entry.optDouble("duration", 0) * 1000;
+        return millis > 0 && millis <= Integer.MAX_VALUE ? (int) Math.round(millis) : 0;
     }
 
     private static boolean same(String a, String b) {

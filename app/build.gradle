@@ -10,8 +10,8 @@ android {
         applicationId 'my.ytmhu'
         minSdk 27
         targetSdk 32
-        versionCode 14
-        versionName '0.4.9'
+        versionCode 15
+        versionName '0.4.10'
     }
 
     compileOptions {

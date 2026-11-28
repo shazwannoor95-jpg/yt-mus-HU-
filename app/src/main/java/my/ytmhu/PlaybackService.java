@@ -52,6 +52,8 @@ public final class PlaybackService extends Service {
     private PendingIntent stopCommand;
     private Future<?> request;
     private boolean prepared;
+    private int pendingSeek = -1;
+    private int inFlightSeek = -1;
     private boolean signInRequired;
     private boolean foreground;
     private boolean started;
@@ -208,11 +210,34 @@ public final class PlaybackService extends Service {
     boolean isShuffle() { return shuffle; }
     boolean isRepeat() { return repeat; }
     int duration() { return prepared ? player.getDuration() : 0; }
-    int position() { return prepared ? player.getCurrentPosition() : 0; }
+    int position() {
+        if (!prepared) return 0;
+        return pendingSeek >= 0 ? pendingSeek : player.getCurrentPosition();
+    }
+
+    boolean buffering() { return state == PlaybackState.STATE_BUFFERING; }
 
     void seekTo(int where) {
         if (!prepared) return;
-        player.seekTo(Math.max(0, Math.min(where, duration())));
+        pendingSeek = Math.max(0, Math.min(where, duration()));
+        if (inFlightSeek < 0) startSeek();
+        publish(state, message);
+    }
+
+    private void startSeek() {
+        inFlightSeek = pendingSeek;
+        player.setOnSeekCompleteListener(this::seekCompleted);
+        player.seekTo(inFlightSeek, MediaPlayer.SEEK_CLOSEST);
+    }
+
+    private void seekCompleted(MediaPlayer source) {
+        if (source != player || inFlightSeek < 0) return;
+        if (pendingSeek != inFlightSeek) {
+            startSeek();
+            return;
+        }
+        pendingSeek = inFlightSeek = -1;
+        publish(state, message);
     }
 
     void toggleShuffle() {
@@ -425,7 +450,7 @@ public final class PlaybackService extends Service {
         if (canSkip(-1)) actions |= PlaybackState.ACTION_SKIP_TO_PREVIOUS;
         if (canSkip(1)) actions |= PlaybackState.ACTION_SKIP_TO_NEXT;
         session.setPlaybackState(new PlaybackState.Builder().setActions(actions)
-                .setState(state, prepared ? player.getCurrentPosition() : 0, playing() ? prefs.speed() : 0f).build());
+                .setState(state, position(), playing() ? prefs.speed() : 0f).build());
         if (foreground) promote();
         if (changed != null) changed.run();
     }
@@ -449,6 +474,7 @@ public final class PlaybackService extends Service {
     }
 
     private void releasePlayer() {
+        pendingSeek = inFlightSeek = -1;
         fading = false;
         ++fade;
         reporter.pause();

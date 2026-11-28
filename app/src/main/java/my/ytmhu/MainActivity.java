@@ -148,8 +148,9 @@ public final class MainActivity extends Activity {
                 syncVolume();
             }
             syncLyricFrames();
-            boolean lyricsVisible = expanded.getVisibility() == View.VISIBLE && expanded.lyricsVisible();
-            if (lyricsVisible && !lyricFramesRunning) expanded.tick(playback == null ? 0 : playback.position());
+            boolean lyricsVisible = expanded.getVisibility() == View.VISIBLE && expanded.lyricsVisible()
+                    && expanded.hasTimedLyrics();
+            if (lyricsVisible && playback != null && !lyricFramesRunning) expanded.syncPosition();
             main.postDelayed(this, lyricsVisible ? 250 : performance.profile().clockMs);
         }
     };
@@ -176,7 +177,7 @@ public final class MainActivity extends Activity {
         long interval = performance.profile() == PerformancePolicy.Profile.BALANCED ? 32_000_000 : 16_000_000;
         if (nanos - lastLyricFrame >= interval) {
             lastLyricFrame = nanos;
-            expanded.tick(playback.position());
+            expanded.syncPosition();
         }
         android.view.Choreographer.getInstance().postFrameCallback(lyricFrame);
     }
@@ -1057,6 +1058,9 @@ public final class MainActivity extends Activity {
             case "lyricRoman": case "lyricRomanSize": case "lyricTranslation": case "lyricTranslationSize": case "lyricTarget": case "lyricHanLanguage":
                 expanded.refreshLyricAppearance();
                 break;
+            case "lyricsOffset": case "lineTrim":
+                expanded.syncPosition();
+                break;
             case "lrclib": case "ytLyrics": case "unisonLyrics": case "lyricsFirst":
                 expanded.invalidateLyrics();
                 break;
@@ -1433,6 +1437,7 @@ public final class MainActivity extends Activity {
             expandedButton.setContentDescription("Expand Now Playing");
         }
         expanded.setVisibility(View.GONE);
+        expanded.hideLyrics();
         browser.setVisibility(View.VISIBLE);
         syncLyricFrames();
     }

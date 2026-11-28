@@ -17,7 +17,7 @@ final class Browse {
     static final String SAVED_PLAYLISTS = "4qmFsgIrEhdGRW11c2ljX2xpa2VkX3BsYXlsaXN0cxoQZ2dNR0tnUUlBQkFCb0FZQg%3D%3D";
 
     enum Search {
-        Songs(""), Albums("EgWKAQIYAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D"),
+        All(""), Songs(""), Albums("EgWKAQIYAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D"),
         Artists("EgWKAQIgAWoQEAMQBBAJEAoQBRAREBAQFQ%3D%3D"),
         Playlists("EgeKAQQoADgBahIQAxAEEAkQDhAKEAUQERAQEBU%3D");
 
@@ -89,6 +89,13 @@ final class Browse {
         JSONArray rows = array(sections, "contents");
         for (int i = 0; i < rows.length() && out.size() < 16; i++) {
             JSONObject row = item(rows, i);
+            JSONObject top = row.optJSONObject("musicCardShelfRenderer");
+            if (top != null) {
+                Card ranked = topResult(top);
+                if (ranked != null && !(hideExplicit && ranked.track != null && ranked.track.explicit)) {
+                    out.add(new Shelf("Top result", java.util.Collections.singletonList(ranked), true));
+                }
+            }
             JSONObject carousel = row.optJSONObject("musicCarouselShelfRenderer");
             JSONObject grid = row.optJSONObject("gridRenderer");
             JSONObject list = row.optJSONObject("musicPlaylistShelfRenderer");
@@ -113,6 +120,23 @@ final class Browse {
             if (!cards.isEmpty()) out.add(new Shelf(title, cards, artwork));
         }
         return out;
+    }
+
+    private static Card topResult(JSONObject renderer) {
+        JSONObject title = item(array(child(renderer, "title"), "runs"), 0);
+        String label = title.optString("text").trim();
+        if (label.isEmpty()) return null;
+        JSONObject endpoint = child(title, "navigationEndpoint");
+        String subtitle = displayText(renderer.optJSONObject("subtitle"));
+        String art = image(renderer.optJSONObject("thumbnail"));
+        String video = child(endpoint, "watchEndpoint").optString("videoId");
+        if (video.matches("[A-Za-z0-9_-]{11}")) {
+            MusicApi.Track track = MusicApi.trackWithByline(video, label, art, MusicApi.explicit(renderer),
+                    array(child(renderer, "subtitle"), "runs"));
+            return new Card(label, subtitle, art, "", track);
+        }
+        String browseId = child(endpoint, "browseEndpoint").optString("browseId");
+        return browseId.isEmpty() ? null : new Card(label, subtitle, art, browseId, null);
     }
 
     private static Card card(JSONObject item) {
@@ -140,9 +164,9 @@ final class Browse {
         String id = child(nav, "watchEndpoint").optString("videoId");
         if (title.isEmpty()) return null;
         if (id.matches("[A-Za-z0-9_-]{11}")) {
-            return new Card(title, subtitle, art, "", new MusicApi.Track(id, title, subtitle, art,
-                    child(child(item(array(child(tile, "subtitle"), "runs"), 0), "navigationEndpoint"), "browseEndpoint").optString("browseId"),
-                    MusicApi.explicit(tile)));
+            MusicApi.Track track = MusicApi.trackWithByline(id, title, art, MusicApi.explicit(tile),
+                    array(child(tile, "subtitle"), "runs"));
+            return new Card(title, subtitle, art, "", track);
         }
         String browseId = child(nav, "browseEndpoint").optString("browseId");
         if (browseId.isEmpty()) {

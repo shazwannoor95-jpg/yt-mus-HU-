@@ -101,7 +101,7 @@ public final class MainActivity extends Activity {
     private String accountErrorCode = "";
     private boolean retryAccount;
     private String page = "Home";
-    private Browse.Search searchType = Browse.Search.Songs;
+    private Browse.Search searchType = Browse.Search.All;
     private String collectionId = "";
     private String collectionTitle = "";
     private String mood = "";
@@ -318,6 +318,7 @@ public final class MainActivity extends Activity {
         Button submit = button(smallSearch ? Icons.SEARCH : "Search", this::search);
         if (smallSearch) submit.setTypeface(appearance.icons);
         submit.setContentDescription("Search");
+        submit.setOnLongClickListener(anchor -> { showRecentSearches(anchor); return true; });
         searchBar.addView(submit, spacedWidth(smallSearch ? 48 : 78, Viewport.TOUCH));
         accountButton = button("Sign in", this::openAccount);
         searchBar.addView(accountButton, spacedWidth(smallSearch ? 48 : 96, Viewport.TOUCH));
@@ -724,12 +725,30 @@ public final class MainActivity extends Activity {
 
     private void search() {
         if (query.getText().toString().trim().isEmpty()) {
+            showRecentSearches(query);
+            return;
+        }
+        SearchHistory.record(prefs, query.getText().toString());
+        getSystemService(InputMethodManager.class).hideSoftInputFromWindow(query.getWindowToken(), 0);
+        searchType = Browse.Search.All;
+        navigate("Search");
+    }
+
+    private void showRecentSearches(View anchor) {
+        List<String> searches = SearchHistory.recent(prefs);
+        if (searches.isEmpty()) {
             query.setError("Enter a song or artist.");
             return;
         }
-        getSystemService(InputMethodManager.class).hideSoftInputFromWindow(query.getWindowToken(), 0);
-        searchType = Browse.Search.Songs;
-        navigate("Search");
+        PopupMenu menu = new PopupMenu(this, anchor);
+        for (String recent : searches) {
+            addAction(menu, recent, () -> {
+                query.setText(recent);
+                search();
+            });
+        }
+        addAction(menu, "Clear recent searches", () -> SearchHistory.clear(prefs));
+        menu.show();
     }
 
     private void openAccount() {
@@ -1502,14 +1521,7 @@ public final class MainActivity extends Activity {
         addAction(popup, "Play next", () -> { if (playback != null) playback.enqueue(track, true); });
         addAction(popup, "Add to queue", () -> { if (playback != null) playback.enqueue(track, false); });
         addAction(popup, "Start radio", () -> startRadio(track));
-        if (!track.artistId.isEmpty()) {
-            addAction(popup, "Go to artist", () -> {
-                closePlayer();
-                collectionId = track.artistId;
-                collectionTitle = track.artist;
-                navigate("Collection");
-            });
-        }
+        if (!track.artists.isEmpty()) addAction(popup, "Go to artist", () -> chooseArtist(track.artists));
         if (queueIndex >= 0 && playback != null) {
             if (queueIndex > Math.max(0, playback.queueIndex() + 1)) {
                 addAction(popup, "Move up", () -> { if (isQueueEntry(track, queueIndex)) playback.moveAt(queueIndex, -1); });
@@ -1522,6 +1534,24 @@ public final class MainActivity extends Activity {
             }
         }
         popup.show();
+    }
+
+    private void chooseArtist(List<MusicApi.ArtistCredit> artists) {
+        if (artists.size() == 1) {
+            openArtist(artists.get(0));
+            return;
+        }
+        String[] names = artists.stream().map(credit -> credit.name).toArray(String[]::new);
+        new AlertDialog.Builder(this).setTitle("Go to artist")
+                .setItems(names, (dialog, index) -> openArtist(artists.get(index)))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void openArtist(MusicApi.ArtistCredit artist) {
+        closePlayer();
+        collectionId = artist.browseId;
+        collectionTitle = artist.name;
+        navigate("Collection");
     }
 
     private boolean isQueueEntry(MusicApi.Track track, int index) {

@@ -1,13 +1,13 @@
 # Full port implementation status
 
-Baseline Android commit `d45de60c6b26712bc31cec17c14ee4c6bcc61413` (0.4.10), upstream `99d404b9d78d0edb72361eb8c5c465ae6af57979`. Baseline checkout had two untracked reports, which remain local. Experimental branch is `experiment/automatic-timed-lyrics`.
+Baseline Android commit `d45de60c6b26712bc31cec17c14ee4c6bcc61413` (0.4.10), upstream `99d404b9d78d0edb72361eb8c5c465ae6af57979`. Baseline checkout had two untracked reports, which remain local. Lyrics checkpoint `b66afd3fefab89a90213b359c61dff28b88916ed` is published on `experiment/automatic-timed-lyrics`. Discovery checkpoint branch is `experiment/music-discovery`.
 
 | Phase | Checkpoint and next work |
 | --- | --- |
 | 1. Baseline and mapping | Imported all 91 existing audit rows with stable IDs. Auth baseline compared. Upstream provider, display and pairing logic traced. |
 | 2. Lyrics and playback | Implemented automatic Unison/LRCLIB discovery, direct LRCLIB lookup, bounded normalized matching and timed cache. Bundled IPADIC, default-on lyrics alternates, locale selection and TTML karaoke shipped in the checkpoint. Other provider formats, alternate vocal lanes and word-aligned alternates remain open. |
 | 3. Song/Video | Source investigation began. Upstream `backend.rs::music_video` tries a YouTube Premium paired relationship and falls back to ranked anonymous matches in `ytm.rs::searched_video/sure_video`. `video.rs` handles the native desktop decoder pipeline and frame presentation. AndroidX Media3 and Android MediaPlayer are candidate backends for a verified permitted stream. The TEST9278B has no evidenced supported parking signal. A permit and a verified video source are required before driver-display playback. |
-| 4. Discovery and context actions | Android already has a Go to artist action in `MainActivity.showSongMenu` when a browse ID exists. Multiple artist identities and richer browse navigation remain open. See matrix for album, playlist, history and recommendation gaps. |
+| 4. Discovery and context actions | 0.4.12 adds validated multi-artist navigation, local recent searches, and a mixed search scope with provider-ranked top result. Artist, album and library page gaps remain open. See matrix for album, playlist, history and recommendation gaps. |
 | 5. Playback and advanced features | Existing foreground playback remains. Queue restore, advanced transitions and desktop listening integrations remain open. |
 | 6. UI, themes and settings | Prior responsive layouts and theme assets retained. Missing rendering and system-window equivalents tracked individually. |
 | 7. Remaining parity | Unchanged rows remain in the matrix for follow-up, including desktop-only equivalents and provider constraints. |
@@ -21,7 +21,7 @@ Upstream `src/lyrics.rs` ranks genuine line/word results over plain sources. It 
 
 `JapaneseDictionary` loads original IPADIC 0.9.0 binary resources directly from the signed APK only when needed. The resources were extracted from the upstream JAR with SHA-256 `24909fd751c0b439f7af5131b080eb65bc85062f0c4977ca4a71c76abe74e0b6`. Existing Kuromoji Apache-2.0 and IPADIC/NAIST attribution remains packaged. No app dependency is added by the dictionary or karaoke port. Romanization and translation are on by default with saved overrides retained. The Cloud translation fallback remains conditional on explicit user configuration. Prior local-dictionary JVM estimates are documented in the 0.4.9 notes. New head-unit memory and installed footprint have not been measured.
 
-Resume from the verified 0.4.11 branch tip. Follow the Phase 3 evidence boundary for driver-display video and use the [parity matrix](FULL_PORT_PARITY_MATRIX.md) for the next source-mapped feature. The pinned desktop source and Android playback continue to use independent implementations. [Upstream lyrics](https://github.com/grapedjuice/ytm-rs/blob/99d404b9d78d0edb72361eb8c5c465ae6af57979/src/lyrics.rs)
+Resume from the verified 0.4.12 discovery branch tip. Follow the Phase 3 evidence boundary for driver-display video and use the [parity matrix](FULL_PORT_PARITY_MATRIX.md) for the next source-mapped feature. The pinned desktop source and Android playback continue to use independent implementations. [Upstream lyrics](https://github.com/grapedjuice/ytm-rs/blob/99d404b9d78d0edb72361eb8c5c465ae6af57979/src/lyrics.rs)
 
 ## Verified checkpoint
 
@@ -30,3 +30,18 @@ Gradle passed 46 tests, including all prior and unmodified authentication tests.
 Protected auth code and dependency declarations match the baseline. Only version fields changed in build configuration/manifest. Application ID `my.ytmhu`, signed certificate, and API 27 minimum were verified. No account storage operations were introduced. Live account session persistence and deployment were unverified. Both lyric endpoints failed through the workspace proxy with HTTP 403 on CONNECT. No emulator or hardware device was attached to validate live timing, progressive rendering or playback.
 
 Artifact: `downloads/ytm-head-unit-0.4.11-debug.apk`.
+
+
+## 0.4.12 discovery mapping
+
+Desktop ytm-rs carries ordered artist credits and navigates by their browse endpoints. The secondary InnerTune reference uses a dedicated artist-ID route and Metrolist separates song menus from artist screens. Android now retains verified YouTube Music artist/user-channel IDs across track parsing, browse cards, radio and queue insertion. **Go to artist** opens an identified artist directly or asks the listener to choose among credited artists. It does not guess by display name. The original primary artist display remains intact for existing lyric and stream behavior.
+
+Mixed search now sends an unfiltered query on the existing provider route, uses the provider’s ranked top result where present, and retains the explicit Songs, Albums, Artists and Playlists scopes. Holding **Search** or submitting an empty query opens up to eight recent local queries. These are independently clearable. No remote suggestion endpoint or new credentials were added. The remaining discovery work starts with dedicated artist/album navigation and the library/history gaps in the matrix.
+
+Song/Video source mapping remains in Phase 3 above. No video view or start action was enabled on hardware lacking a reliable parked-use signal. A validated video backend and parking source, followed by audio recovery and decoder tests, remain prerequisites for enabling that mode.
+
+The 0.4.12 suite passed 49 tests with zero failures or skips. Three new API 27 tests cover stable artist identity through queue insertion, persisted bounded search history and ranked mixed-search rendering. The initial full run hit the production dictionary's heap-headroom fallback in an existing fixture. The final run gave the host test worker a 1 GiB heap and still ran the simulated low-memory cases. The app's memory settings stayed unchanged.
+
+The signed APK is 15,509,354 bytes. Application ID, API 27 minimum and signing certificate match 0.4.11. No native libraries or new dependencies were introduced. Android uses Kuromoji Core 0.9.0 under Apache-2.0, IPADIC/NAIST data, Korean Romanizer 2.0.1 under MIT, and Unicode Unihan data with bundled notices. AGP, JUnit and Robolectric remain build/test tools. REA and Craft Anything verified APK differences. Artifact: `downloads/ytm-head-unit-0.4.12-debug.apk`.
+
+Protected auth code and dependencies remain unchanged. The `MusicApi` diff is limited to track metadata, search request parameters and radio byline parsing. Changes in `MainActivity` and `PlaybackService` are outside protected account paths. The existing auth tests passed unchanged, including AccountVerification (7), GoogleSignIn (2), Android31 (9) and the legacy WebView advice test. No account data operations were added. Session persistence and discovery on a live device are unverified.

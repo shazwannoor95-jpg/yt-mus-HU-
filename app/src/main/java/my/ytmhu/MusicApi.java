@@ -214,8 +214,18 @@ final class MusicApi {
         }
     }
 
+    static final class ArtistCredit {
+        final String name, browseId;
+
+        ArtistCredit(String name, String browseId) {
+            this.name = name;
+            this.browseId = browseId;
+        }
+    }
+
     static final class Track {
-        final String id, title, artist, artwork, artistId;
+        final String id, title, artist, artwork;
+        final List<ArtistCredit> artists;
         final boolean explicit;
 
         Track(String id, String title, String artist, String artwork, String artistId) {
@@ -223,13 +233,38 @@ final class MusicApi {
         }
 
         Track(String id, String title, String artist, String artwork, String artistId, boolean explicit) {
+            this(id, title, artist, artwork, explicit, artistId.isEmpty() ? java.util.Collections.emptyList()
+                    : java.util.Collections.singletonList(new ArtistCredit(artist, artistId)));
+        }
+
+        Track(String id, String title, String artist, String artwork, boolean explicit, List<ArtistCredit> artists) {
             this.id = id;
             this.title = title;
             this.artist = artist;
             this.artwork = artwork;
-            this.artistId = artistId;
             this.explicit = explicit;
+            this.artists = java.util.Collections.unmodifiableList(new ArrayList<>(artists));
         }
+    }
+
+    static Track trackWithByline(String id, String title, String artwork, boolean explicit, JSONArray runs) {
+        Map<String, ArtistCredit> artists = new LinkedHashMap<>();
+        for (int i = 0; i < runs.length() && artists.size() < 16; i++) {
+            JSONObject run = item(runs, i);
+            JSONObject endpoint = child(child(run, "navigationEndpoint"), "browseEndpoint");
+            String browseId = endpoint.optString("browseId");
+            String type = child(child(endpoint, "browseEndpointContextSupportedConfigs"),
+                    "browseEndpointContextMusicConfig").optString("pageType");
+            String name = run.optString("text").trim();
+            if (!name.isEmpty() && browseId.matches("UC[A-Za-z0-9_-]{22}")
+                    && (type.isEmpty() || "MUSIC_PAGE_TYPE_ARTIST".equals(type)
+                        || "MUSIC_PAGE_TYPE_USER_CHANNEL".equals(type))) {
+                artists.putIfAbsent(browseId, new ArtistCredit(name, browseId));
+            }
+        }
+        List<ArtistCredit> credits = new ArrayList<>(artists.values());
+        String display = credits.isEmpty() ? item(runs, 0).optString("text").trim() : credits.get(0).name;
+        return new Track(id, title, display, artwork, explicit, credits);
     }
 
     List<Track> search(String query) throws Exception {
@@ -239,7 +274,9 @@ final class MusicApi {
     }
 
     JSONObject search(String query, String filter) throws Exception {
-        return web("search", new JSONObject().put("query", query).put("params", filter));
+        JSONObject body = new JSONObject().put("query", query);
+        if (!filter.isEmpty()) body.put("params", filter);
+        return web("search", body);
     }
 
     String plainLyrics(String videoId) throws Exception {
@@ -273,10 +310,8 @@ final class MusicApi {
             String id = song.optString("videoId");
             String title = displayText(song.optJSONObject("title"));
             if (!id.matches("[A-Za-z0-9_-]{11}") || title.isEmpty()) continue;
-            JSONObject artist = item(array(child(song, "shortBylineText"), "runs"), 0);
-            String artistId = child(child(artist, "navigationEndpoint"), "browseEndpoint").optString("browseId");
-            tracks.putIfAbsent(id, new Track(id, title, artist.optString("text"),
-                    Browse.thumbnail(song.optJSONObject("thumbnail")), artistId, explicit(song)));
+            tracks.putIfAbsent(id, trackWithByline(id, title, Browse.thumbnail(song.optJSONObject("thumbnail")),
+                    explicit(song), array(child(song, "shortBylineText"), "runs")));
         }
         return new ArrayList<>(tracks.values());
     }
@@ -476,10 +511,7 @@ final class MusicApi {
         if (id.isEmpty()) id = child(child(row, "navigationEndpoint"), "watchEndpoint").optString("videoId");
         String name = title.optString("text").trim();
         if (!id.matches("[A-Za-z0-9_-]{11}") || name.isEmpty()) return null;
-        JSONObject artist = item(column(columns, 1), 0);
-        String artistId = child(child(artist, "navigationEndpoint"), "browseEndpoint").optString("browseId");
-        return new Track(id, name, artist.optString("text").trim(), Browse.image(row.optJSONObject("thumbnail")),
-                artistId, explicit(row));
+        return trackWithByline(id, name, Browse.image(row.optJSONObject("thumbnail")), explicit(row), column(columns, 1));
     }
 
     static boolean explicit(JSONObject row) {

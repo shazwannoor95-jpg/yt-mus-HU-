@@ -58,6 +58,7 @@ public final class PlaybackService extends Service {
     private MediaSession session;
     private MediaPlayer player;
     private VideoSwitch video;
+    private java.util.Map<String, java.io.File> demoAudio = Collections.emptyMap();
     private boolean restoringSong;
     private AudioManager audio;
     private AudioFocusRequest focus;
@@ -168,6 +169,11 @@ public final class PlaybackService extends Service {
     List<MusicApi.Track> queueSnapshot() { return new ArrayList<>(queue); }
     int queueIndex() { return index; }
     MusicApi.Track currentTrack() { return index >= 0 ? queue.get(index) : null; }
+
+    void installDemoAudio(java.util.Map<String, java.io.File> inputs) {
+        if (!DemoPlaybackPolicy.permitted(this)) throw new IllegalStateException("Demo playback unavailable");
+        demoAudio = new java.util.HashMap<>(inputs);
+    }
 
     void playAt(int position) {
         if (position >= 0 && position < queue.size()
@@ -620,6 +626,13 @@ public final class PlaybackService extends Service {
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist).build());
         session.setActive(true);
         publish(PlaybackState.STATE_BUFFERING, "Loading…");
+        if (DemoPlaybackPolicy.PACKAGE.equals(getPackageName())) {
+            java.io.File local = demoAudio.get(track.id);
+            if (local == null || !local.isFile()) fail("Bundled demo audio is unavailable.");
+            else prepare(Collections.singletonList(new MusicApi.AudioSource(
+                    android.net.Uri.fromFile(local).toString(), "", local.length(), 0)), 0, current);
+            return;
+        }
         if (!started) startService(new Intent(this, PlaybackService.class));
         String cookies = GoogleSignIn.cookies();
         request = network.submit(() -> {

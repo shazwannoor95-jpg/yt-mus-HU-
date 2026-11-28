@@ -29,7 +29,7 @@ Develop and exercise independent video components with authorized media in an em
 
 ## Rule 12 — Absolute Lyrics Engine Lock
 
-State: **PENDING FINAL VERIFICATION**. Preserve the verified lyrics behavior during unrelated work. Finish targeted lyrics work in a dedicated checkpoint. Save the exact commit and APK version, protected file and method inventory, resources, dependencies, preference defaults and regression results. Mark the state **ACTIVE PERMANENT LOCK** only after verified runtime behavior and explicit user acceptance of that checkpoint.
+State: **ACTIVE PERMANENT LOCK**. The user explicitly accepted the lyrics experience in APK **0.4.32**, Git commit `6504bf1328c2386afc51e5ed19d9869010f7ca60`. The accepted lyrics implementation originated in `92e1d0752ee26655befb5b0c69d3a31f34085afa`. The protected inventory and known limitations are documented in `docs/FULL_PORT_IMPLEMENTATION_STATUS.md`.
 
 After activation, changes to protected lyrics code and behavior require explicit user approval. Protection covers provider order, discovery and matching, caching, LRC/TTML parsing, timestamp validation, timing and scroll, original/alternate rendering, theme lyric parameters, karaoke, all motion and fades, romanization and the bundled Japanese dictionary, translation and English defaults, lyrics preferences, storage, assets, dependencies and regression tests. In shared files protect lyrics-related methods, call sites and behavior. Keep video, theme, playback, refactoring and performance changes isolated from the lyrics path. Compare the protected scope against the accepted baseline and rerun unchanged lyrics regressions for every meaningful checkpoint. Record new lyrics issues and request explicit approval before changing protected behavior.
 

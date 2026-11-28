@@ -1,7 +1,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <application android:label="YTM Video Fixture" tools:replace="android:label">
-        <activity android:name="my.ytmhu.VideoFixtureActivity" android:exported="false"
-            android:screenOrientation="landscape" />
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <application android:label="YTM Song / Video Demo" tools:replace="android:label">
+        <activity android:name="my.ytmhu.MainActivity" android:enabled="false" android:exported="false"
+            tools:replace="android:exported" />
+        <activity-alias android:name=".Launcher_classic" tools:node="remove" />
+        <activity-alias android:name=".Launcher_official" tools:node="remove" />
+        <activity-alias android:name=".Launcher_smilering" tools:node="remove" />
+        <activity-alias android:name=".Launcher_gear" tools:node="remove" />
+        <activity-alias android:name=".Launcher_wave" tools:node="remove" />
+        <activity-alias android:name=".Launcher_vinyl" tools:node="remove" />
+        <activity-alias android:name=".Launcher_lyrics" tools:node="remove" />
+        <activity-alias android:name=".Launcher_duet" tools:node="remove" />
+        <activity-alias android:name=".Launcher_kawarp" tools:node="remove" />
+        <activity-alias android:name=".Launcher_fluent" tools:node="remove" />
+        <activity android:name="my.ytmhu.VideoFixtureActivity" android:exported="true"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

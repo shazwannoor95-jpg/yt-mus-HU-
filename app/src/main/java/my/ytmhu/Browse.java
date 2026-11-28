@@ -2,10 +2,13 @@
 package my.ytmhu;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import static my.ytmhu.MusicApi.array;
 import static my.ytmhu.MusicApi.child;
@@ -26,6 +29,38 @@ final class Browse {
 
         Search(String params) {
             this.params = params;
+        }
+    }
+
+    enum Library {
+        Playlists("continuation", SAVED_PLAYLISTS, false),
+        Songs("browseId", "FEmusic_liked_videos", true),
+        Albums("continuation", "4qmFsgIoEhRGRW11c2ljX2xpa2VkX2FsYnVtcxoQZ2dNR0tnUUlBQkFCb0FZQg%3D%3D", false),
+        Artists("browseId", "FEmusic_library_corpus_artists", false),
+        History("browseId", "FEmusic_history", true);
+
+        final String key, value;
+        final boolean tracks;
+
+        Library(String key, String value, boolean tracks) {
+            this.key = key;
+            this.value = value;
+            this.tracks = tracks;
+        }
+
+        JSONObject request() throws JSONException {
+            JSONObject body = new JSONObject().put(key, value);
+            if (this == History) body.put("params", "oggECgIIAQ%3D%3D");
+            return body;
+        }
+
+        boolean accepts(Card card) {
+            switch (this) {
+                case Artists: return artistId(card.browseId);
+                case Albums: return MusicApi.AlbumCredit.isBrowseId(card.browseId);
+                case Playlists: return card.browseId.matches("VL[A-Za-z0-9_-]{2,190}");
+                default: return card.track != null;
+            }
         }
     }
 
@@ -145,6 +180,87 @@ final class Browse {
         sections = find(page, "sectionListRenderer", 0);
         return sections == null ? new ArrayList<>() : parseShelves(array(sections, "contents"), hideExplicit, MAX_COLLECTION_TRACKS);
     }
+
+    static Shelf libraryShelf(JSONObject page, Library tab, boolean hideExplicit) {
+        JSONObject sections = find(page, "sectionListContinuation", 0);
+        if (sections == null) sections = find(page, "sectionListRenderer", 0);
+        JSONArray contents = array(sections == null ? new JSONObject() : sections, "contents");
+        List<Card> cards = new ArrayList<>();
+        String next = "";
+        for (int i = 0; i < Math.min(contents.length(), 32) && cards.size() < MAX_COLLECTION_TRACKS; i++) {
+            JSONObject section = item(contents, i);
+            JSONObject grid = section.optJSONObject("gridRenderer");
+            JSONObject shelf = grid != null ? grid : section.optJSONObject("musicShelfRenderer");
+            if (shelf == null) continue;
+            JSONArray rows = array(shelf, grid != null ? "items" : "contents");
+            cards.addAll(libraryCards(rows, tab, hideExplicit, MAX_COLLECTION_TRACKS - cards.size()));
+            if (next.isEmpty() && tab != Library.History) next = cursor(shelf, rows);
+        }
+        return uniqueLibrary(tab, new Shelf(tab.name(), cards, !tab.tracks, next));
+    }
+
+    static Shelf libraryPage(JSONObject response, Library tab, boolean hideExplicit) {
+        JSONObject container = find(response, "appendContinuationItemsAction", 0);
+        JSONArray rows = container == null ? null : container.optJSONArray("continuationItems");
+        if (rows == null) {
+            JSONObject continuation = child(response, "continuationContents");
+            container = continuation.optJSONObject("gridContinuation");
+            if (container == null) container = continuation.optJSONObject("musicShelfContinuation");
+            if (container == null) container = continuation.optJSONObject("musicPlaylistShelfContinuation");
+            if (container == null) return null;
+            rows = container.optJSONArray("items");
+            if (rows == null) rows = container.optJSONArray("contents");
+            if (rows == null) return null;
+        }
+        return new Shelf(tab.name(), libraryCards(rows, tab, hideExplicit, MAX_COLLECTION_TRACKS),
+                !tab.tracks, cursor(container, rows));
+    }
+
+    static Shelf appendLibraryPage(Library tab, Shelf current, Shelf next) {
+        List<Card> cards = new ArrayList<>(current.cards);
+        cards.addAll(next.cards);
+        Shelf merged = uniqueLibrary(tab, new Shelf(current.title, cards, current.preferArtwork, next.cursor));
+        if (merged.cards.size() == current.cards.size() || current.cursor.equals(next.cursor)) {
+            return new Shelf(merged.title, merged.cards, merged.preferArtwork);
+        }
+        return merged;
+    }
+
+    private static List<Card> libraryCards(JSONArray rows, Library tab, boolean hideExplicit, int limit) {
+        List<Card> cards = new ArrayList<>();
+        for (int i = 0; i < Math.min(rows.length(), MAX_COLLECTION_TRACKS * 2) && cards.size() < limit; i++) {
+            Card card = card(item(rows, i));
+            if (card != null && tab.accepts(card) && !(hideExplicit && card.track != null && card.track.explicit)) cards.add(card);
+        }
+        return cards;
+    }
+
+    private static Shelf uniqueLibrary(Library tab, Shelf shelf) {
+        Set<String> seen = new LinkedHashSet<>();
+        List<Card> unique = new ArrayList<>();
+        for (Card card : shelf.cards) {
+            if (seen.add(tab.tracks ? card.track.id : card.browseId)) unique.add(card);
+            if (unique.size() >= MAX_COLLECTION_TRACKS) break;
+        }
+        return new Shelf(shelf.title, unique, shelf.preferArtwork, unique.size() == MAX_COLLECTION_TRACKS ? "" : shelf.cursor);
+    }
+
+    static List<Shelf> artistShelves(List<Shelf> original, String currentArtist, boolean releases) {
+        List<Shelf> filtered = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (Shelf shelf : original) {
+            List<Card> cards = new ArrayList<>();
+            for (Card card : shelf.cards) {
+                String id = card.browseId;
+                boolean valid = releases ? MusicApi.AlbumCredit.isBrowseId(id) : artistId(id) && !id.equals(currentArtist);
+                if (valid && seen.add(id)) cards.add(card);
+            }
+            if (!cards.isEmpty()) filtered.add(new Shelf(shelf.title, cards, true));
+        }
+        return filtered;
+    }
+
+    static boolean artistId(String id) { return id.matches("UC[A-Za-z0-9_-]{22}"); }
 
     static Shelf playlistPage(JSONObject response, boolean hideExplicit) {
         JSONObject appended = find(response, "appendContinuationItemsAction", 0);

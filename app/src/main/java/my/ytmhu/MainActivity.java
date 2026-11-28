@@ -104,6 +104,7 @@ public final class MainActivity extends Activity {
     private boolean retryAccount;
     private String page = "Home";
     private Browse.Search searchType = Browse.Search.All;
+    private Browse.Library libraryTab = Browse.Library.Playlists;
     private String collectionId = "";
     private String collectionTitle = "";
     private Browse.Card collectionCard;
@@ -357,6 +358,7 @@ public final class MainActivity extends Activity {
             collectionTitle = savedState.getString("collectionTitle", "");
             mood = savedState.getString("mood", "");
             searchType = Browse.Search.valueOf(savedState.getString("searchType", "Songs"));
+            libraryTab = Browse.Library.valueOf(savedState.getString("libraryTab", "Playlists"));
             Bundle song = savedState.getBundle("download");
             if (song != null) pendingDownload = new MusicApi.Track(song.getString("id"), song.getString("title"),
                     song.getString("artist"), "", "");
@@ -756,6 +758,7 @@ public final class MainActivity extends Activity {
         state.putString("collectionTitle", collectionTitle);
         state.putString("mood", mood);
         state.putString("searchType", searchType.name());
+        state.putString("libraryTab", libraryTab.name());
         state.putString("settingsTab", settingsTab);
         state.putInt("settingsScroll", settingsView == null ? 0 : settingsView.scrollPosition());
         state.putInt("browseRow", scroll.getFirstVisiblePosition());
@@ -1021,41 +1024,50 @@ public final class MainActivity extends Activity {
             return;
         }
         String active = page;
+        boolean libraryPage = "Library".equals(active);
+        boolean collectionPage = isCollectionPage(active);
+        Browse.Library selectedTab = libraryTab;
         Browse.Search type = searchType;
         String input = query.getText().toString().trim();
         String selectedMood = mood;
         String selectedCollection = collectionId;
         String cookies = account.isEmpty() ? "" : GoogleSignIn.cookies();
         boolean hideExplicit = prefs.flag("hideExplicit", false);
-        String key = active + "\n" + !cookies.isEmpty() + "\n" + hideExplicit;
+        String key = (collectionPage ? "Collection" : active) + "\n" + !cookies.isEmpty() + "\n" + hideExplicit;
         if ("Search".equals(active)) key += "\n" + type + "\n" + input;
         if ("Home".equals(active)) key += "\n" + selectedMood;
-        if ("Collection".equals(active)) key += "\n" + selectedCollection;
+        if (collectionPage) key += "\n" + selectedCollection;
+        if (libraryPage) key += "\n" + selectedTab.name();
         final String destination = key;
         BrowsePage cached = pages.get(key);
-        int continuationShelf = !continuation.isEmpty() && cached != null && "Collection".equals(active)
-                && selectedCollection.startsWith("VL") ? mainTrackShelf(cached) : -1;
+        int continuationShelf = -1;
+        if (!continuation.isEmpty() && cached != null && !cached.shelves.isEmpty()) {
+            if (libraryPage) continuationShelf = 0;
+            else if ("Collection".equals(active) && selectedCollection.startsWith("VL")) continuationShelf = mainTrackShelf(cached);
+        }
         if (continuationShelf >= 0 && continuation.equals(cached.shelves.get(continuationShelf).cursor)) {
+            int shelfIndex = continuationShelf;
             cached.loadingMore = true;
             renderBrowsePage(key, cached);
             pageTask = network.submit(() -> {
                 try {
                     api.setSession(cookies);
-                    Browse.Shelf next = Browse.playlistPage(api.browse(new JSONObject().put("continuation", continuation)),
-                            hideExplicit);
-                    if (next == null) throw new java.io.IOException("Missing playlist page");
+                    JSONObject response = api.browse(new JSONObject().put("continuation", continuation));
+                    Browse.Shelf next = libraryPage ? Browse.libraryPage(response, selectedTab, hideExplicit)
+                            : Browse.playlistPage(response, hideExplicit);
+                    if (next == null) throw new java.io.IOException("Missing continuation page");
                     runOnUiThread(() -> {
                         if (generation != current || isDestroyed()) return;
-                        cached.shelves.set(continuationShelf,
-                                Browse.appendPlaylistPage(cached.shelves.get(continuationShelf), next));
-                        finishPlaylistPage(destination, cached);
+                        Browse.Shelf previousShelf = cached.shelves.get(shelfIndex);
+                        cached.shelves.set(shelfIndex, libraryPage ? Browse.appendLibraryPage(selectedTab, previousShelf, next)
+                                : Browse.appendPlaylistPage(previousShelf, next));
+                        finishBrowsePage(destination, cached);
                     });
                 } catch (Exception unavailable) {
                     runOnUiThread(() -> {
                         if (generation != current || isDestroyed()) return;
-                        finishPlaylistPage(destination, cached);
-                        android.widget.Toast.makeText(this, "Couldn't load more songs. Try again.",
-                                android.widget.Toast.LENGTH_SHORT).show();
+                        finishBrowsePage(destination, cached);
+                        toast(libraryPage ? "Couldn't load more library items. Try again." : "Couldn't load more songs. Try again.");
                     });
                 }
             });
@@ -1067,6 +1079,7 @@ public final class MainActivity extends Activity {
         }
         if (refresh && cached != null) renderBrowsePage(key, cached);
         else {
+            if (libraryPage) addLibraryTabs();
             results.add(() -> label("Loading…", viewport.songSp, MUTED));
             publishRows(0, 0);
         }
@@ -1079,21 +1092,26 @@ public final class MainActivity extends Activity {
                 } else {
                     JSONObject data;
                     if ("Search".equals(active)) data = api.search(input, type.params);
+                    else if (libraryPage) data = api.browse(selectedTab.request());
                     else {
                         JSONObject request = new JSONObject();
                         switch (active) {
-                            case "Library": request.put("continuation", Browse.SAVED_PLAYLISTS); break;
                             case "Explore": request.put("browseId", "FEmusic_explore"); break;
-                            case "Collection": request.put("browseId", selectedCollection); break;
+                            case "Collection": case "Discography": case "Related artists":
+                                request.put("browseId", selectedCollection); break;
                             default:
                                 request.put("browseId", "FEmusic_home");
                                 if (!selectedMood.isEmpty()) request.put("params", selectedMood);
                         }
                         data = api.browse(request);
                     }
-                    if ("Collection".equals(active)) {
+                    if (collectionPage) {
                         loaded = new BrowsePage(Browse.collectionShelves(data, hideExplicit), Collections.emptyList(),
                                 null, Browse.collectionHeader(data, selectedCollection));
+                    } else if (libraryPage) {
+                        List<Browse.Shelf> library = new ArrayList<>(1);
+                        library.add(Browse.libraryShelf(data, selectedTab, hideExplicit));
+                        loaded = new BrowsePage(library, Collections.emptyList(), null);
                     } else {
                         loaded = new BrowsePage(Browse.shelves(data, hideExplicit),
                                 "Home".equals(active) ? Browse.moods(data) : Collections.emptyList(), null);
@@ -1120,6 +1138,7 @@ public final class MainActivity extends Activity {
                         return;
                     }
                     results.clear();
+                    if (libraryPage) addLibraryTabs();
                     results.add(() -> label("Could not load " + active.toLowerCase(java.util.Locale.ROOT) + ".", viewport.songSp, MUTED));
                     results.add(() -> button("Retry", this::loadPage));
                     publishRows(0, 0);
@@ -1182,7 +1201,7 @@ public final class MainActivity extends Activity {
         } else loadPage(true);
     }
 
-    private void finishPlaylistPage(String destination, BrowsePage content) {
+    private void finishBrowsePage(String destination, BrowsePage content) {
         content.loadingMore = false;
         content.row = scroll.getFirstVisiblePosition();
         content.offset = scroll.rowOffset();
@@ -1510,6 +1529,10 @@ public final class MainActivity extends Activity {
     }
 
     private void showBrowse(BrowsePage content) {
+        if ("Library".equals(page)) {
+            showLibrary(content);
+            return;
+        }
         if ("Search".equals(page)) showSearchFilters();
         if (!content.moods.isEmpty()) {
             results.add(() -> chipRow(row -> {
@@ -1524,11 +1547,17 @@ public final class MainActivity extends Activity {
                 }
             }));
         }
-        if ("Library".equals(page)) heading("Playlists");
-        else if ("Explore".equals(page)) heading("Explore");
-        boolean collection = "Collection".equals(page);
+        if ("Explore".equals(page)) heading("Explore");
+        boolean collection = isCollectionPage(page);
         if (collection) {
             results.add(() -> collectionHeader(content));
+            if (Browse.artistId(collectionId)) showArtistTabs();
+            if (!"Collection".equals(page)) {
+                List<Browse.Shelf> shelves = Browse.artistShelves(content.shelves, collectionId, "Discography".equals(page));
+                if (shelves.isEmpty()) results.add(() -> label("Nothing returned for this section.", viewport.songSp, MUTED));
+                for (Browse.Shelf shelf : shelves) addShelf(shelf, new int[1]);
+                return;
+            }
         }
         if (content.shelves.isEmpty()) results.add(() -> label("No music to show.", viewport.songSp, MUTED));
         int mainTracks = collection ? mainTrackShelf(content) : -1;
@@ -1536,6 +1565,55 @@ public final class MainActivity extends Activity {
             if (i == mainTracks) addCollectionTracks(content, i);
             else addShelf(content.shelves.get(i), content.shelfStart(i));
         }
+    }
+
+    private static boolean isCollectionPage(String route) {
+        return "Collection".equals(route) || "Discography".equals(route) || "Related artists".equals(route);
+    }
+
+    private void addLibraryTabs() {
+        heading("Library");
+        results.add(() -> chipRow(row -> {
+            for (Browse.Library tab : Browse.Library.values()) {
+                Button chip = button(tab.name(), () -> {
+                    if (libraryTab == tab) return;
+                    libraryTab = tab;
+                    loadPage();
+                });
+                chip.setSelected(libraryTab == tab);
+                if (chip.isSelected()) chip.setTextColor(accent());
+                row.addView(chip, spacedWidth(-2, Viewport.TOUCH));
+            }
+        }));
+    }
+
+    private void showLibrary(BrowsePage content) {
+        addLibraryTabs();
+        Browse.Shelf shelf = content.shelves.get(0);
+        if (shelf.cards.isEmpty()) results.add(() -> label("No " + libraryTab.name().toLowerCase(java.util.Locale.ROOT)
+                + " returned.", viewport.songSp, MUTED));
+        else addShelf(shelf, content.shelfStart(0));
+        if (!shelf.cursor.isEmpty()) {
+            results.add(() -> {
+                Button more = button(content.loadingMore ? "Loading more…" : "Load more " + shelf.title.toLowerCase(java.util.Locale.ROOT),
+                        () -> loadPage(false, shelf.cursor));
+                more.setEnabled(!content.loadingMore);
+                return more;
+            });
+        }
+    }
+
+    private void showArtistTabs() {
+        results.add(() -> chipRow(row -> {
+            for (String route : new String[]{"Collection", "Discography", "Related artists"}) {
+                Button chip = button("Collection".equals(route) ? "Overview" : route, () -> {
+                    if (!route.equals(page)) navigate(route);
+                });
+                chip.setSelected(route.equals(page));
+                if (chip.isSelected()) chip.setTextColor(accent());
+                row.addView(chip, spacedWidth(-2, Viewport.TOUCH));
+            }
+        }));
     }
 
     private View collectionHeader(BrowsePage content) {
@@ -1665,7 +1743,7 @@ public final class MainActivity extends Activity {
         for (Browse.Card card : shelf.cards) if (card.track != null) tracks.add(card.track);
         String title = shelf.title.isEmpty() ? "Songs" : shelf.title;
         boolean songList = tracks.size() == shelf.cards.size();
-        if (songList && "Collection".equals(page)) {
+        if (songList && ("Collection".equals(page) || "Library".equals(page))) {
             if (!shelf.title.isEmpty()) heading(shelf.title);
             for (int i = 0; i < tracks.size(); i++) {
                 int index = i;

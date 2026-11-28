@@ -29,8 +29,10 @@ final class BrowseHistory {
                 case "Home": return new Route(page, "", "", "", mood, Browse.Search.All);
                 case "Explore": return new Route(page, "", "", "", "", Browse.Search.All);
                 case "Search": return new Route(page, "", "", query, "", scope);
+                case "Discography": case "Related artists":
+                    return Browse.artistId(id) ? new Route(page, id, title, "", "", Browse.Search.All) : null;
                 case "Collection":
-                    if (id.matches("UC[A-Za-z0-9_-]{22}") || id.matches("(MPREb|OLAK5uy)[A-Za-z0-9_-]{2,190}")) {
+                    if (Browse.artistId(id) || MusicApi.AlbumCredit.isBrowseId(id)) {
                         return new Route(page, id, title, "", "", Browse.Search.All);
                     }
                     return null;

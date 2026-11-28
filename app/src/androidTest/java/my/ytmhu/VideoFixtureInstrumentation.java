@@ -3,6 +3,10 @@ package my.ytmhu;
 
 import android.app.Activity;
 import android.app.Instrumentation;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.ImageFormat;
 import android.media.Image;
@@ -12,9 +16,18 @@ import android.media.MediaFormat;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
+import android.os.SystemClock;
+import android.net.Uri;
 import android.os.Looper;
-import android.view.Surface;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -48,70 +61,132 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
         int width = format.getInteger(MediaFormat.KEY_WIDTH);
         int height = format.getInteger(MediaFormat.KEY_HEIGHT);
         require(width == 320 && height == 180, "Fixture dimensions");
-        AtomicReference<String> audioError = new AtomicReference<>();
-        AtomicReference<String> videoError = new AtomicReference<>();
-        CountDownLatch frames = new CountDownLatch(2);
-        Handler main = new Handler(Looper.getMainLooper());
 
-        try (ImageReader output = ImageReader.newInstance(width, height, ImageFormat.PRIVATE, 3)) {
+        Context target = getTargetContext();
+        File localAudio = File.createTempFile("ytm-video-fixture-", ".m4a", target.getCacheDir());
+        CountDownLatch connected = new CountDownLatch(1);
+        AtomicReference<PlaybackService> bound = new AtomicReference<>();
+        ServiceConnection connection = new ServiceConnection() {
+            @Override public void onServiceConnected(ComponentName name, IBinder binder) {
+                bound.set(((PlaybackService.LocalBinder) binder).service());
+                connected.countDown();
+            }
+
+            @Override public void onServiceDisconnected(ComponentName name) { bound.set(null); }
+        };
+        try {
+            try (InputStream clip = getContext().getAssets().open(AUDIO);
+                 FileOutputStream out = new FileOutputStream(localAudio)) {
+                byte[] buffer = new byte[4096];
+                for (int n; (n = clip.read(buffer)) >= 0;) out.write(buffer, 0, n);
+            }
+            Intent intent = new Intent(target, PlaybackService.class);
+            boolean binding = onMain(() -> target.bindService(intent, connection, Context.BIND_AUTO_CREATE));
+            require(binding, "Bind existing PlaybackService");
+            try {
+                require(connected.await(5, TimeUnit.SECONDS), "PlaybackService bind timed out");
+                runServiceFixture(bound.get(), localAudio, width, height);
+            } finally {
+                onMain(() -> {
+                    target.unbindService(connection);
+                    return null;
+                });
+            }
+        } finally {
+            localAudio.delete();
+        }
+    }
+
+    private void runServiceFixture(PlaybackService service, File audioFile, int width, int height) throws Exception {
+        Field activePlayer = PlaybackService.class.getDeclaredField("player");
+        activePlayer.setAccessible(true);
+        Field currentIndex = PlaybackService.class.getDeclaredField("index");
+        currentIndex.setAccessible(true);
+        Field session = PlaybackService.class.getDeclaredField("session");
+        session.setAccessible(true);
+        Method prepare = PlaybackService.class.getDeclaredMethod("prepare", List.class, int.class, int.class);
+        prepare.setAccessible(true);
+
+        onMain(() -> {
+            service.enqueue(new MusicApi.Track("fixture-recording", "Fixture", "Local", "", ""), false);
+            currentIndex.setInt(service, 0);
+            prepare.invoke(service, Collections.singletonList(new MusicApi.AudioSource(
+                    Uri.fromFile(audioFile).toString(), "", audioFile.length(), 0)), 0, 0);
+            return null;
+        });
+
+        await(service::playing, "Local audio running");
+        MediaPlayer song = onMain(() -> (MediaPlayer) activePlayer.get(service));
+        Object originalSession = onMain(() -> session.get(service));
+        onMain(() -> {
+            song.setLooping(true);
+            return null;
+        });
+
+        CountDownLatch frames = new CountDownLatch(2);
+        try (ImageReader output = ImageReader.newInstance(width, height, ImageFormat.PRIVATE, 3);
+             AssetFileDescriptor video = getContext().getAssets().openFd(VIDEO)) {
             output.setOnImageAvailableListener(reader -> {
                 try (Image frame = reader.acquireLatestImage()) {
                     if (frame != null && frame.getTimestamp() > 0) frames.countDown();
                 }
-            }, main);
+            }, new Handler(Looper.getMainLooper()));
 
-            MediaPlayer song = prepare(AUDIO, null, audioError);
-            try {
-                onMain(() -> {
-                    song.setLooping(true);
-                    song.start();
-                    return null;
-                });
-                require(videoFormat(AUDIO) == null && onMain(song::isPlaying), "Audio-only candidate leaves song playing");
-                MediaPlayer video = prepare(VIDEO, output.getSurface(), videoError);
-                try {
-                    require(onMain(song::isPlaying), "Candidate preparation leaves song playing");
-                    seek(video, 1_000);
-                    onMain(() -> {
-                        song.pause();
-                        video.start();
-                        return null;
-                    });
-                    require(onMain(() -> video.isPlaying() && !song.isPlaying()), "Only video plays during handoff");
-                    require(frames.await(5, TimeUnit.SECONDS), "Decoder produced video frames");
-                    onMain(() -> {
-                        video.pause();
-                        return null;
-                    });
-                    require(!onMain(video::isPlaying), "Video paused");
-                    seek(video, 2_000);
-                    int position = onMain(video::getCurrentPosition);
-                    require(Math.abs(position - 2_000) < 500, "Video seek reached its timestamp");
-                    onMain(() -> {
-                        video.start();
-                        return null;
-                    });
-                    require(onMain(video::isPlaying), "Video resumed");
-                    require(videoError.get() == null, "Video error: " + videoError.get());
-                } finally {
-                    onMain(() -> {
-                        video.release();
-                        return null;
-                    });
-                    onMain(() -> {
-                        song.start();
-                        return null;
-                    });
-                }
-                require(onMain(song::isPlaying) && audioError.get() == null, "Audio restored after video teardown");
-            } finally {
-                onMain(() -> {
-                    song.release();
-                    output.setOnImageAvailableListener(null, null);
-                    return null;
-                });
-            }
+            require(!onMain(() -> service.offerOffscreenVideo("wrong-recording", video, output)),
+                    "Reject different recording");
+            seek(service, 600);
+            require(onMain(() -> service.offerOffscreenVideo("fixture-recording", video, output) && song.isPlaying()),
+                    "Candidate preparation preserves audio");
+            await(service::videoActive, "Video switched through PlaybackService");
+            MediaPlayer candidate = onMain(() -> (MediaPlayer) activePlayer.get(service));
+            require(onMain(() -> candidate != song && candidate.isPlaying() && !song.isPlaying()),
+                    "Only candidate is playing");
+            require(frames.await(5, TimeUnit.SECONDS), "Decoder produced video frames");
+            onMain(() -> {
+                service.toggle();
+                return null;
+            });
+            await(() -> !service.playing() && !candidate.isPlaying(), "Video paused");
+            seek(service, 2000);
+            require(Math.abs(onMain(service::position) - 2000) < 500, "Video seek reached its timestamp");
+            onMain(() -> {
+                service.toggle();
+                return null;
+            });
+            await(candidate::isPlaying, "Video resumed");
+            onMain(() -> {
+                service.endVideo();
+                return null;
+            });
+            await(() -> !service.videoActive() && song.isPlaying(), "Original audio recovered");
+            require(onMain(() -> activePlayer.get(service) == song && session.get(service) == originalSession
+                    && "fixture-recording".equals(service.currentTrack().id)), "One session, queue and recording");
+            require(onMain(service::position) >= 1500, "Recovery preserved playback position");
+        } finally {
+            onMain(() -> {
+                service.endVideo();
+                return null;
+            });
         }
+    }
+
+    private void seek(PlaybackService service, int position) throws Exception {
+        Field pending = PlaybackService.class.getDeclaredField("pendingSeek");
+        pending.setAccessible(true);
+        onMain(() -> {
+            service.seekTo(position);
+            return null;
+        });
+        await(() -> pending.getInt(service) < 0, "Seek completed");
+    }
+
+    private void await(Callable<Boolean> condition, String reason) throws Exception {
+        long time = SystemClock.uptimeMillis() + 5_000;
+        while (SystemClock.uptimeMillis() < time) {
+            if (onMain(condition)) return;
+            SystemClock.sleep(25);
+        }
+        throw new AssertionError(reason);
     }
 
     private MediaFormat videoFormat(String asset) throws Exception {
@@ -127,44 +202,6 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
         } finally {
             extractor.release();
         }
-    }
-
-    private MediaPlayer prepare(String asset, Surface surface, AtomicReference<String> error) throws Exception {
-        CountDownLatch prepared = new CountDownLatch(1);
-        MediaPlayer player = onMain(MediaPlayer::new);
-        boolean ready = false;
-        try (AssetFileDescriptor descriptor = getContext().getAssets().openFd(asset)) {
-            onMain(() -> {
-                player.setOnErrorListener((source, what, extra) -> {
-                    error.set(what + "/" + extra);
-                    prepared.countDown();
-                    return true;
-                });
-                player.setOnPreparedListener(source -> prepared.countDown());
-                if (surface != null) player.setSurface(surface);
-                player.setDataSource(descriptor.getFileDescriptor(), descriptor.getStartOffset(), descriptor.getLength());
-                player.prepareAsync();
-                return null;
-            });
-            require(prepared.await(5, TimeUnit.SECONDS) && error.get() == null, "Prepare: " + asset + " " + error.get());
-            ready = true;
-            return player;
-        } finally {
-            if (!ready) onMain(() -> {
-                player.release();
-                return null;
-            });
-        }
-    }
-
-    private void seek(MediaPlayer player, int time) throws Exception {
-        CountDownLatch finished = new CountDownLatch(1);
-        onMain(() -> {
-            player.setOnSeekCompleteListener(source -> finished.countDown());
-            player.seekTo(time, MediaPlayer.SEEK_CLOSEST);
-            return null;
-        });
-        require(finished.await(5, TimeUnit.SECONDS), "Seek timed out");
     }
 
     private <T> T onMain(Callable<T> action) throws Exception {

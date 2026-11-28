@@ -7,9 +7,11 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import android.media.ImageReader;
 import android.media.MediaMetadata;
 import android.media.MediaPlayer;
 import android.media.session.MediaSession;
@@ -17,6 +19,7 @@ import android.media.session.PlaybackState;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.view.Surface;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,6 +48,8 @@ public final class PlaybackService extends Service {
     private List<MusicApi.Track> originalQueue = new ArrayList<>();
     private MediaSession session;
     private MediaPlayer player;
+    private VideoSwitch video;
+    private boolean restoringSong;
     private AudioManager audio;
     private AudioFocusRequest focus;
     private AudioAttributes attributes;
@@ -212,7 +217,10 @@ public final class PlaybackService extends Service {
     int duration() { return prepared ? player.getDuration() : 0; }
     int position() {
         if (!prepared) return 0;
-        return pendingSeek >= 0 ? pendingSeek : player.getCurrentPosition();
+        if (pendingSeek >= 0) return pendingSeek;
+        int position = player.getCurrentPosition();
+        if (videoActive()) video.lastPosition = position;
+        return position;
     }
 
     boolean buffering() { return state == PlaybackState.STATE_BUFFERING; }
@@ -242,7 +250,165 @@ public final class PlaybackService extends Service {
             return;
         }
         pendingSeek = inFlightSeek = -1;
+        if (restoringSong) {
+            restoringSong = false;
+            try {
+                if (playing()) startPreparedPlayer();
+            } catch (IllegalStateException unavailable) {
+                fail("Could not resume the song.");
+                return;
+            }
+        }
         publish(state, message);
+    }
+
+    /**
+     * Starts a candidate for a source whose recording identity has already been verified.
+     * ImageReader keeps this path off-screen until a supported display policy is available.
+     */
+    boolean offerOffscreenVideo(String recordingId, AssetFileDescriptor source, ImageReader output) {
+        MusicApi.Track track = currentTrack();
+        if (!prepared || !playing() || fading || restoringSong || pendingSeek >= 0 || video != null
+                || track == null || !track.id.equals(recordingId) || source.getDeclaredLength() <= 0) return false;
+        Surface surface;
+        try {
+            surface = output.getSurface();
+        } catch (IllegalStateException closed) {
+            return false;
+        }
+        if (surface == null || !surface.isValid()) return false;
+        VideoSwitch candidate = new VideoSwitch(player, generation, surface);
+        video = candidate;
+        try {
+            MediaPlayer next = candidate.player;
+            next.setAudioAttributes(attributes);
+            next.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
+            next.setDataSource(source.getFileDescriptor(), source.getStartOffset(), source.getDeclaredLength());
+            next.setSurface(surface);
+            next.setOnPreparedListener(ready -> {
+                if (!candidate.waiting()) return;
+                if (ready.getVideoWidth() <= 0 || ready.getVideoHeight() <= 0
+                        || Math.abs((long) ready.getDuration() - duration()) > 1000) {
+                    discardVideo();
+                    return;
+                }
+                ready.setOnSeekCompleteListener(done -> activateVideo(candidate));
+                alignVideo(candidate);
+            });
+            next.setOnErrorListener((broken, what, extra) -> {
+                if (video == candidate) endVideo();
+                return true;
+            });
+            next.setOnCompletionListener(done -> {
+                if (video == candidate && videoActive()) trackCompleted(done, candidate.generation);
+            });
+            main.postDelayed(candidate.timeout, 8000);
+            next.prepareAsync();
+            return true;
+        } catch (Exception failed) {
+            discardVideo();
+            return false;
+        }
+    }
+
+    private void alignVideo(VideoSwitch candidate) {
+        if (!candidate.waiting()) return;
+        if (!playing() || pendingSeek >= 0 || !candidate.surface.isValid()) {
+            discardVideo();
+            return;
+        }
+        candidate.attempts++;
+        try {
+            candidate.player.seekTo(Math.min(position(), candidate.player.getDuration()), MediaPlayer.SEEK_CLOSEST);
+        } catch (IllegalStateException unavailable) {
+            discardVideo();
+        }
+    }
+
+    private void activateVideo(VideoSwitch candidate) {
+        if (!candidate.waiting()) return;
+        if (!playing() || fading || pendingSeek >= 0 || !candidate.surface.isValid()) {
+            discardVideo();
+            return;
+        }
+        if (Math.abs(position() - candidate.player.getCurrentPosition()) > 400) {
+            if (candidate.attempts < 2) alignVideo(candidate);
+            else discardVideo();
+            return;
+        }
+        main.removeCallbacks(candidate.timeout);
+        try {
+            candidate.song.pause();
+        } catch (IllegalStateException unavailable) {
+            discardVideo();
+            return;
+        }
+        player = candidate.player;
+        candidate.lastPosition = player.getCurrentPosition();
+        try {
+            startPreparedPlayer();
+        } catch (IllegalStateException failed) {
+            endVideo();
+            return;
+        }
+        seekRevision++;
+        publish(state, message);
+    }
+
+    boolean videoActive() { return video != null && player == video.player; }
+
+    void endVideo() {
+        if (video == null) return;
+        if (!videoActive()) {
+            discardVideo();
+            return;
+        }
+        VideoSwitch active = video;
+        int position = pendingSeek >= 0 ? pendingSeek : active.lastPosition;
+        try {
+            if (pendingSeek < 0) position = active.player.getCurrentPosition();
+        } catch (IllegalStateException decoderFailed) {
+            // MediaPlayer can lose its clock in the error state.
+        }
+        player = active.song;
+        discardVideo();
+        fading = false;
+        ++fade;
+        restoringSong = true;
+        inFlightSeek = -1;
+        try {
+            seekTo(position);
+        } catch (IllegalStateException unavailable) {
+            fail("Could not resume the song.");
+        }
+    }
+
+    private void discardVideo() {
+        if (video == null) return;
+        VideoSwitch discarded = video;
+        video = null;
+        main.removeCallbacks(discarded.timeout);
+        discarded.player.release();
+    }
+
+    private final class VideoSwitch {
+        final MediaPlayer player = new MediaPlayer();
+        final MediaPlayer song;
+        final Surface surface;
+        final int generation;
+        final Runnable timeout = () -> { if (waiting()) discardVideo(); };
+        int attempts, lastPosition;
+
+        VideoSwitch(MediaPlayer song, int generation, Surface surface) {
+            this.song = song;
+            this.generation = generation;
+            this.surface = surface;
+        }
+
+        boolean waiting() {
+            return video == this && PlaybackService.this.generation == generation
+                    && PlaybackService.this.player == song && prepared;
+        }
     }
 
     void toggleShuffle() {
@@ -323,13 +489,7 @@ public final class PlaybackService extends Service {
                 resume();
             }
         });
-        next.setOnCompletionListener(done -> {
-            if (done != player || generation != current) return;
-            if (canSkip(1)) skip(1);
-            else if (repeat && (!prefs.flag("hideExplicit", false) || !queue.get(index).explicit)) select(index);
-            else if (prefs.flag("autoplay", false)) continueWithRadio(current);
-            else stopPlayback();
-        });
+        next.setOnCompletionListener(done -> trackCompleted(done, current));
         next.setOnErrorListener((broken, what, extra) -> {
             if (broken == player && generation == current) {
                 publish(PlaybackState.STATE_BUFFERING, "Trying another audio source…");
@@ -346,6 +506,14 @@ public final class PlaybackService extends Service {
         } catch (Exception error) {
             prepare(urls, source + 1, current);
         }
+    }
+
+    private void trackCompleted(MediaPlayer done, int current) {
+        if (done != player || generation != current) return;
+        if (canSkip(1)) skip(1);
+        else if (repeat && (!prefs.flag("hideExplicit", false) || !queue.get(index).explicit)) select(index);
+        else if (prefs.flag("autoplay", false)) continueWithRadio(current);
+        else stopPlayback();
     }
 
     private void continueWithRadio(int current) {
@@ -388,12 +556,16 @@ public final class PlaybackService extends Service {
             publish(PlaybackState.STATE_PAUSED, "Another app is using audio.");
             return;
         }
+        if (!restoringSong) startPreparedPlayer();
+        reporter.play(currentTrack(), duration());
+        publish(PlaybackState.STATE_PLAYING, queue.get(index).artist);
+    }
+
+    private void startPreparedPlayer() {
         tuning.applyVolume(player, loudness, 1f);
         tuning.applyEqualizer(player);
         tuning.applySpeed(player);
         player.start();
-        reporter.play(currentTrack(), duration());
-        publish(PlaybackState.STATE_PLAYING, queue.get(index).artist);
     }
 
     private void pause() {
@@ -479,6 +651,9 @@ public final class PlaybackService extends Service {
     }
 
     private void releasePlayer() {
+        if (videoActive()) player = video.song;
+        discardVideo();
+        restoringSong = false;
         pendingSeek = inFlightSeek = -1;
         fading = false;
         ++fade;

@@ -96,3 +96,31 @@ Gradle passed 52 regression tests, zero failures or skips. API 27 fixtures verif
 The signed APK is `downloads/ytm-head-unit-0.4.14-debug.apk`, 15,521,786 bytes. SHA-256 `0823108ae25e155b64bd2e6ab202e031db42ed535ffc5a198d36b7300f0e79da`. REA verified the APK digest and membership. Craft Anything found two changed entries (the manifest version and app DEX) and 66 identical entries. API minimum is 27, application ID is `my.ytmhu`, and the certificate matches 0.4.13. Protected authentication code, dependencies and tests match `3d58f25`. Protected tests passed. Account storage and session behavior were not altered by this change.
 
 Next, run the native video fixture on a permitted device and verify a source with an authorized, explicit recording relationship. Driver-display activation still needs a supported OEM parked-state signal. Independent scoped video/backend work can proceed while those prerequisites are open.
+
+## 0.4.15 off-screen video service checkpoint
+
+Branch `experiment/service-video-0415`, based on `87521a77536023e692b43e5452c099c48206026c`. InnerTune's MusicService and Metrolist's MusicService keep one controller-facing MediaSession. AndroidX Media3's MediaCodecUtil separates decoder eligibility and hardware characteristics. This experiment keeps Android's platform MediaPlayer and reuses the app's existing service, queue, tuning, focus and MediaSession. It adds no decoder dependency. Upstream's authorized recording relationship and verified position mapping remain prerequisites for video discovery.
+
+The service accepts an explicitly verified recording ID and an authorized file descriptor for off-screen output. A candidate prepares while the song continues. Dimension/duration checks, a bounded timeout and playback-position alignment precede handoff. The current player pointer switches after pausing the song. On return or candidate error, the service releases video, seeks the original song to the last known position and restores its playback state. Platform decoder selection, adaptive rendition selection, production discovery and visible UI remain open. The current interface accepts ImageReader output only.
+
+Gradle passed 54 unit tests with zero skips/failures, including tests for wrong recording and duration rejection, single playing source, position recovery after a simulated decoder error and one MediaSession. The separate instrumentation APK now drives the real service using the original synthetic local H.264/AAC fixtures. Both APKs compile. No emulator or head unit was available for native decoder/surface, real audio continuity or production parked-state validation.
+
+- App APK `downloads/ytm-head-unit-0.4.15-debug.apk`, 15,524,498 bytes, SHA-256 `25ed0ff0a407245d41d0ece5f68c2fe86f36afa35b3fc984812d356039c6cb4a`.
+- Test APK `downloads/ytm-native-video-service-0.4.15-test.apk`, 101,370 bytes, SHA-256 `61e26339ea03c587b7004b435c5e8eb80b865d96f87fa6a66017f19673c24fb0`. Use the 0.4.15 app as its target. The instrumentation command from the preceding fixture still applies.
+- REA package evidence `ev_7ae34d62069f275b5d6099a61412744665938bcbb0c9bd5d63068b77d6493b20`. Craft Anything found the app manifest version and app DEX changed, 66 members identical and no new app assets.
+- Protected authentication production code, dependencies and tests match baseline. Application ID and signing certificate are unchanged. Existing accounts are not reset or migrated. Live account persistence remains unverified.
+
+Next run the updated fixture on a permitted API 27 device and verify a legitimate paired service source and delivery mechanism. The reference head unit still needs an OEM-supported parked-state signal before visible driver-display activation.
+
+## 04:43 reference recordings
+
+The actual content identifies `20261128-0443-04.4718818.mp4` as Windows ytm-rs (desktop title/transport chrome) and `20261128-0443-31.6066679.mp4` as the Android app (Android navigation, Lyrics/Up next buttons, Android controls). Both are constant-rate 30 FPS captures. Both show NMB48's `太宰治を読んだか?`, with original Japanese, romaji and translation. The two captures start at different song positions. Frame indices below are zero-based and relative to the respective clips. A text-mask scan of decoded frames tracks each group's vertical position and relative contrast. The pixel values refer to per-capture crops and do not establish physical display timing.
+
+| Event for `君と出会った日正直に言えば` | Windows | Android |
+| --- | --- | --- |
+| Before emphasis changes | At frame 80 (2.667 s) the rows are stable. The three observed Japanese text peaks are at y=255, 483 and 706 pixels in the crop. | At frame 183 (6.100 s) the three rows are stable. Their text peaks are y=146, 240 and 320. |
+| Scroll starts and settles | From roughly frame 82 (2.733 s) the viewport starts moving. At frame 88 the rows have traveled about 94, 63 and 48 px respectively. The lower row is still settling after the newly active row's position stabilizes. | The highlight changes by frame 184 (6.133 s) with no row movement yet. At frame 192 all three tracked peaks have shifted 80 px. They move together and largely settle by frame 196 (6.533 s). |
+| Entry and exit | At frames 93–98 (3.100–3.267 s) the incoming original line grows and brightens; the previous line keeps fading afterward. This matches the separate source transitions. | One brightness step is visible at frame 184. No comparable scale ramp or trailing release is resolved in this recording. |
+| Karaoke and alternates | Romaji and translation move with the original group. The chosen transition shows whole-line emphasis; it does not establish source word timings. | All three layers remain aligned. The clip does not prove missing word timing or a regression in progressive karaoke. |
+
+This comparison measures the two supplied reference builds, not post-build device behavior for 0.4.14 or later. Compression and repeated frames limit sub-frame measurements. Small percentage changes in scale were confirmed visually and mapped to the pinned source, not inferred from an absolute physical-size comparison.

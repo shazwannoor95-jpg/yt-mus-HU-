@@ -12,6 +12,7 @@ android {
         targetSdk 32
         versionCode 18
         versionName '0.4.13'
+        testInstrumentationRunner 'my.ytmhu.VideoFixtureInstrumentation'
     }
 
     compileOptions {

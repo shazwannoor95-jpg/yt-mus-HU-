@@ -61,3 +61,18 @@ Gradle passed 51 tests, zero failures and zero skips. API 27 fixtures exercise e
 Signed APK `downloads/ytm-head-unit-0.4.13-debug.apk`, 15,514,178 bytes, SHA-256 `ff143b4f8ce3ba58d58bf9b7dc99f003ed191cbfb86f731132547ab47a0fd2f6`. API 27 minimum, application ID `my.ytmhu`, and APK certificate match the prior version. Protected authentication files, dependency declarations, account storage paths, and authentication tests match 0.4.12. All protected tests passed. REA verified the APK digest and member inventory. Craft Anything verified 2 changed members (DEX and versioned manifest), 66 identical, no additions or removals.
 
 Resume the next experiment from this checkpoint. The independent authorized-media video path may proceed without a driver-parking integration. Production Song/Video controls require verified pairing and reliable supported parked gating on the driver display.
+
+## 0.4.13 native video experiment
+
+Branch `experiment/native-video-fixture-0413`, based on `43185424cde31de843a745f4552410f8320d349d`. Upstream `backend.rs::music_video` uses a provider-declared pair or a strict ranked match via `ytm.rs::sure_video`. A fallback match does not establish a timestamp mapping. Upstream `video.rs` uses separate decoder and audio clocks. The Android experiment uses the platform MediaPlayer and off-screen ImageReader surface, with no added decoder dependency or integration on the driver display.
+
+A separate API 27+ instrumentation APK prepares a synthetic 320 × 180 baseline H.264/AAC clip while the source audio continues. Its assertions cover audio-only candidate rejection, off-screen decoded frames, seek, pause, resume, one playing source at handoff and restoration after video release. FFprobe confirmed the two generated fixtures. Gradle built the test APK successfully. REA/Craft Anything and the test manifest verify that the clips and instrumentation are contained in the separate test APK. Its size is 91,108 bytes and its certificate matches the app. There is no Android emulator or USB device available in this workspace. The native decoder, timing of the handoff and audio recovery still require a runtime run.
+
+On an authorized emulator or permitted non-driver-display Android device with the ordinary 0.4.13 app installed using the same key, install the instrumentation APK and run:
+
+```sh
+adb install -r downloads/ytm-native-video-fixture-0.4.13-test.apk
+adb shell am instrument -w my.ytmhu.test/my.ytmhu.VideoFixtureInstrumentation
+```
+
+Next verify the harness on API 27 and a newer API. Then plan a verified media source and paired-version mapping before plumbing video into the single PlaybackService and MediaSession. Driver-display use still requires an OEM-supported parked-state gate. Production pairing, quality/decoder fallback, screen lifecycle, Song/Video selector and fullscreen are open. The main APK from the Now Playing branch is the installable app update.

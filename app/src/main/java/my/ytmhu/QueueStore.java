@@ -129,9 +129,14 @@ final class QueueStore {
                 credits.put(new JSONObject().put("name", bounded(credit.name)).put("id", credit.browseId));
             }
         }
-        return new JSONObject().put("id", track.id).put("title", bounded(track.title))
+        JSONObject saved = new JSONObject().put("id", track.id).put("title", bounded(track.title))
                 .put("artist", bounded(track.artist)).put("art", artwork(track.artwork))
                 .put("explicit", track.explicit).put("rank", rank).put("credits", credits);
+        if (track.album != null) {
+            saved.put("album", bounded(track.album.name));
+            if (MusicApi.AlbumCredit.isBrowseId(track.album.browseId)) saved.put("albumId", track.album.browseId);
+        }
+        return saved;
     }
 
     private static MusicApi.Track decode(JSONObject item) {
@@ -143,8 +148,12 @@ final class QueueStore {
             String id = value.optString("id");
             if (id.matches("UC[A-Za-z0-9_-]{22}")) credits.add(new MusicApi.ArtistCredit(bounded(value.optString("name")), id));
         }
+        String albumName = bounded(item.optString("album"));
+        String albumId = item.optString("albumId");
+        MusicApi.AlbumCredit album = albumName.isEmpty() ? null : new MusicApi.AlbumCredit(albumName,
+                MusicApi.AlbumCredit.isBrowseId(albumId) ? albumId : "");
         return new MusicApi.Track(item.optString("id"), bounded(item.optString("title")),
-                bounded(item.optString("artist")), artwork(item.optString("art")), item.optBoolean("explicit"), credits);
+                bounded(item.optString("artist")), artwork(item.optString("art")), item.optBoolean("explicit"), credits, album);
     }
 
     private static String artwork(String input) {

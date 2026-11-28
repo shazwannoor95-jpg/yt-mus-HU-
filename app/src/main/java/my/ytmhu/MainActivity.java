@@ -95,6 +95,8 @@ public final class MainActivity extends Activity {
     private boolean bound;
     private boolean refreshingAccount;
     private Future<?> pageTask;
+    private Future<?> trackDetailsTask;
+    private final Map<String, MusicApi.Track> trackDetails = new LinkedHashMap<>(24, 0.75f, true);
     private int generation;
     private String account = "";
     private String accountError = "";
@@ -251,6 +253,7 @@ public final class MainActivity extends Activity {
         browser = body;
         stage.addView(body, new FrameLayout.LayoutParams(-1, -1));
         expanded = new NowPlayingView(this, prefs, appearance, artwork, this::showSongMenu, this::closePlayer);
+        expanded.setArtistAction(this::goToArtist);
         expanded.setVisibility(View.GONE);
         stage.addView(expanded, new FrameLayout.LayoutParams(-1, -1));
         addMiniPlayer(stage);
@@ -474,6 +477,8 @@ public final class MainActivity extends Activity {
 
     private void showPlaybackOptions(View anchor) {
         PopupMenu popup = new PopupMenu(this, anchor);
+        MusicApi.Track song = playback == null ? null : playback.currentTrack();
+        if (song != null) addAction(popup, "Song options", () -> showCurrentSongMenu(anchor));
         addAction(popup, playback != null && playback.isShuffle() ? "Turn shuffle off" : "Turn shuffle on", this::toggleShuffle);
         String repeatMode = playback != null && playback.isRepeatOne() ? "One"
                 : playback != null && playback.isRepeat() ? "All" : "Off";
@@ -491,7 +496,6 @@ public final class MainActivity extends Activity {
         addAction(popup, "Up next", () -> openPlayer(false));
         addAction(popup, "Mini player", this::toggleMiniPlayer);
         addAction(popup, "Now Playing", this::toggleExpanded);
-        addAction(popup, "Song options", () -> showCurrentSongMenu(anchor));
         popup.show();
     }
 
@@ -561,26 +565,37 @@ public final class MainActivity extends Activity {
         miniArtist = label("", viewport.metadataSp, MUTED);
         miniTitle.setPadding(0, 0, 0, 0);
         miniArtist.setPadding(0, 0, 0, 0);
-        details.addView(miniTitle, new LinearLayout.LayoutParams(-1, -2));
-        details.addView(miniArtist, new LinearLayout.LayoutParams(-1, -2));
-
+        miniArtist.setOnClickListener(view -> {
+            MusicApi.Track song = playback == null ? null : playback.currentTrack();
+            if (song != null && hasArtist(song)) goToArtist(song);
+        });
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
         boolean full = inline || width >= 6 * Viewport.TOUCH;
+        LinearLayout names = column();
+        names.addView(miniTitle, new LinearLayout.LayoutParams(-1, -2));
+        names.addView(miniArtist, new LinearLayout.LayoutParams(-1, -2));
         if (full) {
+            LinearLayout header = new LinearLayout(this);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            header.addView(names, new LinearLayout.LayoutParams(0, -2, 1));
+            transport(header, Icons.MORE, "Current song actions", null, Viewport.TOUCH)
+                    .setOnClickListener(this::showCurrentSongMenu);
+            details.addView(header);
             miniLike = transport(controls, Icons.HEART, "Like song", () -> rateCurrent("like", "Liked"));
             miniDislike = transport(controls, Icons.THUMBS_DOWN, "Dislike song", () -> rateCurrent("dislike", "Disliked"));
-        }
+        } else details.addView(names);
         miniPrevious = transport(controls, Icons.PREVIOUS, "Previous", () -> { if (playback != null) playback.skip(-1); });
         miniPlay = playButton(controls, Viewport.TOUCH);
         miniNext = transport(controls, Icons.NEXT, "Next", () -> { if (playback != null) playback.skip(1); });
-        if (full) transport(controls, Icons.VOLUME, "Media volume", this::showVolume);
-        else {
+        if (full) {
+            transport(controls, Icons.VOLUME, "Media volume", this::showVolume);
+        } else {
             Button more = transport(controls, Icons.MORE, "Mini player options", null);
             more.setOnClickListener(anchor -> {
                 PopupMenu popup = new PopupMenu(this, anchor);
-                addAction(popup, "Like song", () -> rateCurrent("like", "Liked"));
-                addAction(popup, "Dislike song", () -> rateCurrent("dislike", "Disliked"));
+                MusicApi.Track song = playback == null ? null : playback.currentTrack();
+                if (song != null) addSongActions(popup, song, -1);
                 addAction(popup, "Media volume", this::showVolume);
                 popup.show();
             });
@@ -723,6 +738,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onDestroy() {
+        if (trackDetailsTask != null) trackDetailsTask.cancel(true);
         ++generation;
         if (signInDialog != null && signInDialog.isShowing()) signInDialog.dismiss();
         network.shutdownNow();
@@ -1582,7 +1598,14 @@ public final class MainActivity extends Activity {
                 ? CollectionTracks.Order.saved(prefs.text(sortKey, "")) : CollectionTracks.Order.ORIGINAL;
         List<Browse.Card> cards = CollectionTracks.visible(shelf.cards, content.filter, order);
         List<MusicApi.Track> tracks = new ArrayList<>(cards.size());
-        for (Browse.Card card : cards) tracks.add(card.track);
+        String albumTitle = content.header != null && !content.header.title.isEmpty() ? content.header.title : collectionTitle;
+        MusicApi.AlbumCredit album = MusicApi.AlbumCredit.isBrowseId(id) && !albumTitle.isEmpty()
+                ? new MusicApi.AlbumCredit(albumTitle, id) : null;
+        for (Browse.Card card : cards) {
+            MusicApi.Track track = card.track;
+            tracks.add(track.album == null && album != null ? new MusicApi.Track(track.id, track.title, track.artist,
+                    track.artwork, track.explicit, track.artists, album) : track);
+        }
         if (!shelf.title.isEmpty()) heading(shelf.title);
         results.add(() -> chipRow(row -> {
             if (!tracks.isEmpty()) {
@@ -1698,12 +1721,23 @@ public final class MainActivity extends Activity {
         TextView title = label(card.title, viewport.songSp, INK);
         title.setTypeface(appearance.font, Typeface.BOLD);
         title.setMaxLines(2);
-        tile.addView(title);
-        if (!card.subtitle.isEmpty()) tile.addView(label(card.subtitle, viewport.metadataSp, MUTED));
+        if (card.track == null) tile.addView(title);
+        else {
+            LinearLayout caption = new LinearLayout(this);
+            caption.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout info = column();
+            info.addView(title);
+            if (!card.subtitle.isEmpty()) info.addView(label(card.subtitle, viewport.metadataSp, MUTED));
+            caption.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+            addTrackOverflow(caption, card.track);
+            tile.addView(caption);
+        }
+        if (card.track == null && !card.subtitle.isEmpty()) tile.addView(label(card.subtitle, viewport.metadataSp, MUTED));
         return tile;
     }
 
     private View songRow(Browse.Card card, List<MusicApi.Track> tracks, int index) {
+        MusicApi.Track track = tracks.get(index);
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(4), dp(3), dp(4), dp(3));
@@ -1713,7 +1747,7 @@ public final class MainActivity extends Activity {
         row.setFocusable(true);
         row.setOnClickListener(view -> playTracks(tracks, index));
         row.setOnLongClickListener(view -> {
-            showSongMenu(view, card.track, -1);
+            showSongMenu(view, track, -1);
             return true;
         });
         row.addView(cover(card.image), new LinearLayout.LayoutParams(dp(40), dp(40)));
@@ -1722,7 +1756,13 @@ public final class MainActivity extends Activity {
         text.addView(label(card.title, viewport.songSp, INK));
         text.addView(label(card.subtitle, viewport.metadataSp, MUTED));
         row.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
+        addTrackOverflow(row, track);
         return row;
+    }
+
+    private void addTrackOverflow(LinearLayout row, MusicApi.Track track) {
+        transport(row, Icons.MORE, "Actions for " + track.title, null, Viewport.TOUCH)
+                .setOnClickListener(anchor -> showSongMenu(anchor, track, -1));
     }
 
     private void openCollection(Browse.Card card) {
@@ -1824,6 +1864,20 @@ public final class MainActivity extends Activity {
 
     private void showSongMenu(View anchor, MusicApi.Track track, int queueIndex) {
         PopupMenu popup = new PopupMenu(this, anchor);
+        addSongActions(popup, track, queueIndex);
+        popup.show();
+    }
+
+    private void addSongActions(PopupMenu popup, MusicApi.Track track, int queueIndex) {
+        if (hasArtist(track)) addAction(popup, "Go to artist", () -> goToArtist(track));
+        MusicApi.AlbumCredit album = track.album;
+        if (album != null) {
+            if (MusicApi.AlbumCredit.isBrowseId(album.browseId)) {
+                addAction(popup, "Go to album", () -> openTrackCollection(album.browseId, album.name));
+            } else if (!album.name.isEmpty()) {
+                addAction(popup, "Search for album", () -> searchTrackMetadata(album.name, Browse.Search.Albums));
+            }
+        }
         addAction(popup, "Like song", () -> react(track, "like", "Liked"));
         addAction(popup, "Dislike song", () -> react(track, "dislike", "Disliked"));
         addAction(popup, "Clear rating", () -> react(track, "removelike", "Rating cleared"));
@@ -1837,7 +1891,6 @@ public final class MainActivity extends Activity {
         addAction(popup, "Play next", () -> { if (playback != null) playback.enqueue(track, true); });
         addAction(popup, "Add to queue", () -> { if (playback != null) playback.enqueue(track, false); });
         addAction(popup, "Start radio", () -> startRadio(track));
-        if (!track.artists.isEmpty()) addAction(popup, "Go to artist", () -> chooseArtist(track.artists));
         if (queueIndex >= 0 && playback != null) {
             if (queueIndex > Math.max(0, playback.queueIndex() + 1)) {
                 addAction(popup, "Move up", () -> { if (isQueueEntry(track, queueIndex)) playback.moveAt(queueIndex, -1); });
@@ -1849,7 +1902,63 @@ public final class MainActivity extends Activity {
                 addAction(popup, "Remove from queue", () -> { if (isQueueEntry(track, queueIndex)) playback.removeAt(queueIndex); });
             }
         }
-        popup.show();
+    }
+
+    static boolean hasArtist(MusicApi.Track track) {
+        return !track.artists.isEmpty() || MusicApi.ArtistCredit.usableName(track.artist);
+    }
+
+    private void goToArtist(MusicApi.Track track) {
+        if (!track.artists.isEmpty()) {
+            chooseArtist(track.artists);
+            return;
+        }
+        MusicApi.Track cached = trackDetails.get(track.id);
+        if (cached != null && !cached.artists.isEmpty()) {
+            chooseArtist(cached.artists);
+            return;
+        }
+        if (trackDetailsTask != null) return;
+        int requestedOn = generation;
+        boolean expandedAtRequest = expanded.isShown(), miniAtRequest = miniPlayer.isShown();
+        toast("Looking up the artist…");
+        trackDetailsTask = network.submit(() -> {
+            MusicApi.Track result = track;
+            try {
+                result = new MusicApi(prefs).trackDetails(track);
+            } catch (Exception unavailable) {
+                // The public provider may not return credits for this recording.
+            }
+            MusicApi.Track resolved = result;
+            runOnUiThread(() -> {
+                trackDetailsTask = null;
+                if (isDestroyed() || requestedOn != generation || expandedAtRequest != expanded.isShown()
+                        || miniAtRequest != miniPlayer.isShown()) return;
+                if (resolved.artists.isEmpty()) offerArtistSearch(track.artist);
+                else {
+                    trackDetails.put(track.id, resolved);
+                    if (trackDetails.size() > 24) trackDetails.remove(trackDetails.keySet().iterator().next());
+                    chooseArtist(resolved.artists);
+                }
+            });
+        });
+    }
+
+    private void offerArtistSearch(String artist) {
+        if (artist.trim().isEmpty()) return;
+        new AlertDialog.Builder(this).setTitle("Artist page unavailable")
+                .setMessage("No verified artist link was found for this song. Search for “" + artist + "”?")
+                .setPositiveButton("Search for artist", (dialog, which) -> searchTrackMetadata(artist, Browse.Search.Artists))
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void searchTrackMetadata(String name, Browse.Search scope) {
+        closePlayer();
+        miniPlayer.setVisibility(View.GONE);
+        query.setText(name);
+        SearchHistory.record(prefs, name);
+        searchType = scope;
+        navigate("Search");
     }
 
     private void chooseArtist(List<MusicApi.ArtistCredit> artists) {
@@ -1864,9 +1973,15 @@ public final class MainActivity extends Activity {
     }
 
     private void openArtist(MusicApi.ArtistCredit artist) {
+        openTrackCollection(artist.browseId, artist.name);
+    }
+
+    private void openTrackCollection(String id, String name) {
         closePlayer();
-        collectionId = artist.browseId;
-        collectionTitle = artist.name;
+        miniPlayer.setVisibility(View.GONE);
+        collectionCard = null;
+        collectionId = id;
+        collectionTitle = name;
         navigate("Collection");
     }
 
@@ -2025,6 +2140,7 @@ public final class MainActivity extends Activity {
         MusicApi.Track song = playback == null ? null : playback.currentTrack();
         miniTitle.setText(song == null ? "Now playing" : song.title);
         miniArtist.setText(song == null ? "" : song.artist);
+        miniArtist.setClickable(song != null && hasArtist(song));
         miniPrevious.setEnabled(previous.isEnabled());
         miniNext.setEnabled(next.isEnabled());
         if (miniLike != null) miniLike.setEnabled(song != null);

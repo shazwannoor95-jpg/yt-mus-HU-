@@ -3,8 +3,10 @@ package my.ytmhu;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import java.util.Locale;
 
 final class AppSettings {
+    static final String DEFAULT_LYRIC_TARGET = "en";
     private final SharedPreferences values;
 
     AppSettings(Context context) {
@@ -30,4 +32,16 @@ final class AppSettings {
     String country() { return text("songCountry", "MY"); }
     float speed() { return flag("speedEnabled", false) ? number("speed", 100) / 100f : 1f; }
     int lyricOffset() { return number("lyricsOffset", 0) + number("lineTrim", 0); }
+
+    String lyricTarget() {
+        String chosen = text("lyricTarget", DEFAULT_LYRIC_TARGET);
+        if (!"auto".equals(chosen)) return chosen;
+        String language = Locale.getDefault().getLanguage();
+        switch (language) {
+            case "zh": return "zh-CN";
+            case "in": return "id";
+            case "ms": case "id": case "ja": case "ko": case "ru": return language;
+            default: return DEFAULT_LYRIC_TARGET;
+        }
+    }
 }

@@ -176,7 +176,7 @@ public final class PlaybackService extends Service {
 
     void enqueue(MusicApi.Track track, boolean next) {
         if (prefs.flag("hideExplicit", false) && track.explicit) return;
-        MusicApi.Track entry = new MusicApi.Track(track.id, track.title, track.artist, track.artwork, track.explicit, track.artists);
+        MusicApi.Track entry = new MusicApi.Track(track.id, track.title, track.artist, track.artwork, track.explicit, track.artists, track.album);
         int at = next && index >= 0 ? index + 1 : queue.size();
         queue.add(at, entry);
         int original = next && index >= 0 ? originalQueue.indexOf(queue.get(index)) + 1 : originalQueue.size();

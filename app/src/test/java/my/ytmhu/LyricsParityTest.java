@@ -13,6 +13,7 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 27)
@@ -80,7 +81,49 @@ public final class LyricsParityTest {
         assertEquals("Hello", values.getJSONObject("Привет").getString("translation"));
         assertThrows(java.io.IOException.class, () -> LyricExtras.align(originals, new JSONArray()));
         Lyrics.Line repeated = new Lyrics.Line(100, "你好");
-        assertEquals(1, LyricExtras.needed(Arrays.asList(repeated, repeated), Collections.emptyList(), true, false, "en").size());
+        assertEquals(1, LyricExtras.needed(Arrays.asList(repeated, repeated), Collections.emptyList(), true, false, "en", "").size());
+    }
+
+    @Test public void unsetTargetRendersEnglishOnMalayDeviceAndLegacyOffStaysOff() throws Exception {
+        java.util.Locale prior = java.util.Locale.getDefault();
+        java.util.Locale.setDefault(java.util.Locale.forLanguageTag("ms-MY"));
+        try (org.robolectric.android.controller.ActivityController<Activity> controller =
+                     Robolectric.buildActivity(Activity.class).setup()) {
+            Activity activity = controller.get();
+            AppSettings prefs = new AppSettings(activity);
+            prefs.set("lyricSpacing", 125); // Existing settings from an upgrade.
+            Artwork artwork = new Artwork();
+            NowPlayingView player = new NowPlayingView(activity, prefs, new Appearance(activity, prefs),
+                    artwork, (view, track, index) -> {}, () -> {});
+            org.robolectric.util.ReflectionHelpers.setField(player, "lyricsMode", true);
+            org.robolectric.util.ReflectionHelpers.setField(player, "track", new MusicApi.Track("fixture", "Song", "Artist", "", ""));
+            Lyrics.Line line = TtmlLyrics.parse(FIXTURE).lines.get(0);
+            org.robolectric.util.ReflectionHelpers.setField(player, "lyrics",
+                    new Lyrics(Collections.singletonList(line), "", "Unison", "ja"));
+            org.robolectric.util.ReflectionHelpers.callInstanceMethod(player, "render");
+            assertNotNull(AdaptiveUiTest.text(player, "おはよう"));
+            assertNotNull(AdaptiveUiTest.text(player, "ohayou"));
+            assertNotNull(AdaptiveUiTest.text(player, "Good morning"));
+            assertNull(AdaptiveUiTest.text(player, "Selamat pagi"));
+
+            prefs.set("lyricTranslation", false);
+            assertFalse(new AppSettings(activity).flag("lyricTranslation", true));
+            org.robolectric.util.ReflectionHelpers.setField(player, "track", new MusicApi.Track("other", "Other", "Artist", "", ""));
+            org.robolectric.util.ReflectionHelpers.callInstanceMethod(player, "render");
+            assertNull(AdaptiveUiTest.text(player, "Good morning"));
+            assertNotNull(AdaptiveUiTest.text(player, "ohayou"));
+            player.close();
+            artwork.close();
+        } finally {
+            java.util.Locale.setDefault(prior);
+        }
+    }
+
+    @Test public void songLanguageDoesNotSuppressForeignScriptLines() {
+        List<Lyrics.Line> mixed = Arrays.asList(new Lyrics.Line(100, "Already in English"), new Lyrics.Line(200, "おはよう"));
+        assertEquals(Collections.singletonList("おはよう"),
+                LyricExtras.needed(mixed, Collections.emptyList(), false, true, "en", "en-US"));
+        assertTrue(LyricExtras.needed(mixed, Collections.emptyList(), false, false, "en", "en-US").isEmpty());
     }
 
     @Test public void oldWebViewAdviceIsSpecific() {

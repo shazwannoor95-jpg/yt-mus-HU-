@@ -49,7 +49,7 @@ final class NowPlayingView extends LinearLayout {
     private final ThreadPoolExecutor network = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
             new LinkedBlockingQueue<>(2));
     private final TextView title, artist;
-    private final Button lyricsTab, queueTab, returnToCurrent;
+    private final Button lyricsTab, queueTab, returnToCurrent, songActions;
     private final ImageView cover;
     private final FrostedBackdrop frost;
     private final ScrollView scroll;
@@ -58,6 +58,7 @@ final class NowPlayingView extends LinearLayout {
     private final List<TextView> lines = new ArrayList<>();
     private PlaybackService playback;
     private MusicApi.Track track;
+    private java.util.function.Consumer<MusicApi.Track> artistAction;
     private boolean lyricsMode;
     private Lyrics lyrics;
     private Future<?> lyricsTask, extrasTask;
@@ -105,6 +106,10 @@ final class NowPlayingView extends LinearLayout {
         title.setMaxLines(2);
         artist = text("", appearance.artistSize, MUTED);
         artist.setMaxLines(2);
+        artist.setOnClickListener(view -> {
+            if (artistAction != null && track != null && MainActivity.hasArtist(track)) artistAction.accept(track);
+        });
+        artist.setClickable(false);
         LinearLayout details = new LinearLayout(context) {
             @Override protected void onMeasure(int widthSpec, int heightSpec) {
                 int width = MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight();
@@ -146,6 +151,14 @@ final class NowPlayingView extends LinearLayout {
         tabs.setPadding(dp(6), 0, 0, dp(6));
         addTab(tabs, lyricsTab, 0, 1);
         addTab(tabs, queueTab, 0, 1);
+        songActions = button(Icons.MORE, null);
+        songActions.setTypeface(appearance.icons);
+        songActions.setContentDescription("Current song actions");
+        songActions.setOnClickListener(anchor -> {
+            if (track != null) menu.show(anchor, track, -1);
+        });
+        songActions.setVisibility(GONE);
+        addTab(tabs, songActions, dp(Viewport.TOUCH), 0);
         Button closeTab = button(Icons.CLOSE, close);
         closeTab.setTypeface(appearance.icons);
         closeTab.setContentDescription("Close Now Playing");
@@ -239,6 +252,8 @@ final class NowPlayingView extends LinearLayout {
             background(appearance.start);
             title.setText(track == null ? "Now playing" : track.title);
             artist.setText(track == null ? "" : track.artist);
+            artist.setClickable(artistAction != null && track != null && MainActivity.hasArtist(track));
+            songActions.setVisibility(track == null ? GONE : VISIBLE);
             if (track != null) bindCover(track);
             render();
         } else if (!lyricsMode) {
@@ -249,6 +264,8 @@ final class NowPlayingView extends LinearLayout {
             syncPosition();
         }
     }
+
+    void setArtistAction(java.util.function.Consumer<MusicApi.Track> action) { artistAction = action; }
 
     void syncPosition() {
         if (playback == null || getVisibility() != VISIBLE) return;
@@ -383,7 +400,7 @@ final class NowPlayingView extends LinearLayout {
                 romanStatus = roman ? alternateStatus() : null;
                 translationStatus = translate ? alternateStatus() : null;
                 showExtras(display, new org.json.JSONObject(), Collections.emptyList(), roman, translate,
-                        SettingsView.lyricTarget(prefs));
+                        prefs.lyricTarget());
                 loadExtras(display, roman, translate);
             }
             syncPosition();
@@ -433,7 +450,7 @@ final class NowPlayingView extends LinearLayout {
     private void loadExtras(List<Lyrics.Line> display, boolean roman, boolean translate) {
         cancelExtras();
         Lyrics original = lyrics;
-        String target = SettingsView.lyricTarget(prefs);
+        String target = prefs.lyricTarget();
         String hanPreference = prefs.text("lyricHanLanguage", "auto");
         String title = track == null ? "" : track.title;
         LyricExtras request = new LyricExtras(getContext());
@@ -452,8 +469,10 @@ final class NowPlayingView extends LinearLayout {
                     dictionaryState = batch.dictionaryState();
                 }
             }
-            boolean fetchTranslation = translate && !sameLanguage(inferred, target);
-            List<String> requested = LyricExtras.needed(display, local, roman, fetchTranslation, target);
+            // Use provider language for translation, separately from the romanizer's title-based guess.
+            String source = original.language;
+            String sourceHint = target.split("[-_]", 2)[0].equalsIgnoreCase(source.split("[-_]", 2)[0]) ? "" : source;
+            List<String> requested = LyricExtras.needed(display, local, roman, translate, target, source);
             LocalRomanizer.DictionaryState status = dictionaryState;
             if (!requested.isEmpty() && roman) {
                 post(() -> {
@@ -465,18 +484,18 @@ final class NowPlayingView extends LinearLayout {
             String failure = "";
             JSONObject values = new JSONObject();
             if (!requested.isEmpty() && !Thread.currentThread().isInterrupted()) {
-                try { values = request.load(requested, target, inferred); }
+                try { values = request.load(requested, target, sourceHint); }
                 catch (Exception unavailable) { failure = LyricExtras.failure(unavailable); }
             }
-            if (fetchTranslation && !Thread.currentThread().isInterrupted()) {
-                List<String> missing = LyricExtras.missingTranslations(display, values, target);
+            if (translate && !Thread.currentThread().isInterrupted()) {
+                List<String> missing = LyricExtras.missingTranslations(display, values, target, source);
                 if (!missing.isEmpty()) {
                     try {
                         String key = new LyricCloudKey(getContext()).read();
                         if (!key.isEmpty()) {
                             for (int i = 0; i < missing.size() && !Thread.currentThread().isInterrupted(); i += LyricExtras.CLOUD_BATCH) {
                                 List<String> batch = missing.subList(i, Math.min(i + LyricExtras.CLOUD_BATCH, missing.size()));
-                                JSONObject result = request.cloud(batch, target, inferred, key);
+                                JSONObject result = request.cloud(batch, target, sourceHint, key);
                                 for (String text : batch) {
                                     JSONObject received = result.optJSONObject(text);
                                     if (received == null) continue;
@@ -501,14 +520,14 @@ final class NowPlayingView extends LinearLayout {
                 if (!currentExtras(original, request)) return;
                 showExtras(display, received, local, roman, translate, target);
                 showDiagnostics(display, received, local, roman, translate, target,
-                        language, status, fetchTranslation, providerFailure);
+                        language, status, providerFailure);
             });
         });
     }
 
     private void showDiagnostics(List<Lyrics.Line> display, JSONObject values, List<LocalRomanizer.Reading> local,
                                  boolean roman, boolean translate, String target, String language,
-                                 LocalRomanizer.DictionaryState dictionaryState, boolean fetchTranslation, String failure) {
+                                 LocalRomanizer.DictionaryState dictionaryState, String failure) {
         Set<String> readings = new LinkedHashSet<>();
         Set<String> translations = new LinkedHashSet<>();
         boolean missingRoman = false, japaneseHan = false, missingTranslation = false;
@@ -530,7 +549,7 @@ final class NowPlayingView extends LinearLayout {
             if (!LyricExtras.clean(line.translation(target), line.text).isEmpty()) translations.add("source-provided");
             else if (!extra(values, line.text, "translation").isEmpty()) {
                 translations.add("machine translation by " + extra(values, line.text, "provider"));
-            } else if (fetchTranslation) missingTranslation = true;
+            } else if (LyricExtras.needsTranslation(line, target, lyrics.language)) missingTranslation = true;
         }
         readingProvider = String.join(", ", readings);
         translationProvider = String.join(", ", translations);
@@ -559,10 +578,6 @@ final class NowPlayingView extends LinearLayout {
             }
             showAlternate(translationStatus, state, false);
         }
-    }
-
-    private static boolean sameLanguage(String first, String second) {
-        return first.split("[-_]", 2)[0].equalsIgnoreCase(second.split("[-_]", 2)[0]);
     }
 
     private void showExtras(List<Lyrics.Line> display, org.json.JSONObject values,
@@ -1052,6 +1067,10 @@ final class NowPlayingView extends LinearLayout {
         names.setFocusable(true);
         names.setOnClickListener(view -> {
             if (playback != null) playback.playAt(position);
+        });
+        names.setOnLongClickListener(view -> {
+            menu.show(view, song, position);
+            return true;
         });
         row.addView(names, new LayoutParams(0, -2, 1));
         Button options = new Button(getContext());

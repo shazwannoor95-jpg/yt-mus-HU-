@@ -217,7 +217,7 @@ final class SettingsView extends LinearLayout {
                 "lyricRomanSize", 75, 50, 125, 5, value -> value + "%");
         toggle("Lyrics", "Romanization & Translation", "Translation",
                 "Use supplied translations, Unison or the optional Cloud Translation fallback.", "lyricTranslation", true);
-        choice("Lyrics", "Romanization & Translation", "Translate into", null, "lyricTarget", "auto",
+        choice("Lyrics", "Romanization & Translation", "Translate into", null, "lyricTarget", AppSettings.DEFAULT_LYRIC_TARGET,
                 new String[]{"Device language", "English", "Bahasa Melayu", "Indonesia", "日本語", "한국어", "简体中文", "Русский"},
                 new String[]{"auto", "en", "ms", "id", "ja", "ko", "zh-CN", "ru"});
         add("Lyrics", "Romanization & Translation", "Google Cloud Translation fallback",
@@ -312,18 +312,6 @@ final class SettingsView extends LinearLayout {
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");
         action("About", "About", "Source code", "GPL-3.0-only. Includes upstream attributions.", "Open GitHub", "source");
         action("About", "About", "Upstream ytm-rs", "Desktop project, releases and credits.", "Open GitHub", "upstream");
-    }
-
-    static String lyricTarget(AppSettings prefs) {
-        String chosen = prefs.text("lyricTarget", "auto");
-        if (!"auto".equals(chosen)) return chosen;
-        String language = Locale.getDefault().getLanguage();
-        switch (language) {
-            case "zh": return "zh-CN";
-            case "in": return "id";
-            case "ms": case "id": case "ja": case "ko": case "ru": return language;
-            default: return "en";
-        }
     }
 
     private void manageLyricCloud(LyricCloudKey key) {

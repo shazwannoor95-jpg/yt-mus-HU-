@@ -221,11 +221,29 @@ final class MusicApi {
             this.name = name;
             this.browseId = browseId;
         }
+
+        static boolean usableName(String name) {
+            String value = name.trim();
+            return !value.equalsIgnoreCase("Song") && !value.equalsIgnoreCase("Video")
+                    && value.codePoints().anyMatch(Character::isLetter);
+        }
+    }
+
+    static final class AlbumCredit {
+        final String name, browseId;
+
+        AlbumCredit(String name, String browseId) {
+            this.name = name;
+            this.browseId = browseId;
+        }
+
+        static boolean isBrowseId(String id) { return id.matches("(MPREb|OLAK5uy)[A-Za-z0-9_-]{2,190}"); }
     }
 
     static final class Track {
         final String id, title, artist, artwork;
         final List<ArtistCredit> artists;
+        final AlbumCredit album;
         final boolean explicit;
 
         Track(String id, String title, String artist, String artwork, String artistId) {
@@ -238,33 +256,74 @@ final class MusicApi {
         }
 
         Track(String id, String title, String artist, String artwork, boolean explicit, List<ArtistCredit> artists) {
+            this(id, title, artist, artwork, explicit, artists, null);
+        }
+
+        Track(String id, String title, String artist, String artwork, boolean explicit, List<ArtistCredit> artists, AlbumCredit album) {
             this.id = id;
             this.title = title;
             this.artist = artist;
             this.artwork = artwork;
             this.explicit = explicit;
             this.artists = java.util.Collections.unmodifiableList(new ArrayList<>(artists));
+            this.album = album;
         }
     }
 
     static Track trackWithByline(String id, String title, String artwork, boolean explicit, JSONArray runs) {
+        return trackWithByline(id, title, artwork, explicit, runs, null);
+    }
+
+    private static Track trackWithByline(String id, String title, String artwork, boolean explicit, JSONArray runs, AlbumCredit album) {
         Map<String, ArtistCredit> artists = new LinkedHashMap<>();
-        for (int i = 0; i < runs.length() && artists.size() < 16; i++) {
+        String display = "";
+        for (int i = 0; i < Math.min(runs.length(), 48); i++) {
             JSONObject run = item(runs, i);
             JSONObject endpoint = child(child(run, "navigationEndpoint"), "browseEndpoint");
             String browseId = endpoint.optString("browseId");
             String type = child(child(endpoint, "browseEndpointContextSupportedConfigs"),
                     "browseEndpointContextMusicConfig").optString("pageType");
             String name = run.optString("text").trim();
-            if (!name.isEmpty() && browseId.matches("UC[A-Za-z0-9_-]{22}")
+            if (name.isEmpty()) continue;
+            if (AlbumCredit.isBrowseId(browseId) || "MUSIC_PAGE_TYPE_ALBUM".equals(type)) {
+                if (album == null || (album.browseId.isEmpty() && AlbumCredit.isBrowseId(browseId))) {
+                    album = new AlbumCredit(name, AlbumCredit.isBrowseId(browseId) ? browseId : "");
+                }
+            } else if (artists.size() < 16 && browseId.matches("UC[A-Za-z0-9_-]{22}")
                     && (type.isEmpty() || "MUSIC_PAGE_TYPE_ARTIST".equals(type)
                         || "MUSIC_PAGE_TYPE_USER_CHANNEL".equals(type))) {
                 artists.putIfAbsent(browseId, new ArtistCredit(name, browseId));
+            } else if (display.isEmpty() && browseId.isEmpty() && ArtistCredit.usableName(name)) {
+                display = name;
             }
         }
         List<ArtistCredit> credits = new ArrayList<>(artists.values());
-        String display = credits.isEmpty() ? item(runs, 0).optString("text").trim() : credits.get(0).name;
-        return new Track(id, title, display, artwork, explicit, credits);
+        if (display.isEmpty()) display = item(runs, 0).optString("text").trim();
+        return new Track(id, title, credits.isEmpty() ? display : credits.get(0).name, artwork, explicit, credits, album);
+    }
+
+    Track trackDetails(Track track) throws Exception {
+        if (!track.id.matches("[A-Za-z0-9_-]{11}")) return track;
+        return detailsForRecording(track, web("next", new JSONObject().put("videoId", track.id)));
+    }
+
+    static Track detailsForRecording(Track track, JSONObject response) {
+        JSONObject panel = find(response, "playlistPanelRenderer", 0);
+        if (panel == null) return track;
+        JSONArray entries = array(panel, "contents");
+        for (int i = 0; i < Math.min(entries.length(), 64); i++) {
+            JSONObject song = child(item(entries, i), "playlistPanelVideoRenderer");
+            if (!track.id.equals(song.optString("videoId"))) continue;
+            Track details = trackWithByline(track.id, track.title, track.artwork, track.explicit,
+                    array(child(song, "longBylineText"), "runs"), track.album);
+            if (details.artists.isEmpty()) {
+                details = trackWithByline(track.id, track.title, track.artwork, track.explicit,
+                        array(child(song, "shortBylineText"), "runs"), details.album);
+            }
+            return new Track(track.id, track.title, track.artist.isEmpty() ? details.artist : track.artist,
+                    track.artwork, track.explicit, details.artists.isEmpty() ? track.artists : details.artists, details.album);
+        }
+        return track;
     }
 
     List<Track> search(String query) throws Exception {
@@ -511,7 +570,11 @@ final class MusicApi {
         if (id.isEmpty()) id = child(child(row, "navigationEndpoint"), "watchEndpoint").optString("videoId");
         String name = title.optString("text").trim();
         if (!id.matches("[A-Za-z0-9_-]{11}") || name.isEmpty()) return null;
-        return trackWithByline(id, name, Browse.image(row.optJSONObject("thumbnail")), explicit(row), column(columns, 1));
+        Track track = trackWithByline(id, name, Browse.image(row.optJSONObject("thumbnail")), explicit(row), column(columns, 1));
+        if (track.album != null) return track;
+        Track extraColumn = trackWithByline(id, name, track.artwork, track.explicit, column(columns, 2));
+        return extraColumn.album == null ? track : new Track(id, name, track.artist, track.artwork, track.explicit,
+                track.artists, extraColumn.album);
     }
 
     static boolean explicit(JSONObject row) {

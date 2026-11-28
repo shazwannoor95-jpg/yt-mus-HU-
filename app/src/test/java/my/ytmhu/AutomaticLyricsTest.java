@@ -38,9 +38,11 @@ public final class AutomaticLyricsTest {
             Locale saved = Locale.getDefault();
             try {
                 Locale.setDefault(Locale.forLanguageTag("ms-MY"));
-                assertEquals("ms", SettingsView.lyricTarget(prefs));
+                assertEquals("en", prefs.lyricTarget());
+                prefs.set("lyricTarget", "auto");
+                assertEquals("ms", new AppSettings(activity).lyricTarget());
                 prefs.set("lyricTarget", "id");
-                assertEquals("id", SettingsView.lyricTarget(prefs));
+                assertEquals("id", new AppSettings(activity).lyricTarget());
             } finally {
                 Locale.setDefault(saved);
             }

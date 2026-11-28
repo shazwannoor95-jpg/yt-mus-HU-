@@ -47,8 +47,8 @@ final class LyricExtras {
                 && Character.UnicodeScript.of(c) != Character.UnicodeScript.LATIN);
     }
 
-    static List<String> missingTranslations(List<Lyrics.Line> lines, JSONObject translated, String target) {
-        List<String> candidates = needed(lines, java.util.Collections.emptyList(), false, true, target);
+    static List<String> missingTranslations(List<Lyrics.Line> lines, JSONObject translated, String target, String source) {
+        List<String> candidates = needed(lines, java.util.Collections.emptyList(), false, true, target, source);
         candidates.removeIf(text -> !value(translated, text, "translation").isEmpty());
         return candidates;
     }
@@ -59,7 +59,7 @@ final class LyricExtras {
     }
 
     static List<String> needed(List<Lyrics.Line> lines, List<LocalRomanizer.Reading> local,
-                               boolean roman, boolean translate, String target) {
+                               boolean roman, boolean translate, String target, String source) {
         Set<String> unique = new LinkedHashSet<>();
         int bytes = 0;
         for (int index = 0; index < lines.size(); index++) {
@@ -68,12 +68,30 @@ final class LyricExtras {
             if (text.isEmpty() || text.equals("♪") || unique.contains(text)) continue;
             boolean missingRoman = roman && clean(line.roman, text).isEmpty() && nonLatin(text)
                     && (index >= local.size() || !local.get(index).complete);
-            if (!missingRoman && !(translate && clean(line.translation(target), text).isEmpty())) continue;
+            if (!missingRoman && !(translate && needsTranslation(line, target, source))) continue;
             bytes += text.getBytes(StandardCharsets.UTF_8).length;
             if (unique.size() >= 240 || bytes > BYTE_LIMIT / 2) break;
             unique.add(text);
         }
         return new ArrayList<>(unique);
+    }
+
+    static boolean needsTranslation(Lyrics.Line line, String target, String source) {
+        if (!clean(line.translation(target), line.text).isEmpty()) return false;
+        String targetLanguage = target.split("[-_]", 2)[0];
+        if (!targetLanguage.equalsIgnoreCase(source.split("[-_]", 2)[0])) return true;
+        // Providers can mark the entire song as English even when some lines use another script.
+        return line.text.codePoints().filter(Character::isLetter).anyMatch(point -> {
+            Character.UnicodeScript script = Character.UnicodeScript.of(point);
+            switch (targetLanguage) {
+                case "ja": return script != Character.UnicodeScript.HAN && script != Character.UnicodeScript.HIRAGANA
+                        && script != Character.UnicodeScript.KATAKANA;
+                case "ko": return script != Character.UnicodeScript.HANGUL && script != Character.UnicodeScript.HAN;
+                case "zh": return script != Character.UnicodeScript.HAN;
+                case "ru": return script != Character.UnicodeScript.CYRILLIC;
+                default: return script != Character.UnicodeScript.LATIN;
+            }
+        });
     }
 
     JSONObject load(List<String> lines, String target, String sourceLanguage) throws Exception {

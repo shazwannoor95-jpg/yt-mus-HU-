@@ -50,6 +50,8 @@ public final class PlaybackService extends Service {
     private QueueStore queueStore;
     private boolean restoredQueue;
     private int savedPosition, resumeGeneration = -1;
+    private final SleepTimer sleepTimer = new SleepTimer();
+    private int sleepPauseGeneration = -1;
     private List<MusicApi.Track> originalQueue = new ArrayList<>();
     private MediaSession session;
     private MediaPlayer player;
@@ -125,10 +127,7 @@ public final class PlaybackService extends Service {
         savedPosition = snapshot.position;
         state = PlaybackState.STATE_PAUSED;
         message = "Ready to resume";
-        MusicApi.Track track = currentTrack();
-        session.setMetadata(new MediaMetadata.Builder()
-                .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist).build());
+        publishRestoredTrack();
     }
 
     @Override public IBinder onBind(Intent intent) {
@@ -229,7 +228,7 @@ public final class PlaybackService extends Service {
 
     void settingsChanged() {
         if (prepared) {
-            tuning.applyVolume(player, loudness, 1f);
+            applyVolume(1f);
             tuning.applyEqualizer(player);
             if (playing()) tuning.applySpeed(player);
         }
@@ -476,7 +475,72 @@ public final class PlaybackService extends Service {
 
     private boolean repeatsCurrent() {
         MusicApi.Track track = currentTrack();
+        return !sleepTimer.songEnd() && wantsRepeatOne(track);
+    }
+
+    private boolean wantsRepeatOne(MusicApi.Track track) {
         return repeat == REPEAT_ONE && track != null && (!prefs.flag("hideExplicit", false) || !track.explicit);
+    }
+
+    int sleepSelection() { return sleepTimer.minutesLeft(android.os.SystemClock.elapsedRealtime()); }
+
+    void setSleepTimer(int minutes) {
+        clearSleepTimer();
+        sleepTimer.set(minutes, android.os.SystemClock.elapsedRealtime());
+        if (prepared) {
+            player.setLooping(repeatsCurrent());
+            if (!fading) applyVolume(1f);
+        }
+        if (sleepTimer.timed()) scheduleSleepStep();
+        publish(state, message);
+    }
+
+    private void clearSleepTimer() {
+        sleepTimer.set(SleepTimer.OFF, 0);
+        main.removeCallbacks(sleepStep);
+    }
+
+    private void scheduleSleepStep() {
+        main.postDelayed(sleepStep, sleepTimer.delayToNextStep(android.os.SystemClock.elapsedRealtime()));
+    }
+
+    private final Runnable sleepStep = () -> {
+        if (!sleepTimer.timed()) return;
+        if (sleepTimer.due(android.os.SystemClock.elapsedRealtime())) {
+            if (prepared) applyVolume(1f);
+            clearSleepTimer();
+            if (playing()) pauseNow();
+            else if (buffering()) sleepPauseGeneration = generation;
+            return;
+        }
+        if (playing() && prepared && !fading) applyVolume(1f);
+        scheduleSleepStep();
+    };
+
+    private void applyVolume(float envelope) {
+        tuning.applyVolume(player, loudness, envelope * sleepTimer.gain(android.os.SystemClock.elapsedRealtime()));
+    }
+
+    private void holdAfterSong() {
+        boolean repeatOne = wantsRepeatOne(currentTrack());
+        int following = repeatOne ? -1 : adjacent(1);
+        clearSleepTimer();
+        releasePlayer();
+        audio.abandonAudioFocusRequest(focus);
+        if (following >= 0) index = following;
+        resumeGeneration = -1;
+        savedPosition = 0;
+        restoredQueue = true;
+        publishRestoredTrack();
+        publish(PlaybackState.STATE_PAUSED, "Sleep timer ended");
+        endForeground();
+    }
+
+    private void publishRestoredTrack() {
+        MusicApi.Track track = currentTrack();
+        session.setMetadata(new MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist).build());
     }
 
     void stopForSignOut() {
@@ -534,6 +598,16 @@ public final class PlaybackService extends Service {
         next.setOnPreparedListener(ready -> {
             if (ready == player && generation == current) {
                 prepared = true;
+                if (sleepPauseGeneration == current) {
+                    sleepPauseGeneration = -1;
+                    // Retain a requested resume position for the next Play action.
+                    if (resumeGeneration == current && savedPosition > 0) {
+                        resumeGeneration = -1;
+                        seekTo(savedPosition);
+                    }
+                    publish(PlaybackState.STATE_PAUSED, "Sleep timer ended");
+                    return;
+                }
                 if (resumeGeneration == current) {
                     int target = Math.min(savedPosition, Math.max(0, duration() - 500));
                     if (target > 0) {
@@ -567,6 +641,10 @@ public final class PlaybackService extends Service {
 
     private void trackCompleted(MediaPlayer done, int current) {
         if (done != player || generation != current) return;
+        if (sleepTimer.songEnd()) {
+            holdAfterSong();
+            return;
+        }
         if (repeatsCurrent()) select(index);
         else if (canSkip(1)) skip(1);
         else if (repeat == REPEAT_ALL && (!prefs.flag("hideExplicit", false) || !queue.get(index).explicit)) select(index);
@@ -627,7 +705,7 @@ public final class PlaybackService extends Service {
     }
 
     private void startPreparedPlayer() {
-        tuning.applyVolume(player, loudness, 1f);
+        applyVolume(1f);
         tuning.applyEqualizer(player);
         tuning.applySpeed(player);
         player.setLooping(repeatsCurrent());
@@ -646,7 +724,7 @@ public final class PlaybackService extends Service {
             final int step = i;
             main.postDelayed(() -> {
                 if (!fading || fade != token || player == null || !prepared) return;
-                tuning.applyVolume(player, loudness, 1f - step / 5f);
+                applyVolume(1f - step / 5f);
                 if (step == 5) pauseNow();
             }, step * 40L);
         }
@@ -672,6 +750,7 @@ public final class PlaybackService extends Service {
     }
 
     private void stopPlayback() {
+        clearSleepTimer();
         reporter.reset();
         ++generation;
         if (request != null) request.cancel(true);
@@ -752,6 +831,7 @@ public final class PlaybackService extends Service {
     }
 
     @Override public void onDestroy() {
+        clearSleepTimer();
         main.removeCallbacks(positionCheckpoint);
         writeQueueCheckpoint();
         destroyed = true;

@@ -476,6 +476,12 @@ public final class MainActivity extends Activity {
                 : playback != null && playback.isRepeat() ? "All" : "Off";
         addAction(popup, "Repeat · " + repeatMode, this::toggleRepeat);
         addAction(popup, "Seek to position", this::showSeek);
+        if (playback != null) {
+            int sleep = playback.sleepSelection();
+            String timer = sleep == SleepTimer.SONG_END ? "Sleep timer · End of song"
+                    : sleep > 0 ? "Sleep timer · " + sleep + " min" : "Sleep timer";
+            addAction(popup, timer, this::showSleepTimer);
+        }
         addAction(popup, "Media volume", this::showVolume);
         addAction(popup, "Lyrics", () -> openPlayer(true));
         addAction(popup, "Up next", () -> openPlayer(false));
@@ -483,6 +489,20 @@ public final class MainActivity extends Activity {
         addAction(popup, "Now Playing", this::toggleExpanded);
         addAction(popup, "Song options", () -> showCurrentSongMenu(anchor));
         popup.show();
+    }
+
+    private void showSleepTimer() {
+        PlaybackService service = playback;
+        if (service == null) return;
+        int[] minutes = {SleepTimer.OFF, 15, 30, 45, 60, SleepTimer.SONG_END};
+        String[] options = {"Off", "15 minutes", "30 minutes", "45 minutes", "60 minutes", "End of song"};
+        int selected = -1;
+        for (int i = 0; i < minutes.length; i++) if (service.sleepSelection() == minutes[i]) selected = i;
+        new AlertDialog.Builder(this).setTitle("Sleep timer")
+                .setSingleChoiceItems(options, selected, (dialog, which) -> {
+                    if (playback == service) service.setSleepTimer(minutes[which]);
+                    dialog.dismiss();
+                }).setNegativeButton("Cancel", null).show();
     }
 
     private void addMiniPlayer(FrameLayout stage) {

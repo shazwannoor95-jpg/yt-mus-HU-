@@ -104,6 +104,31 @@ public final class LegacyRomanizationTest {
         }
     }
 
+    @Test public void japaneseMorphologyJoinsConjugationsAndPronouncesParticles() throws Exception {
+        try (org.robolectric.android.controller.ActivityController<Activity> controller =
+                     Robolectric.buildActivity(Activity.class).setup()) {
+            Activity activity = controller.get();
+            JapaneseDictionary dictionary = installFixture(activity);
+            memory(activity, false);
+            try (LocalRomanizer.Batch batch = new LocalRomanizer().new Batch(activity, dictionary)) {
+                assertEquals("hitori ni natte", batch.read("一人になって", "ja").text);
+                assertEquals("koko ni atte", batch.read("ここにあって", "ja").text);
+                assertEquals("omotteru", batch.read("思ってる", "ja").text);
+                assertEquals("nigirishimeteta", batch.read("握りしめてた", "ja").text);
+                assertEquals("gakkō", batch.read("学校", "ja").text);
+                assertEquals("kyō wa", batch.read("今日は", "ja").text);
+                assertEquals("gakkō e iku", batch.read("学校へ行く", "ja").text);
+                assertEquals("kimi o omou", batch.read("君を想う", "ja").text);
+                assertEquals("Hello, koko ni atte 2026!", batch.read("Hello, ここにあって 2026!", "ja").text);
+                assertEquals("ja", LocalRomanizer.language("", "Shamrock", java.util.Arrays.asList(
+                        new Lyrics.Line(0, "学校"), new Lyrics.Line(1000, "ここにあって"))));
+                assertEquals("gakkō", batch.read("学校", "ja").text);
+            } finally {
+                Files.deleteIfExists(dictionary.archive.toPath());
+            }
+        }
+    }
+
     @Test public void pressureSkipsTheDictionaryWhileKanaRemainsAvailable() throws Exception {
         try (org.robolectric.android.controller.ActivityController<Activity> controller =
                      Robolectric.buildActivity(Activity.class).setup()) {

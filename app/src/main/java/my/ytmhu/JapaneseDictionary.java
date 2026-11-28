@@ -106,6 +106,9 @@ final class JapaneseDictionary {
             super(id, text, type, position, data);
         }
 
+        String partOfSpeech() { return getFeature(4); }
+        String category() { return getFeature(5); }
+        String subcategory() { return getFeature(6); }
         String reading() { return getFeature(11); }
         String pronunciation() { return getFeature(12); }
     }

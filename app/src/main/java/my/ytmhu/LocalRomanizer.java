@@ -38,8 +38,7 @@ final class LocalRomanizer {
 
     static String language(String reported, String title, List<Lyrics.Line> lines) {
         String source = reported.toLowerCase(Locale.ROOT).split("[-_]", 2)[0];
-        if (!source.isEmpty() && !"und".equals(source)) return source;
-        if (hasKana(title)) return "ja";
+        if ("ja".equals(source) || hasKana(title)) return "ja";
         int kanaLines = 0;
         int koreanLines = 0;
         for (Lyrics.Line line : lines) {
@@ -47,6 +46,7 @@ final class LocalRomanizer {
             if (line.text.codePoints().anyMatch(c -> script(c) == Character.UnicodeScript.HANGUL)) koreanLines++;
         }
         if (kanaLines > 0 && koreanLines == 0) return "ja";
+        if (!source.isEmpty() && !"und".equals(source)) return source;
         if (koreanLines > 0 && kanaLines == 0) return "ko";
         return "";
     }
@@ -91,7 +91,7 @@ final class LocalRomanizer {
             if (text.length() > MAX_LINE || Thread.currentThread().isInterrupted()) return Reading.NONE;
             if (!LyricExtras.nonLatin(text)) return Reading.ORIGINAL;
             boolean japanese = "ja".equals(language) || hasKana(text);
-            String key = (japanese ? "ja" : language) + '\n' + text;
+            String key = "hepburn-2:" + language + (japanese ? ":ja" : "") + '\n' + text;
             Reading cached = cache.get(key);
             if (cached != null) return cached;
 
@@ -158,15 +158,7 @@ final class LocalRomanizer {
                         }
                         tokenizer = new JapaneseDictionary.Tokenizer(dictionary);
                     }
-                    StringBuilder output = new StringBuilder();
-                    for (JapaneseDictionary.JapaneseToken token : tokenizer.tokenize(normalized)) {
-                        if (Thread.currentThread().isInterrupted()) return text;
-                        String kana = token.isKnown() ? token.pronunciation() : "";
-                        if ("*".equals(kana)) kana = token.reading();
-                        if ("*".equals(kana) || kana.isEmpty()) kana = token.getSurface();
-                        appendWord(output, Hepburn.convert(kana));
-                    }
-                    return output.toString();
+                    return JapaneseReading.render(tokenizer.tokenize(normalized));
                 } catch (IOException | RuntimeException error) {
                     dictionaryState = DictionaryState.ERROR;
                     close();

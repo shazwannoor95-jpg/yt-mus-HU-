@@ -12,3 +12,9 @@
 - Use [ZAP](https://github.com/zaproxy/zaproxy) for passive analysis when an authorized local HTTP target or a sanitized HTTP capture is available. Keep active scan and spidering disabled.
 - Use [Strix](https://github.com/usestrix/strix) as a reference for defensive review coverage. Keep autonomous attack agents and exploit validation outside this workflow.
 - Report each tool's result, including skips and their reasons. Keep scanner reports out of commits and preserve the read-only launcher checkouts.
+
+## Permanent Google authentication lock
+
+Google authentication is frozen across all future updates, dependency changes, refactors and iDash integration. Explicit user approval is required for any exception. The lock covers GoogleSignIn, WebSession, account and verification logic in MusicApi and MainActivity, WebView flow and configuration, cookies, redirects, session storage and persistence, account detection, account-menu classification, tokens, ACCOUNT_MENU_SIGNED_OUT fixes, authentication diagnostics, dependencies, manifest entries and regression tests. Preserve the application ID, signing configuration and existing sessions. Never clear or reset accounts, force sign-in again, or alter authentication indirectly through a shared dependency.
+
+Before changing the project, record the commit and working tree, identify the protected code and configuration, and establish a baseline. Preserve existing user changes. Before delivery, compare the protected code and configuration with that baseline, run the unmodified authentication regression tests, verify the application ID and certificate, and report any limits on live verification. Report separate authentication issues without fixing them automatically. If another feature conflicts with this lock, isolate or defer that feature.

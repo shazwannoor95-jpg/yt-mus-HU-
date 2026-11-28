@@ -193,6 +193,11 @@ final class SettingsView extends LinearLayout {
         choice("Lyrics", "Lyrics look", "Lyrics style", "Choose how lyric lines are laid out.", "lyricsStyle", "theme",
                 new String[]{"Theme default", "Classic"}, new String[]{"theme", "classic"});
         range("Lyrics", "Lyrics look", "Text size", null, "lyricsSize", 100, 75, 160, 5, value -> value + "%");
+        toggle("Lyrics", "Lyrics look", "Show original lyrics",
+                "Keep original lines visible alongside available readings and translations.", "lyricOriginal", true);
+        range("Lyrics", "Lyrics look", "Line spacing", null, "lyricSpacing", 100, 75, 180, 5, value -> value + "%");
+        choice("Lyrics", "Lyrics look", "Active lyric colour", null, "lyricColour", "white",
+                new String[]{"White", "Theme accent"}, new String[]{"white", "accent"});
         choice("Lyrics", "Lyrics look", "Line weight", null, "lyricsWeight", "theme",
                 new String[]{"Theme default", "Regular", "Bold"}, new String[]{"theme", "regular", "bold"});
         toggle("Lyrics", "Lyrics look", "Quick line changes", "Jump to the current line instead of scrolling smoothly.", "quickLyrics", false);
@@ -211,12 +216,19 @@ final class SettingsView extends LinearLayout {
         range("Lyrics", "Romanization & Translation", "Romanization size", null,
                 "lyricRomanSize", 75, 50, 125, 5, value -> value + "%");
         toggle("Lyrics", "Romanization & Translation", "Translation",
-                "Use translations supplied with the lyrics or send missing lines to Unison.", "lyricTranslation", false);
+                "Use supplied translations, Unison or the optional Cloud Translation fallback.", "lyricTranslation", false);
         choice("Lyrics", "Romanization & Translation", "Translate into", null, "lyricTarget", "en",
                 new String[]{"English", "Bahasa Melayu", "Indonesia", "日本語", "한국어", "简体中文", "Русский"},
                 new String[]{"en", "ms", "id", "ja", "ko", "zh-CN", "ru"});
+        add("Lyrics", "Romanization & Translation", "Google Cloud Translation fallback",
+                "Optional billed service using your own API key.", () -> {
+            LyricCloudKey key = new LyricCloudKey(getContext());
+            Button manage = button("Manage");
+            manage.setOnClickListener(view -> manageLyricCloud(key));
+            row("Google Cloud Translation fallback", key.configured() ? "Configured" : "Off", manage);
+        });
         range("Lyrics", "Romanization & Translation", "Translation size", null,
-                "lyricTranslationSize", 75, 50, 125, 5, value -> value + "%");
+                "lyricTranslationSize", 65, 50, 125, 5, value -> value + "%");
         toggle("Lyrics", "Lyrics timing", "Lyrics at the screen’s refresh rate",
                 "Use faster line timing during playback when the effective profile allows it.", "lyricRefresh", false);
         range("Lyrics", "Lyrics timing", "Timing offset", "Positive values show lyrics later.", "lyricsOffset", 0, -5000, 5000, 100, SettingsView::milliseconds);
@@ -285,12 +297,44 @@ final class SettingsView extends LinearLayout {
 
         action("About", "Updates", "Check now", "Check GitHub for a newer Android APK. Updates are installed through Android.", "Check", "updates");
         action("About", "Updates", "What’s new in " + BuildVersion.VERSION,
-                "Offline romanization on Android 8.1, optional Japanese dictionary and clearer lyrics messages.", null, "");
+                "Contextual Japanese readings, clearer lyric layers and an optional Cloud Translation fallback.", null, "");
         action("About", "About", "YTM Head Unit " + BuildVersion.VERSION, "Android port of parts of ytm-rs. Android API 27 and newer.", null, "");
-        action("About", "About", "Lyrics", "LRCLIB, YouTube Music and optional Better Lyrics Unison. Local readings use Kuromoji/IPADIC, Korean Romanizer and Unicode Unihan.", null, "");
+        action("About", "About", "Lyrics", "LRCLIB, YouTube Music and optional Better Lyrics Unison or Google Cloud Translation. Local readings use Kuromoji/IPADIC, Korean Romanizer and Unicode Unihan.", null, "");
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");
         action("About", "About", "Source code", "GPL-3.0-only. Includes upstream attributions.", "Open GitHub", "source");
         action("About", "About", "Upstream ytm-rs", "Desktop project, releases and credits.", "Open GitHub", "upstream");
+    }
+
+    private void manageLyricCloud(LyricCloudKey key) {
+        EditText input = new EditText(getContext());
+        input.setSingleLine();
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setHint("Cloud Translation API key");
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext())
+                .setTitle("Google Cloud Translation fallback")
+                .setMessage("Sends original lyric text to Google Cloud for missing translations. Requires your own enabled, billed Cloud Translation project. The key is stored separately on this device.")
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Enable", null);
+        if (key.configured()) builder.setNeutralButton("Remove key", (dialog, which) -> {
+            key.remove();
+            host.changed("lyricCloud");
+            render();
+        });
+        AlertDialog dialog = builder.show();
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            try {
+                key.save(input.getText().toString().trim());
+                input.setText("");
+                dialog.dismiss();
+                host.changed("lyricCloud");
+                render();
+            } catch (IllegalArgumentException invalid) {
+                input.setError("Enter your Cloud Translation API key.");
+            } catch (Exception unavailable) {
+                input.setError("This device could not securely save the key.");
+            }
+        });
     }
 
     void updateDictionary() {

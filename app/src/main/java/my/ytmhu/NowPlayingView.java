@@ -13,11 +13,16 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import org.json.JSONObject;
+
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.Future;
 
 final class NowPlayingView extends LinearLayout {
@@ -26,13 +31,15 @@ final class NowPlayingView extends LinearLayout {
     }
 
     private static final int FOREGROUND = 0xfff5eef5;
+    private static final int INACTIVE_LYRIC = 0xffb3aeb9;
     private static final int MUTED = 0xffc6b8c6;
     private final Artwork artwork;
     private final LocalRomanizer romanizer = new LocalRomanizer();
     private final AppSettings prefs;
     private final Appearance appearance;
     private final SongMenu menu;
-    private final ExecutorService network = Executors.newSingleThreadExecutor();
+    private final ThreadPoolExecutor network = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>(2));
     private final TextView title, artist;
     private final Button lyricsTab, queueTab;
     private final ImageView cover;
@@ -234,7 +241,9 @@ final class NowPlayingView extends LinearLayout {
             List<Lyrics.Line> display = lyrics.displayLines();
             for (Lyrics.Line line : display) {
                 LinearLayout group = column();
-                TextView view = lyricsLine(line.text, line.millis < 0 ? FOREGROUND : MUTED);
+                TextView view = lyricsLine(line.text, line.millis < 0 ? FOREGROUND : INACTIVE_LYRIC);
+                int padding = dp(Math.round(8 * prefs.number("lyricSpacing", 100) / 100f));
+                group.setPadding(0, padding / 2, 0, padding - padding / 2);
                 group.addView(view);
                 if (line.millis >= 0 && !line.text.isEmpty()) group.setOnClickListener(clicked -> {
                     if (playback != null) playback.seekTo(line.millis + prefs.lyricOffset());
@@ -259,9 +268,9 @@ final class NowPlayingView extends LinearLayout {
     }
 
     private TextView addAlternate(LinearLayout group, String key) {
-        TextView view = lyricsLine("", MUTED);
+        TextView view = lyricsLine("", INACTIVE_LYRIC);
         view.setTextSize(appearance.lyricsSize * prefs.number("lyricsSize", 100) / 100f
-                * prefs.number(key, 75) / 100f);
+                * prefs.number(key, "lyricTranslationSize".equals(key) ? 65 : 75) / 100f);
         view.setVisibility(GONE);
         group.addView(view);
         return view;
@@ -289,7 +298,7 @@ final class NowPlayingView extends LinearLayout {
         LyricExtras request = new LyricExtras(getContext());
         extrasRequest = request;
         extrasTask = network.submit(() -> {
-            String inferred = roman ? LocalRomanizer.language(original.language, title, display) : original.language;
+            String inferred = LocalRomanizer.language(original.language, title, display);
             String language = !"auto".equals(hanPreference) && inferred.isEmpty() ? hanPreference : inferred;
             List<LocalRomanizer.Reading> local = new ArrayList<>();
             LocalRomanizer.DictionaryState dictionaryState = LocalRomanizer.DictionaryState.MISSING;
@@ -297,12 +306,12 @@ final class NowPlayingView extends LinearLayout {
                 try (LocalRomanizer.Batch batch = romanizer.new Batch(getContext(), new JapaneseDictionary(getContext()))) {
                     for (Lyrics.Line line : display) {
                         if (Thread.currentThread().isInterrupted()) return;
-                        local.add(line.roman.isEmpty() ? batch.read(line.text, language) : LocalRomanizer.Reading.ORIGINAL);
+                        local.add(LyricExtras.clean(line.roman, line.text).isEmpty() ? batch.read(line.text, language) : LocalRomanizer.Reading.ORIGINAL);
                     }
                     dictionaryState = batch.dictionaryState();
                 }
             }
-            boolean fetchTranslation = translate && !sameLanguage(original.language, target);
+            boolean fetchTranslation = translate && !sameLanguage(inferred, target);
             List<String> requested = LyricExtras.needed(display, local, roman, fetchTranslation, target);
             LocalRomanizer.DictionaryState status = dictionaryState;
             if (!requested.isEmpty() && roman) {
@@ -312,53 +321,101 @@ final class NowPlayingView extends LinearLayout {
                     }
                 });
             }
-            boolean unavailable = false;
-            org.json.JSONObject values = new org.json.JSONObject();
+            String failure = "";
+            JSONObject values = new JSONObject();
             if (!requested.isEmpty() && !Thread.currentThread().isInterrupted()) {
-                try { values = request.load(requested, target, original.language.isEmpty() ? language : original.language); }
-                catch (Exception failure) { unavailable = true; }
+                try { values = request.load(requested, target, inferred); }
+                catch (Exception unavailable) { failure = LyricExtras.failure(unavailable); }
+            }
+            if (fetchTranslation && !Thread.currentThread().isInterrupted()) {
+                List<String> missing = LyricExtras.missingTranslations(display, values, target);
+                if (!missing.isEmpty()) {
+                    try {
+                        String key = new LyricCloudKey(getContext()).read();
+                        if (!key.isEmpty()) {
+                            for (int i = 0; i < missing.size() && !Thread.currentThread().isInterrupted(); i += LyricExtras.CLOUD_BATCH) {
+                                List<String> batch = missing.subList(i, Math.min(i + LyricExtras.CLOUD_BATCH, missing.size()));
+                                JSONObject result = request.cloud(batch, target, inferred, key);
+                                for (String text : batch) {
+                                    JSONObject received = result.optJSONObject(text);
+                                    if (received == null) continue;
+                                    JSONObject existing = values.optJSONObject(text);
+                                    if (existing != null && existing.has("romanization")) {
+                                        received.put("romanization", existing.optString("romanization"));
+                                    }
+                                    values.put(text, received);
+                                }
+                            }
+                            failure = "";
+                        }
+                    } catch (Exception unavailable) {
+                        failure = LyricExtras.failure(unavailable);
+                    }
+                }
             }
             if (Thread.currentThread().isInterrupted()) return;
-            org.json.JSONObject received = values;
-            boolean providerUnavailable = unavailable;
+            JSONObject received = values;
+            String providerFailure = failure;
             post(() -> {
                 if (!currentExtras(original, request)) return;
                 showExtras(display, received, local, roman, translate, target);
-                boolean missingRoman = false;
-                boolean missingTranslation = false;
-                boolean japaneseHan = false;
-                for (int i = 0; i < display.size(); i++) {
-                    Lyrics.Line line = display.get(i);
-                    if (line.text.trim().isEmpty() || "♪".equals(line.text.trim())) continue;
-                    if (roman && line.roman.isEmpty() && !local.get(i).complete && extra(received, line.text, "romanization").isEmpty()) {
-                        missingRoman = true;
-                        japaneseHan |= LocalRomanizer.japaneseHan(line.text, language);
-                    }
-                    if (fetchTranslation && line.translation(target).isEmpty() && extra(received, line.text, "translation").isEmpty()) {
-                        missingTranslation = true;
-                    }
-                }
-                if (missingRoman) {
-                    String message = "Some lines have no reliable romanization. Original lyrics are kept.";
-                    if (japaneseHan && status == LocalRomanizer.DictionaryState.MISSING) {
-                        message = "For kanji readings, install the Japanese dictionary in Settings › Lyrics (" + JapaneseDictionary.DOWNLOAD_SIZE + ").";
-                    } else if (japaneseHan && status == LocalRomanizer.DictionaryState.MEMORY) {
-                        message = "Japanese dictionary paused to save memory. Reopen Lyrics when more memory is available.";
-                    } else if (japaneseHan && status == LocalRomanizer.DictionaryState.ERROR) {
-                        message = "Japanese dictionary could not open. Reinstall it in Settings › Lyrics.";
-                    } else if (language.isEmpty() && LocalRomanizer.hasHan(display)) {
-                        message += " For Chinese lyrics, choose Chinese in Settings › Lyrics › Han-only lyrics.";
-                    }
-                    showAlternate(romanStatus, message, false);
-                }
-                if (missingTranslation) {
-                    String message = providerUnavailable
-                            ? "Translation service unavailable. Check the connection and reopen Lyrics to retry."
-                            : "Some lines have no translation in the selected language. Try another language in Settings › Lyrics.";
-                    showAlternate(translationStatus, message, false);
-                }
+                showDiagnostics(display, received, local, roman, translate, target,
+                        language, status, fetchTranslation, providerFailure);
             });
         });
+    }
+
+    private void showDiagnostics(List<Lyrics.Line> display, JSONObject values, List<LocalRomanizer.Reading> local,
+                                 boolean roman, boolean translate, String target, String language,
+                                 LocalRomanizer.DictionaryState dictionaryState, boolean fetchTranslation, String failure) {
+        Set<String> readings = new LinkedHashSet<>();
+        Set<String> translations = new LinkedHashSet<>();
+        boolean missingRoman = false, japaneseHan = false, missingTranslation = false;
+        for (int i = 0; i < display.size(); i++) {
+            Lyrics.Line line = display.get(i);
+            if (line.text.trim().isEmpty() || "♪".equals(line.text.trim())) continue;
+            if (roman && LyricExtras.nonLatin(line.text)) {
+                if (!LyricExtras.clean(line.roman, line.text).isEmpty()) readings.add("source-provided");
+                else if (local.get(i).complete) {
+                    readings.add(LocalRomanizer.japaneseHan(line.text, language) ? "local dictionary" : "local conversion");
+                } else if (!extra(values, line.text, "romanization").isEmpty()) readings.add("Unison");
+                else {
+                    if (!local.get(i).text.isEmpty()) readings.add("partial local conversion");
+                    missingRoman = true;
+                    japaneseHan |= LocalRomanizer.japaneseHan(line.text, language);
+                }
+            }
+            if (!translate) continue;
+            if (!LyricExtras.clean(line.translation(target), line.text).isEmpty()) translations.add("source-provided");
+            else if (!extra(values, line.text, "translation").isEmpty()) {
+                translations.add("machine translation by " + extra(values, line.text, "provider"));
+            } else if (fetchTranslation) missingTranslation = true;
+        }
+        if (roman) {
+            String state = readings.isEmpty() ? "" : "Romanization: " + String.join(", ", readings) + ".";
+            if (missingRoman) {
+                String advice = "Some readings are unsupported or could not be converted.";
+                if (japaneseHan && dictionaryState == LocalRomanizer.DictionaryState.MISSING) {
+                    advice = "For kanji readings, install the Japanese dictionary in Settings › Lyrics (" + JapaneseDictionary.DOWNLOAD_SIZE + ").";
+                } else if (japaneseHan && dictionaryState == LocalRomanizer.DictionaryState.MEMORY) {
+                    advice = "Japanese dictionary paused to save memory. Reopen Lyrics when more memory is available.";
+                } else if (japaneseHan && dictionaryState == LocalRomanizer.DictionaryState.ERROR) {
+                    advice = "Japanese dictionary could not open. Reinstall it in Settings › Lyrics.";
+                } else if (language.isEmpty() && LocalRomanizer.hasHan(display)) {
+                    advice = "For Han-only lyrics with unknown language, choose Japanese or Chinese in Settings › Lyrics.";
+                }
+                state = state.isEmpty() ? "Romanization: " + advice : state + " " + advice;
+            }
+            showAlternate(romanStatus, state, false);
+        }
+        if (translate) {
+            String state = translations.isEmpty() ? "" : "Translation: " + String.join(", ", translations) + ".";
+            if (missingTranslation) {
+                String advice = failure.isEmpty() ? "Some lines have no translation in the selected language." : failure;
+                state = state.isEmpty() ? "Translation: " + advice : state + " " + advice;
+            }
+            showAlternate(translationStatus, state, false);
+        }
     }
 
     private static boolean sameLanguage(String first, String second) {
@@ -370,7 +427,7 @@ final class NowPlayingView extends LinearLayout {
         for (int i = 0; i < display.size(); i++) {
             Lyrics.Line line = display.get(i);
             if (roman) {
-                String value = line.roman;
+                String value = LyricExtras.clean(line.roman, line.text);
                 LocalRomanizer.Reading reading = i < local.size() ? local.get(i) : LocalRomanizer.Reading.NONE;
                 if (value.isEmpty() && reading.complete) value = reading.text;
                 if (value.isEmpty()) value = extra(values, line.text, "romanization");
@@ -378,21 +435,30 @@ final class NowPlayingView extends LinearLayout {
                 showAlternate(alternates.get(i).get(0), value, i == activeLine);
             }
             if (translate) {
-                String value = line.translation(target);
+                String value = LyricExtras.clean(line.translation(target), line.text);
                 if (value.isEmpty()) value = extra(values, line.text, "translation");
-                showAlternate(alternates.get(i).get(roman ? 1 : 0), value, i == activeLine);
+                TextView view = alternates.get(i).get(roman ? 1 : 0);
+                showAlternate(view, value, i == activeLine);
+                if (!value.isEmpty()) {
+                    String provider = extra(values, line.text, "provider");
+                    view.setContentDescription(LyricExtras.clean(line.translation(target), line.text).isEmpty() && !provider.isEmpty()
+                            ? "Machine translation by " + provider + ". " + value : value);
+                }
+
             }
+            boolean hasAlternate = alternates.get(i).stream().anyMatch(view -> view.getVisibility() == VISIBLE);
+            lines.get(i).setVisibility(!hasAlternate || prefs.flag("lyricOriginal", true) ? VISIBLE : GONE);
         }
+        if (activeLine >= 0) followActive(activeLine, lines.get(activeLine));
     }
 
     private static String extra(org.json.JSONObject values, String text, String key) {
-        org.json.JSONObject entry = values.optJSONObject(text.trim());
-        return entry == null ? "" : entry.optString(key);
+        return LyricExtras.value(values, text, key);
     }
 
     private static void showAlternate(TextView view, String text, boolean active) {
         view.setText(text);
-        view.setTextColor(active ? FOREGROUND : MUTED);
+        view.setTextColor(active ? FOREGROUND : INACTIVE_LYRIC);
         view.setVisibility(text.isEmpty() ? GONE : VISIBLE);
     }
 
@@ -401,6 +467,7 @@ final class NowPlayingView extends LinearLayout {
         if (extrasTask != null) extrasTask.cancel(true);
         extrasRequest = null;
         extrasTask = null;
+        network.purge();
     }
 
     void refreshLyricAppearance() {
@@ -413,27 +480,37 @@ final class NowPlayingView extends LinearLayout {
         if (activeLine == index) return;
         if (activeLine >= 0) {
             TextView last = lines.get(activeLine);
-            if (activeLine < alternates.size()) for (TextView extra : alternates.get(activeLine)) extra.setTextColor(MUTED);
-            last.setTextColor(MUTED);
+            if (activeLine < alternates.size()) for (TextView extra : alternates.get(activeLine)) extra.setTextColor(INACTIVE_LYRIC);
+            last.setTextColor(INACTIVE_LYRIC);
             last.setTypeface(last.getTypeface(), "bold".equals(prefs.text("lyricsWeight", "theme")) ? Typeface.BOLD : Typeface.NORMAL);
         }
         activeLine = index;
         if (index >= 0) {
             TextView line = lines.get(index);
             if (index < alternates.size()) for (TextView extra : alternates.get(index)) extra.setTextColor(FOREGROUND);
-            line.setTextColor(Color.WHITE);
+            line.setTextColor(activeLyricColour());
             line.setTypeface(line.getTypeface(), "regular".equals(prefs.text("lyricsWeight", "theme")) ? Typeface.NORMAL : Typeface.BOLD);
-            scroll.post(() -> {
-                if (activeLine == index && lyricsMode && line.getParent() instanceof View
-                        && ((View) line.getParent()).getParent() == rows) {
-                    int top = Math.max(0, ((View) line.getParent()).getTop() - scroll.getHeight() / 3);
-                    if (prefs.flag("quickLyrics", false) || profile.ordinal() <= PerformancePolicy.Profile.LITE.ordinal()) scroll.scrollTo(0, top);
-                    else scroll.smoothScrollTo(0, top);
-                }
-            });
+            followActive(index, line);
         } else {
             scroll.smoothScrollTo(0, 0);
         }
+    }
+
+    private int activeLyricColour() {
+        if (!"accent".equals(prefs.text("lyricColour", "white"))) return Color.WHITE;
+        return Color.rgb((Color.red(appearance.accent) + 510) / 3,
+                (Color.green(appearance.accent) + 510) / 3, (Color.blue(appearance.accent) + 510) / 3);
+    }
+
+    private void followActive(int index, TextView line) {
+        scroll.post(() -> {
+            if (activeLine != index || !lyricsMode || !(line.getParent() instanceof View)) return;
+            View group = (View) line.getParent();
+            if (group.getParent() != rows) return;
+            int top = Math.max(0, group.getTop() - scroll.getHeight() / 3);
+            if (prefs.flag("quickLyrics", false) || profile.ordinal() <= PerformancePolicy.Profile.LITE.ordinal()) scroll.scrollTo(0, top);
+            else scroll.smoothScrollTo(0, top);
+        });
     }
 
     private void renderQueue() {
@@ -488,6 +565,7 @@ final class NowPlayingView extends LinearLayout {
         if (lyricsTask != null) lyricsTask.cancel(true);
         ++lyricsGeneration;
         lyricsTask = null;
+        network.purge();
         lyrics = null;
     }
 

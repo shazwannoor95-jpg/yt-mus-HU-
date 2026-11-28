@@ -1052,6 +1052,8 @@ public final class MainActivity extends Activity {
             case "performance":
                 performance.choose(prefs.text("performance", "AUTO"));
                 return;
+            case "lyricsSize": case "lyricsStyle": case "lyricsWeight": case "lyricOriginal":
+            case "lyricSpacing": case "lyricColour": case "lyricCloud":
             case "lyricRoman": case "lyricRomanSize": case "lyricTranslation": case "lyricTranslationSize": case "lyricTarget": case "lyricHanLanguage":
                 expanded.refreshLyricAppearance();
                 break;

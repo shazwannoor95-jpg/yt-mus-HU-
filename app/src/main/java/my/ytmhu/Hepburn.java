@@ -52,6 +52,15 @@ final class Hepburn {
             return stem + ("sh".equals(stem) || "ch".equals(stem) || "j".equals(stem) ? "" : "y")
                     + "auo".charAt(smallY);
         }
+        if (next == 'ゅ') {
+            switch (current) {
+                case 'ふ': return "fyu";
+                case 'て': return "tyu";
+                case 'で': return "dyu";
+                case 'ゔ': return "vyu";
+                default: break;
+            }
+        }
         int smallVowel = "ぁぃぅぇぉ".indexOf(next);
         if (smallVowel < 0) return "";
         char vowel = "aiueo".charAt(smallVowel);
@@ -59,6 +68,9 @@ final class Hepburn {
             case 'ふ': return "f" + vowel;
             case 'ゔ': return "v" + vowel;
             case 'う': return "w" + vowel;
+            case 'い': return next == 'ぇ' ? "ye" : "";
+            case 'く': return next == 'ぁ' ? "kwa" : "";
+            case 'ぐ': return next == 'ぁ' ? "gwa" : "";
             case 'つ': return "ts" + vowel;
             case 'し': return next == 'ぇ' ? "she" : "";
             case 'じ': return next == 'ぇ' ? "je" : "";

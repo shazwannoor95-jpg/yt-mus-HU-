@@ -260,3 +260,25 @@ Branch `experiment/owned-playlist-entries-0429`, based on `5740dab5a9bb922d19c53
 Gradle passed 92 tests with zero failures, errors or skips. API 27 additions exercise distinct entry IDs for repeated songs, manual-order detection, successor math and invalid tail movement, and exact acknowledgement for deletion. Signed APK `downloads/ytm-head-unit-0.4.29-debug.apk` is 15,574,578 bytes. REA SHA-256 `dd75b9906f1c01e33caee955d0ed1893f66a801018230db596c42c0d1efc7a23`. Craft Anything found two archive changes and 66 identical entries. Application ID `my.ytmhu`, minimum API 27 and signing certificate match baseline. No dependencies changed. The unchanged login, visitor/session, authorization, account verification and WebView methods and existing auth regression fixtures were checked against 0.4.24. Live Google persistence, Unison service results, playlist mutations and physical-device behavior remain unverified. No live account was used for testing.
 
 The next compatible development path is save queue as a private playlist using the upstream ordered video-ID creation request, then decoder-aware playback staging and transition tests. For Song/Video, test the authorized off-screen fixture on a permitted runtime. Production driver-display video still needs verified pairing and an OEM-supported parked-state signal. Current open scope is tracked by all 91 IDs in the parity matrix.
+
+## User verification of 0.4.29
+
+The user confirmed automatic English without opening Settings, the Now Playing Go to artist entry, the correct artist profile or an appropriate fallback, Go to album, all added Library tabs and an existing active Google login. This records the user's runtime evidence for the 0.4.29 install. Final animation verification is pending. No new animation regression was reported.
+
+## 0.4.30 visible video fixture
+
+Branch `experiment/visible-video-fixture-0430`, based on `bd6cf0de729681be62c38879970c87dee8cc94c8`. Pinned `backend.rs::music_video` and `ytm.rs::paired_video/parse_paired_video` use declared counterparts and may include a timeline offset. Its anonymous `searched_video/sure_video` path cannot establish exact time alignment. No approved native delivery and timeline are available for the catalog on Android. The Media3 decoder-capability reference and the app's existing ranking remain applicable. No protected login, provider session, lyrics method or resource changed.
+
+The isolated fixture uses a native TextureView and the existing PlaybackService, with Song as its default, an in-place Video selector, shared Play/Pause/seek, Previous/Next using the service queue, fit/fill, immersive fullscreen, loading state and audio recovery on detach. Two versions of the same synthetic fixture at 144p and 180p use compatible local AVC/AAC. Automatic selection tries the next compatible fixture rendition if opening or preparation fails, and quality selection offers only available fixture renditions. Decoded-frame capture is not used for ambient effects. The fixture requires a non-automotive Android SDK emulator and its own package `my.ytmhu.videofixture`. The regular app has no fixture Activity, controls or media assets.
+
+Gradle passed 94 host tests with zero failures, errors or skips, including API 27 fit/fill geometry, identity gating and player release/recovery. The native suite compiles and is prepared to assert actual frames, pause, seek, fullscreen and recovery. There is no Android SDK emulator or attached permitted device in this workspace, so native assertions, physical performance and actual runtime selection are pending. The confirmed OEM parked-state input for TEST9278B and authorized provider media with an auditable timeline remain required for production. Catalog discovery, delivery, native network adaptation and ambient effects remain open.
+
+Regular APK `downloads/ytm-head-unit-0.4.30-debug.apk` is 15,574,974 bytes. REA SHA-256 `9bda4a1881a5c925aba43f78cfd0780ffaf6b2361e25e7ecea0410b67f81bc27`. Craft Anything found two differences and 66 identical archive entries. The signer, minimum API 27 and application ID `my.ytmhu` match the baseline. Both fixture APKs also passed signature checks. Their app and runner are published separately.
+
+```sh
+adb install -r ytm-visible-video-0.4.30-fixture.apk
+adb install -r ytm-visible-video-0.4.30-test.apk
+adb shell am instrument -w my.ytmhu.videofixture.test/my.ytmhu.VideoFixtureInstrumentation
+```
+
+Rule 12 is pending final verification. Continue the dedicated lyrics checkpoint using the 04:43 frame comparison and the pinned karaoke source. On new runtime or pairing evidence, Song/Video remains the highest unresolved priority.

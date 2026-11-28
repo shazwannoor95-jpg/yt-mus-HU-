@@ -10,10 +10,19 @@ android {
         applicationId 'my.ytmhu'
         minSdk 27
         targetSdk 32
-        versionCode 34
-        versionName '0.4.29'
+        versionCode 35
+        versionName '0.4.30'
         testInstrumentationRunner 'my.ytmhu.VideoFixtureInstrumentation'
     }
+
+    buildTypes {
+        videoFixture {
+            initWith debug
+            applicationIdSuffix '.videofixture'
+            matchingFallbacks = ['debug']
+        }
+    }
+    testBuildType = providers.gradleProperty('visibleVideoFixture').isPresent() ? 'videoFixture' : 'debug'
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

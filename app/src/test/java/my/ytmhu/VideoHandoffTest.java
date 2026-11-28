@@ -52,10 +52,12 @@ public final class VideoHandoffTest {
             assertFalse(service.offerOffscreenVideo("different-id", video, output));
             assertTrue(song.isPlaying());
             assertTrue(service.offerOffscreenVideo("fixture-id", video, output));
+            assertTrue(service.videoPreparing());
             assertSame(song, field("player").get(service));
             assertTrue(song.isPlaying());
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
             assertTrue(service.videoActive());
+            assertFalse(service.videoPreparing());
             MediaPlayer candidate = (MediaPlayer) field("player").get(service);
             assertTrue(candidate.isPlaying());
             assertFalse(song.isPlaying());
@@ -95,6 +97,35 @@ public final class VideoHandoffTest {
             assertNull(field("video").get(service));
             assertSame(song, field("player").get(service));
             assertTrue(song.isPlaying());
+        } finally {
+            controller.destroy();
+            clip.delete();
+        }
+    }
+
+    @Test public void localRenditionWaitsForIdentityAndReleasesWhenTheSurfaceOwnerEndsIt() throws Exception {
+        org.robolectric.android.controller.ServiceController<PlaybackService> controller =
+                Robolectric.buildService(PlaybackService.class).create();
+        PlaybackService service = controller.get();
+        File clip = File.createTempFile("ytm-visible-video", ".mp4");
+        try (ImageReader output = ImageReader.newInstance(320, 180, ImageFormat.PRIVATE, 3);
+             AssetFileDescriptor video = new AssetFileDescriptor(
+                     ParcelFileDescriptor.open(clip, ParcelFileDescriptor.MODE_READ_ONLY), 0, 100)) {
+            MediaPlayer song = installPlayingAudio(service);
+            ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(video.getFileDescriptor(), 0, 100),
+                    new ShadowMediaPlayer.MediaInfo(4000, 30));
+            assertFalse(service.canOfferVideo("unrelated"));
+            assertFalse(service.offerLocalVideo("fixture-id", video, null));
+            assertTrue(service.offerLocalVideo("fixture-id", video, output.getSurface()));
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(120));
+            assertTrue(service.videoActive());
+            MediaPlayer movie = (MediaPlayer) field("player").get(service);
+            service.endVideo();
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(80));
+            assertFalse(service.videoActive());
+            assertSame(song, field("player").get(service));
+            assertTrue(song.isPlaying());
+            assertEquals(ShadowMediaPlayer.State.END, shadowOf(movie).getState());
         } finally {
             controller.destroy();
             clip.delete();

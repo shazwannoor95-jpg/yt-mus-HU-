@@ -20,6 +20,7 @@ import android.os.IBinder;
 import android.os.SystemClock;
 import android.net.Uri;
 import android.os.Looper;
+import android.widget.FrameLayout;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -27,15 +28,17 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** Exercises native video off-screen using only synthetic media in the test APK. */
+/** Exercises off-screen and visible playback using only synthetic media in an isolated AVD install. */
 public final class VideoFixtureInstrumentation extends Instrumentation {
     private static final String VIDEO = "native-video-fixture.mp4";
+    private static final String VIDEO_SMALL = "native-video-fixture-144.mp4";
     private static final String AUDIO = "native-audio-fixture.m4a";
 
     @Override public void onCreate(Bundle arguments) {
@@ -47,7 +50,7 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
         Bundle result = new Bundle();
         try {
             exercise();
-            result.putString("stream", "\nPASS: native AVC surface, seek, pause, resume and audio recovery\n");
+            result.putString("stream", "\nPASS: off-screen and visible AVC surfaces, fit/fill, fullscreen, seek, pause and audio recovery\n");
             finish(Activity.RESULT_OK, result);
         } catch (Exception | AssertionError failed) {
             result.putString("stream", "\nFAIL: " + failed + "\n");
@@ -56,7 +59,13 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
     }
 
     private void exercise() throws Exception {
+        Context target = getTargetContext();
+        require(target.getPackageName().endsWith(".videofixture"), "Use the isolated fixture APK target");
+        Class<?> host = Class.forName("my.ytmhu.VideoFixtureActivity", true, target.getClassLoader());
+        require(Boolean.TRUE.equals(host.getMethod("permitted", Context.class).invoke(null, target)),
+                "Visible fixture is restricted to a non-automotive Android SDK emulator");
         MediaFormat format = videoFormat(VIDEO);
+        MediaFormat small = videoFormat(VIDEO_SMALL);
         require(format != null && "video/avc".equals(format.getString(MediaFormat.KEY_MIME)), "Fixture AVC track");
         int width = format.getInteger(MediaFormat.KEY_WIDTH);
         int height = format.getInteger(MediaFormat.KEY_HEIGHT);
@@ -64,7 +73,9 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
         require(!VideoRenditions.rank(Collections.singletonList(format), PerformancePolicy.Profile.ULTRA_LITE,
                 height, 0, VideoRenditions::platformDecoder).isEmpty(), "Platform advertises a compatible local decoder");
 
-        Context target = getTargetContext();
+        require(small != null && small.getInteger(MediaFormat.KEY_HEIGHT) == 144, "Alternate fixture rendition");
+        List<MediaFormat> renditions = VideoRenditions.rank(Arrays.asList(format, small), PerformancePolicy.Profile.ULTRA_LITE,
+                height, 0, VideoRenditions::platformDecoder);
         File localAudio = File.createTempFile("ytm-video-fixture-", ".m4a", target.getCacheDir());
         CountDownLatch connected = new CountDownLatch(1);
         AtomicReference<PlaybackService> bound = new AtomicReference<>();
@@ -88,6 +99,7 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
             try {
                 require(connected.await(5, TimeUnit.SECONDS), "PlaybackService bind timed out");
                 runServiceFixture(bound.get(), localAudio, width, height);
+                runVisibleFixture(bound.get(), renditions, format, host);
             } finally {
                 onMain(() -> {
                     target.unbindService(connection);
@@ -110,6 +122,10 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
         prepare.setAccessible(true);
 
         onMain(() -> {
+            // This service instance belongs only to the separate fixture package.
+            field("queue").set(service, new java.util.ArrayList<MusicApi.Track>());
+            field("originalQueue").set(service, new java.util.ArrayList<MusicApi.Track>());
+            currentIndex.setInt(service, -1);
             service.enqueue(new MusicApi.Track("fixture-recording", "Fixture", "Local", "", ""), false);
             currentIndex.setInt(service, 0);
             prepare.invoke(service, Collections.singletonList(new MusicApi.AudioSource(
@@ -170,6 +186,47 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
                 return null;
             });
         }
+    }
+
+    private void runVisibleFixture(PlaybackService service, List<MediaFormat> renditions, MediaFormat large, Class<?> host)
+            throws Exception {
+        Field active = field("player"), session = field("session");
+        MediaPlayer original = onMain(() -> (MediaPlayer) active.get(service));
+        Object token = onMain(() -> session.get(service));
+        Activity screen = startActivitySync(new Intent(getTargetContext(), host).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        try {
+            VisibleVideoPanel panel = onMain(() -> {
+                VisibleVideoPanel view = new VisibleVideoPanel(screen, service, "fixture-recording", renditions,
+                        format -> getContext().getAssets().openFd(format == large ? VIDEO : VIDEO_SMALL));
+                screen.setContentView(view);
+                return view;
+            });
+            seek(service, 450);
+            await(() -> panel.video.isEnabled() && panel.song.isSelected(), "Song default and visible surface ready");
+            onMain(panel.video::performClick);
+            await(panel::hasVideoFrame, "TextureView acquired a native decoder frame");
+            require(onMain(() -> service.videoActive() && !original.isPlaying()), "One audible player after visible handoff");
+            onMain(panel.play::performClick);
+            await(() -> !service.playing(), "Visible transport pauses the service");
+            require(onMain(panel.fit::performClick), "Toggle Fill");
+            require(onMain(panel.full::performClick), "Enter fullscreen");
+            require(onMain(() -> "Exit fullscreen".contentEquals(panel.full.getText())), "Fullscreen label reflects state");
+            require(onMain(panel.full::performClick), "Exit fullscreen");
+            seek(service, 950);
+            onMain(panel.play::performClick);
+            await(service::playing, "Visible transport resumes the service");
+            onMain(() -> { screen.setContentView(new FrameLayout(screen)); return null; });
+            await(() -> !service.videoActive() && original.isPlaying(), "View detach releases video and resumes audio");
+            require(onMain(() -> active.get(service) == original && session.get(service) == token), "Original player and MediaSession preserved");
+        } finally {
+            onMain(() -> { screen.finish(); service.endVideo(); return null; });
+        }
+    }
+
+    private static Field field(String name) throws Exception {
+        Field field = PlaybackService.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return field;
     }
 
     private void seek(PlaybackService service, int position) throws Exception {

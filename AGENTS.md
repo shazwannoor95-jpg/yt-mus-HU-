@@ -27,6 +27,12 @@ Target Android API 27+, ARM32/ARM64, GLES 2.0 and the reference 1024 × 600 head
 
 Develop and exercise independent video components with authorized media in an emulator or permitted non-driver-display environment. Driver-display video requires an OEM-supported, reliable parked signal. An unknown state keeps driver-display playback unavailable.
 
+## Rule 12 — Absolute Lyrics Engine Lock
+
+State: **PENDING FINAL VERIFICATION**. Preserve the verified lyrics behavior during unrelated work. Finish targeted lyrics work in a dedicated checkpoint. Save the exact commit and APK version, protected file and method inventory, resources, dependencies, preference defaults and regression results. Mark the state **ACTIVE PERMANENT LOCK** only after verified runtime behavior and explicit user acceptance of that checkpoint.
+
+After activation, changes to protected lyrics code and behavior require explicit user approval. Protection covers provider order, discovery and matching, caching, LRC/TTML parsing, timestamp validation, timing and scroll, original/alternate rendering, theme lyric parameters, karaoke, all motion and fades, romanization and the bundled Japanese dictionary, translation and English defaults, lyrics preferences, storage, assets, dependencies and regression tests. In shared files protect lyrics-related methods, call sites and behavior. Keep video, theme, playback, refactoring and performance changes isolated from the lyrics path. Compare the protected scope against the accepted baseline and rerun unchanged lyrics regressions for every meaningful checkpoint. Record new lyrics issues and request explicit approval before changing protected behavior.
+
 ## Continuous checkpoint development
 
 Continue compatible parity work independently through meaningful, verified checkpoints. Preserve existing work, record the exact next unfinished task, and keep working on independent features when another feature requires unavailable hardware, authorization, or provider access. Revisit a known blocker when there is new evidence. Report each verification limit and obtain the required authorization for irreversible actions.

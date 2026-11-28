@@ -301,15 +301,18 @@ public final class PlaybackService extends Service {
      * ImageReader keeps this path off-screen until a supported display policy is available.
      */
     boolean offerOffscreenVideo(String recordingId, AssetFileDescriptor source, ImageReader output) {
-        MusicApi.Track track = currentTrack();
-        if (!prepared || !playing() || fading || restoringSong || pendingSeek >= 0 || video != null
-                || track == null || !track.id.equals(recordingId) || source.getDeclaredLength() <= 0) return false;
         Surface surface;
         try {
             surface = output.getSurface();
         } catch (IllegalStateException closed) {
             return false;
         }
+        return offerLocalVideo(recordingId, source, surface);
+    }
+
+    /** The caller must own a permitted output and a verified same-timeline local rendition. */
+    boolean offerLocalVideo(String recordingId, AssetFileDescriptor source, Surface surface) {
+        if (!canOfferVideo(recordingId) || source.getDeclaredLength() <= 0) return false;
         if (surface == null || !surface.isValid()) return false;
         VideoSwitch candidate = new VideoSwitch(player, generation, surface);
         video = candidate;
@@ -392,6 +395,14 @@ public final class PlaybackService extends Service {
     }
 
     boolean videoActive() { return video != null && player == video.player; }
+
+    boolean videoPreparing() { return video != null && player != video.player; }
+
+    boolean canOfferVideo(String recordingId) {
+        MusicApi.Track track = currentTrack();
+        return prepared && playing() && !fading && !restoringSong && pendingSeek < 0 && video == null
+                && track != null && track.id.equals(recordingId);
+    }
 
     void endVideo() {
         if (video == null) return;

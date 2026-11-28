@@ -103,7 +103,7 @@ public final class SyncedLyricsRuntimeTest {
                     display.add(new Lyrics.Line(i * 1000, "Motion " + i, "Reading " + i,
                             Collections.emptyMap()));
                 }
-                shadowOf(media).setCurrentPosition(8_900);
+                shadowOf(media).setCurrentPosition(8_400);
                 setLyrics(player, service, new Lyrics(display, "", "Motion fixture", "ja"));
                 layout(player);
                 publish(service, PlaybackState.STATE_PLAYING);
@@ -117,7 +117,15 @@ public final class SyncedLyricsRuntimeTest {
                 ScrollView scroll = (ScrollView) field(NowPlayingView.class, "scroll").get(player);
                 int before = scroll.getScrollY();
                 assertTrue(service.playing());
-                assertEquals(8900, field(NowPlayingView.class, "lastLyricTime").getInt(player));
+                assertEquals(8400, field(NowPlayingView.class, "lastLyricTime").getInt(player));
+                shadowOf(media).setCurrentPosition(8_510);
+                player.syncPosition();
+                layout(player);
+                assertActive(player, 8, 8_000);
+                assertEquals(1f, outgoing.getScaleX(), 0.001f);
+                assertEquals(0.95f, incoming.getScaleX(), 0.001f);
+                assertTrue(scroll.getScrollY() > before);
+                assertTrue(incoming.getTranslationY() > 0f);
                 shadowOf(media).setCurrentPosition(9_010);
                 player.syncPosition();
                 layout(player);

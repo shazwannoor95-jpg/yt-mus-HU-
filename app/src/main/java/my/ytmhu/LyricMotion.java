@@ -15,7 +15,7 @@ final class LyricMotion {
     private static final float[] UPCOMING = {0.82f, 0.68f, 0.55f, 0.39f};
 
     final float restScale, activeScale, lineOpacity, wordPopSeconds, glowEm, glowAlpha;
-    final int scaleMs, wordFadeMs, wordFadeDelay;
+    final int scaleMs, followLeadMs, wordFadeMs, wordFadeDelay;
     final Interpolator enter, exit, opacity, scroll;
     final Timing regular, past, active;
     private final float[] pastLines, upcomingLines, pastWords, upcomingWords;
@@ -29,6 +29,7 @@ final class LyricMotion {
         lineOpacity = number(style, "active_opacity_line_synced", 1f, 0f, 1f);
         scaleMs = Math.round(1000 * number(style, "scale_secs", 0.166f, 0.001f, 2f));
         scrollMs = Math.round(1000 * number(style, "scroll_secs", 0.75f, 0.01f, 2f));
+        followLeadMs = Math.round(1000 * number(style, "scroll_offset", 0.5f, 0f, 1.25f));
         scrollCurve = tuple(style.optJSONArray("scroll_curve"), 5);
         enter = bezier(style, "scale_ease", EASE);
         exit = bezier(style, "scale_exit_ease", enter);

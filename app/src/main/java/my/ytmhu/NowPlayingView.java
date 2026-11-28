@@ -73,7 +73,7 @@ final class NowPlayingView extends LinearLayout {
     private final Set<LyricRow> movingRows = new LinkedHashSet<>();
     private final Runnable motionFrame = this::updateMotion;
     private boolean motionPending, richLyrics;
-    private int scrollMotionCount, lastLyricTime = -1, lastSeekRevision;
+    private int scrollMotionCount, lastLyricTime = -1, lastSeekRevision, followIndex = -1;
     private String readingProvider = "", translationProvider = "";
     private boolean closed;
     private List<MusicApi.Track> lastQueue = Collections.emptyList();
@@ -299,6 +299,7 @@ final class NowPlayingView extends LinearLayout {
         alternates.clear();
         activeLine = -1;
         lastLyricTime = -1;
+        followIndex = -1;
         if (track == null) {
             rows.addView(text("Play a song to see its lyrics.", 17, MUTED));
         } else if (lyrics != null) {
@@ -566,7 +567,7 @@ final class NowPlayingView extends LinearLayout {
 
     private void showExtras(List<Lyrics.Line> display, org.json.JSONObject values,
                             List<LocalRomanizer.Reading> local, boolean roman, boolean translate, String target) {
-        boolean retarget = scrollMotionCount > 0 && following() && activeLine >= 0;
+        boolean retarget = scrollMotionCount > 0 && following() && followIndex >= 0;
         int scrollY = retarget ? displayedScrollY() : scroll.getScrollY();
         View anchor = scrollY > 0 ? firstVisibleGroup(scrollY) : null;
         int oldTop = anchor == null ? 0 : anchor.getTop();
@@ -603,7 +604,7 @@ final class NowPlayingView extends LinearLayout {
             if (anchor != null && (retarget || scroll.getScrollY() == scrollY)) {
                 scroll.scrollTo(0, scrollY + anchor.getTop() - oldTop);
             }
-            if (retarget && activeLine >= 0) followActive(activeLine, lines.get(activeLine), true);
+            if (retarget && followIndex >= 0) followLine(followIndex, true);
         });
     }
 
@@ -656,6 +657,7 @@ final class NowPlayingView extends LinearLayout {
         if (activeLine == index && !jump) {
             updateWord(time);
             if (expired) resumeFollow();
+            else anticipateFollow(index, time);
             return;
         }
         if (expired) clearFollowPause();
@@ -678,12 +680,22 @@ final class NowPlayingView extends LinearLayout {
         }
         updateWord(time);
         if (index >= 0) {
-            followActive(index, lines.get(index), animate);
+            if (jump || followIndex != index) followLine(index, animate);
         } else if (following() && time < lyrics.lines.get(0).millis) {
             ++scrollRevision;
             stopLyricScroll();
             scroll.scrollTo(0, 0);
+            followIndex = -1;
         }
+    }
+
+    private void anticipateFollow(int index, int time) {
+        int next = index + 1;
+        int lead = appearance.lyricMotion.followLeadMs;
+        if (!following() || index < 0 || next >= lines.size() || followIndex >= next || lead <= 0
+                || playback == null || !playback.playing() || quickLyricScroll()) return;
+        int untilNext = lyrics.lines.get(next).millis - time;
+        if (untilNext > 0 && untilNext <= lead) followLine(next, true);
     }
 
     private void updateWord(int time) {
@@ -720,6 +732,7 @@ final class NowPlayingView extends LinearLayout {
 
     private void pauseFollow() {
         stopLyricScroll();
+        followIndex = -1;
         followPausedUntil = SystemClock.uptimeMillis() + 8000;
         ++scrollRevision;
         returnToCurrent.setVisibility(VISIBLE);
@@ -735,16 +748,18 @@ final class NowPlayingView extends LinearLayout {
     private void resumeFollow() {
         draggingLyrics = false;
         clearFollowPause();
-        if (activeLine >= 0) followActive(activeLine, lines.get(activeLine), false);
+        if (activeLine >= 0) followLine(activeLine, false);
         else scroll.scrollTo(0, 0);
     }
 
-    private void followActive(int index, TextView line, boolean animate) {
+    private void followLine(int index, boolean animate) {
         if (!following()) return;
+        TextView line = lines.get(index);
+        followIndex = index;
         int revision = ++scrollRevision;
         afterLayout(() -> {
             if (!following() || revision != scrollRevision || !lyricsMode || getVisibility() != VISIBLE
-                    || activeLine != index || !(line.getParent() instanceof View)) return;
+                    || followIndex != index || !(line.getParent() instanceof View)) return;
             View group = (View) line.getParent();
             if (group.getParent() != rows) return;
             int height = scroll.getHeight();

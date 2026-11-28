@@ -74,7 +74,7 @@ public final class MainActivity extends Activity {
     private ImageView miniArtwork;
     private TextView miniTitle, miniArtist;
     private Button miniPrevious, miniNext, miniLike, miniDislike, expandedButton;
-    private SeekBar miniSeek;
+    private LoopSeekBar miniSeek;
     private boolean miniSeeking;
     private long volumeRefreshed;
     private int settingsScroll;
@@ -160,7 +160,7 @@ public final class MainActivity extends Activity {
     private Button home, explore, library, liked, settings, accountButton, sideAccount;
     private Button previous, next, shuffle, repeat;
     private PlayPauseButton play, miniPlay;
-    private SeekBar seek;
+    private LoopSeekBar seek;
     private boolean seeking;
 
     private final Runnable clock = new Runnable() {
@@ -442,8 +442,7 @@ public final class MainActivity extends Activity {
             utility.setPadding(dp(7), 0, dp(7), 0);
             player.addView(utility, new LinearLayout.LayoutParams(-1, dp(Viewport.TOUCH)));
         }
-        seek = new SeekBar(this);
-        seek.setContentDescription("Track progress");
+        seek = new LoopSeekBar(this, "Track progress", INK, false);
         seek.setProgressTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
         seek.setThumbTintList(android.content.res.ColorStateList.valueOf(appearance.progress(accent())));
         seek.setPadding(dp(8), 0, dp(8), 0);
@@ -546,6 +545,7 @@ public final class MainActivity extends Activity {
                             if (which == 0) service.setLoopStart();
                             else if (which == 2) service.clearLoop();
                             else if (!service.setLoopEnd()) toast("Choose a loop at least two seconds long.");
+                            renderLoopMarkers();
                         }).setNegativeButton("Cancel", null).show();
     }
 
@@ -629,10 +629,9 @@ public final class MainActivity extends Activity {
         miniPlayer.addView(body);
         if (!inline) miniPlayer.addView(controls, new LinearLayout.LayoutParams(-1, dp(Viewport.TOUCH)));
 
-        miniSeek = new SeekBar(this);
+        miniSeek = new LoopSeekBar(this, "Mini player track progress", INK, true);
         miniSeek.setPadding(0, 0, 0, 0);
         miniSeek.setThumb(null);
-        miniSeek.setContentDescription("Mini player track progress");
         android.graphics.drawable.ClipDrawable filled = new android.graphics.drawable.ClipDrawable(
                 shape(appearance.progress(accent()), 0), Gravity.LEFT, android.graphics.drawable.ClipDrawable.HORIZONTAL);
         android.graphics.drawable.LayerDrawable line = new android.graphics.drawable.LayerDrawable(
@@ -2504,6 +2503,17 @@ public final class MainActivity extends Activity {
         if (expanded.getVisibility() == View.VISIBLE) expanded.update(playback);
         syncLyricFrames();
         renderProgress();
+        renderLoopMarkers();
+    }
+
+    private void renderLoopMarkers() {
+        boolean available = playback != null && playback.canSetLoop();
+        int start = available ? playback.loopStart() : -1;
+        int end = available ? playback.loopEnd() : -1;
+        String range = start < 0 ? "" : end < 0 ? ", loop start " + time(start)
+                : ", loop from " + time(start) + " to " + time(end);
+        seek.setLoopBounds(start, end, range);
+        miniSeek.setLoopBounds(start, end, range);
     }
 
     private void updatePlayerArtwork() {

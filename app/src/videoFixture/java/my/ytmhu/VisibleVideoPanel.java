@@ -40,6 +40,9 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     private final PlaybackService service;
     private final DemoMedia media;
     private final ExecutorService loading;
+    private final DevicePerformance performance;
+    private final VideoAmbientLight ambient = new VideoAmbientLight();
+    private final Button light;
     private final FrameLayout frame;
     private final TextureView picture;
     private final TextView caption, time;
@@ -51,6 +54,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     private int attempt, chosenHeight;
     private long activeSince;
     private boolean wantVideo, offered, hadVideo, hasFrame, fill, fullscreen, tracking;
+    private boolean ambientEnabled = true, ambientActive;
     private Future<?> networkRequest;
     private int networkGeneration;
     private File networkVideo;
@@ -62,12 +66,14 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         }
     };
 
-    VisibleVideoPanel(Activity activity, PlaybackService service, DemoMedia media, ExecutorService loading) {
+    VisibleVideoPanel(Activity activity, PlaybackService service, DemoMedia media, ExecutorService loading,
+            DevicePerformance performance) {
         super(activity);
         this.activity = activity;
         this.service = service;
         this.media = media;
         this.loading = loading;
+        this.performance = performance;
         setOrientation(VERTICAL);
         setBackgroundColor(0xff18131b);
         LinearLayout modes = new LinearLayout(activity);
@@ -79,12 +85,17 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
             fill = !fill;
             fitLabel();
             framePicture();
+            refreshAmbient();
         });
         full = action(modes, "Fullscreen", this::toggleFullscreen);
+        light = action(modes, "Ambient", () -> {
+            ambientEnabled = !ambientEnabled;
+            refreshAmbient();
+        });
         addView(modes);
 
         frame = new FrameLayout(activity);
-        frame.setBackgroundColor(Color.BLACK);
+        frame.setBackground(ambient);
         frame.setClipChildren(true);
         LayoutParams stage = new LayoutParams(-1, 0, 1);
         stage.setMargins(dp(24), dp(8), dp(24), dp(8));
@@ -246,6 +257,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
 
     private void returnToSong() {
         cancelNetworkVideo();
+        ambient.reset();
         wantVideo = offered = hadVideo = hasFrame = false;
         delivered = null;
         error = "";
@@ -266,6 +278,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         String id = track == null ? "" : track.id;
         if (!recordingId.equals(id)) {
             cancelNetworkVideo();
+            ambient.reset();
             networkVideo = null;
             recordingId = id;
             recording = media.recordings.get(id);
@@ -304,6 +317,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
                 return;
             }
         }
+        if (!active && hadVideo) ambient.reset();
         hadVideo = active;
         if (!wantVideo && fullscreen) toggleFullscreen();
         boolean visible = active && hasFrame;
@@ -319,6 +333,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         video.setEnabled(!wantVideo && surface != null && available && service.canPlay());
         fit.setEnabled(active);
         full.setEnabled(active);
+        refreshAmbient();
         String qualityLabel = chosenHeight == 0 ? "Auto" : chosenHeight + "p";
         quality.setText(networkRequest != null ? "Fetching 240p…" : networkVideo != null ? "240p · HTTPS"
                 : qualityLabel + (active && chosenHeight == 0 && delivered != null ? " · " + label(delivered) : ""));
@@ -389,6 +404,18 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
                 delivered.getInteger(MediaFormat.KEY_WIDTH), delivered.getInteger(MediaFormat.KEY_HEIGHT), fill));
     }
 
+    void refreshAmbient() {
+        boolean supported = VideoAmbientLight.intervalMs(performance.profile()) > 0;
+        boolean available = supported && service.videoActive() && !fill;
+        if (light.isEnabled() != available) light.setEnabled(available);
+        boolean active = available && ambientEnabled;
+        if (active == ambientActive) return;
+        ambientActive = active;
+        light.setSelected(active);
+        light.setContentDescription(active ? "Turn ambient lighting off" : "Turn ambient lighting on");
+        if (!active) ambient.reset();
+    }
+
     boolean hasVideoFrame() { return service.videoActive() && hasFrame; }
 
     @Override protected void onAttachedToWindow() {
@@ -417,6 +444,9 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         if (!hasFrame && service.videoActive()) {
             hasFrame = true;
             render();
+        }
+        if (ambientActive && service.videoActive() && service.playing()) {
+            ambient.sample(surface, performance.profile());
         }
     }
 

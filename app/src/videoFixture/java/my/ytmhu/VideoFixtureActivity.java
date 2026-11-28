@@ -16,6 +16,7 @@ import java.util.concurrent.Executors;
 public final class VideoFixtureActivity extends Activity {
     private PlaybackService service;
     private DemoMedia media;
+    private DevicePerformance performance;
     private boolean bound, visible;
     private final ExecutorService loading = Executors.newSingleThreadExecutor();
     VisibleVideoPanel panel;
@@ -39,6 +40,9 @@ public final class VideoFixtureActivity extends Activity {
             message("Song / Video Demo requires a non-automotive Android SDK emulator.");
             return;
         }
+        performance = new DevicePerformance(this, "auto", () -> {
+            if (panel != null) panel.refreshAmbient();
+        });
         message("Preparing bundled test media…");
         loading.execute(() -> {
             try {
@@ -58,6 +62,7 @@ public final class VideoFixtureActivity extends Activity {
         super.onStart();
         visible = true;
         if (DemoPlaybackPolicy.permitted(this)) {
+            performance.start();
             bound = bindService(new Intent(this, PlaybackService.class), connection, BIND_AUTO_CREATE);
             if (!bound) message("Playback service could not start.");
         }
@@ -66,7 +71,7 @@ public final class VideoFixtureActivity extends Activity {
     private void showPlayer() {
         if (!visible || !bound || service == null || media == null || panel != null) return;
         service.installDemoAudio(media.audio);
-        panel = new VisibleVideoPanel(this, service, media, loading);
+        panel = new VisibleVideoPanel(this, service, media, loading, performance);
         setContentView(panel);
         service.play(media.queue, 0);
     }
@@ -85,6 +90,7 @@ public final class VideoFixtureActivity extends Activity {
 
     @Override protected void onStop() {
         visible = false;
+        if (performance != null) performance.stop();
         if (panel != null) {
             message("Preparing bundled test media…");
             panel = null;
@@ -93,6 +99,11 @@ public final class VideoFixtureActivity extends Activity {
         bound = false;
         service = null;
         super.onStop();
+    }
+
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (performance != null) performance.trim(level);
     }
 
     @Override protected void onDestroy() {

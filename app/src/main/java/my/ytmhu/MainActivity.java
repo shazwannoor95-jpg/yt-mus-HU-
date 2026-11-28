@@ -474,6 +474,7 @@ public final class MainActivity extends Activity {
                 : playback != null && playback.isRepeat() ? "All" : "Off";
         addAction(popup, "Repeat · " + repeatMode, this::toggleRepeat);
         addAction(popup, "Seek to position", this::showSeek);
+        if (playback != null && playback.canSetLoop()) addAction(popup, "A/B loop", this::showLoopOptions);
         if (playback != null) {
             int sleep = playback.sleepSelection();
             String timer = sleep == SleepTimer.SONG_END ? "Sleep timer · End of song"
@@ -501,6 +502,24 @@ public final class MainActivity extends Activity {
                     if (playback == service) service.setSleepTimer(minutes[which]);
                     dialog.dismiss();
                 }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void showLoopOptions() {
+        PlaybackService service = playback;
+        if (service == null || !service.canSetLoop()) return;
+        MusicApi.Track track = service.currentTrack();
+        int start = service.loopStart();
+        int end = service.loopEnd();
+        String title = end >= 0 ? "A/B loop · " + time(start) + " – " + time(end)
+                : start >= 0 ? "A/B loop · A at " + time(start) : "A/B loop";
+        new AlertDialog.Builder(this).setTitle(title)
+                .setItems(new String[]{"Set A at current position", "Set B at current position", "Clear loop"},
+                        (dialog, which) -> {
+                            if (playback != service || service.currentTrack() != track || !service.canSetLoop()) return;
+                            if (which == 0) service.setLoopStart();
+                            else if (which == 2) service.clearLoop();
+                            else if (!service.setLoopEnd()) toast("Choose a loop at least two seconds long.");
+                        }).setNegativeButton("Cancel", null).show();
     }
 
     private void addMiniPlayer(FrameLayout stage) {

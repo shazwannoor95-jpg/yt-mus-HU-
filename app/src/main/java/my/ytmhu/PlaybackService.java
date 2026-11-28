@@ -52,6 +52,8 @@ public final class PlaybackService extends Service {
     private int savedPosition, resumeGeneration = -1;
     private final SleepTimer sleepTimer = new SleepTimer();
     private int sleepPauseGeneration = -1;
+    private final AbLoop loop = new AbLoop();
+    private int loopGeneration = -1;
     private List<MusicApi.Track> originalQueue = new ArrayList<>();
     private MediaSession session;
     private MediaPlayer player;
@@ -384,6 +386,7 @@ public final class PlaybackService extends Service {
             return;
         }
         main.postDelayed(candidate.checkSurface, 500);
+        loop.clear();
         seekRevision++;
         publish(state, message);
     }
@@ -542,6 +545,49 @@ public final class PlaybackService extends Service {
                 .putString(MediaMetadata.METADATA_KEY_TITLE, track.title)
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist).build());
     }
+
+    boolean canSetLoop() { return prepared && !videoActive() && duration() >= 2000 + Math.round(500 * prefs.speed()); }
+    int loopStart() { return loop.hasStart() || loopEnd() >= 0 ? loop.start() : -1; }
+    int loopEnd() { return prepared ? loop.end(duration(), prefs.speed()) : -1; }
+
+    void setLoopStart() {
+        if (!canSetLoop()) return;
+        loopGeneration = generation;
+        loop.setStart(position());
+        scheduleLoop();
+    }
+
+    boolean setLoopEnd() {
+        if (!canSetLoop()) return false;
+        loopGeneration = generation;
+        boolean valid = loop.setEnd(position(), duration(), prefs.speed());
+        scheduleLoop();
+        return valid;
+    }
+
+    void clearLoop() {
+        loop.clear();
+        main.removeCallbacks(loopTick);
+    }
+
+    private void scheduleLoop() {
+        main.removeCallbacks(loopTick);
+        if (loopGeneration != generation) {
+            loop.clear();
+            return;
+        }
+        int end = loopEnd();
+        if (end < 0 || !playing() || pendingSeek >= 0 || videoActive()) return;
+        long delay = (long) Math.ceil((end - position()) / Math.max(0.1f, prefs.speed()));
+        main.postDelayed(loopTick, Math.max(5, delay));
+    }
+
+    private final Runnable loopTick = () -> {
+        int end = loopEnd();
+        if (!playing() || pendingSeek >= 0 || end < 0 || loopGeneration != generation || videoActive()) return;
+        if (position() >= end) seekTo(loop.start());
+        else scheduleLoop();
+    };
 
     void stopForSignOut() {
         stopPlayback();
@@ -776,6 +822,7 @@ public final class PlaybackService extends Service {
                 .setState(state, position(), playing() ? prefs.speed() : 0f).build());
         if (foreground) promote();
         writeQueueCheckpoint();
+        scheduleLoop();
         main.removeCallbacks(positionCheckpoint);
         if (playing()) main.postDelayed(positionCheckpoint, POSITION_CHECKPOINT_MS);
         if (changed != null) changed.run();
@@ -817,6 +864,7 @@ public final class PlaybackService extends Service {
     }
 
     private void releasePlayer() {
+        main.removeCallbacks(loopTick);
         if (videoActive()) player = video.song;
         discardVideo();
         restoringSong = false;

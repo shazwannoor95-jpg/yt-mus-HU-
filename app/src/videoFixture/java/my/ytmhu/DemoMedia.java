@@ -19,22 +19,24 @@ import java.util.Map;
 
 final class DemoMedia {
     static final String ARTIST = "Bundled synthetic test media";
+    static final String LICENSED_ID = "demo-rab001";
     final List<MusicApi.Track> queue = new ArrayList<>();
     final Map<String, File> audio = new LinkedHashMap<>();
     final Map<String, Recording> recordings = new LinkedHashMap<>();
 
     static DemoMedia load(Context context) throws IOException {
         DemoMedia result = new DemoMedia();
-        result.add(context, "grid", "demo-grid01", "Studio Grid");
-        result.add(context, "hue", "demo-hue002", "Colour Shift");
+        result.add(context, "demo/grid", "demo-grid01", "Studio Grid", ARTIST, new int[]{180, 144});
+        result.add(context, "demo/hue", "demo-hue002", "Colour Shift", ARTIST, new int[]{180, 144});
+        result.add(context, "licensed/rabbit", LICENSED_ID, "Rabbit", "MDN Learning Area · CC0 1.0", new int[]{240, 144});
         return result;
     }
 
-    private void add(Context context, String base, String id, String title) throws IOException {
-        File file = new File(context.getCacheDir(), "demo-0433-" + base + ".m4a");
+    private void add(Context context, String base, String id, String title, String artist, int[] heights) throws IOException {
+        File file = new File(context.getCacheDir(), id + ".m4a");
         File temp = File.createTempFile("demo-", ".m4a", context.getCacheDir());
         try {
-            try (InputStream input = context.getAssets().open("demo/" + base + ".m4a");
+            try (InputStream input = context.getAssets().open(base + ".m4a");
                  FileOutputStream output = new FileOutputStream(temp)) {
                 byte[] chunk = new byte[8192];
                 for (int read; (read = input.read(chunk)) != -1;) output.write(chunk, 0, read);
@@ -44,9 +46,9 @@ final class DemoMedia {
             temp.delete();
         }
         audio.put(id, file);
-        queue.add(new MusicApi.Track(id, title, ARTIST, "", ""));
+        queue.add(new MusicApi.Track(id, title, artist, "", ""));
         List<MediaFormat> formats = new ArrayList<>();
-        for (int height : new int[]{180, 144}) {
+        for (int height : heights) {
             try (AssetFileDescriptor descriptor = context.getAssets().openFd(video(base, height))) {
                 MediaExtractor decoder = new MediaExtractor();
                 try {
@@ -61,14 +63,14 @@ final class DemoMedia {
             }
         }
         Bitmap cover;
-        try (InputStream input = context.getAssets().open("demo/" + base + ".jpg")) {
+        try (InputStream input = context.getAssets().open(base + ".jpg")) {
             cover = BitmapFactory.decodeStream(input);
         }
         recordings.put(id, new Recording(base, cover, VideoRenditions.rank(formats,
-                PerformancePolicy.Profile.ULTRA_LITE, 180, 0, VideoRenditions::platformDecoder)));
+                PerformancePolicy.Profile.ULTRA_LITE, heights[0], 0, VideoRenditions::platformDecoder)));
     }
 
-    private static String video(String base, int height) { return "demo/" + base + "-" + height + ".mp4"; }
+    private static String video(String base, int height) { return base + "-" + height + ".mp4"; }
 
     static final class Recording {
         final String base;

@@ -66,7 +66,7 @@ public final class VideoFixtureActivity extends Activity {
     private void showPlayer() {
         if (!visible || !bound || service == null || media == null || panel != null) return;
         service.installDemoAudio(media.audio);
-        panel = new VisibleVideoPanel(this, service, media);
+        panel = new VisibleVideoPanel(this, service, media, loading);
         setContentView(panel);
         service.play(media.queue, 0);
     }

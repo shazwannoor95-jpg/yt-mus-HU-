@@ -1,6 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <application android:label="YTM Song / Video Demo" tools:replace="android:label">
         <activity android:name="my.ytmhu.MainActivity" android:enabled="false" android:exported="false"
             tools:replace="android:exported" />

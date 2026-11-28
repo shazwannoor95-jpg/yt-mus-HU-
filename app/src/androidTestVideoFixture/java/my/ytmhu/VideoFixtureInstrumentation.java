@@ -60,11 +60,17 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
             onMain(panel.play::performClick);
             await(() -> "Pause".contentEquals(panel.play.getContentDescription()), "Original audio resumes");
             onMain(panel.next::performClick);
-            await(() -> panel.previous.isEnabled() && !panel.next.isEnabled() && panel.video.isEnabled(), "Next plays the second local song");
+            await(() -> panel.previous.isEnabled() && panel.next.isEnabled() && panel.video.isEnabled(), "Next plays the second local song");
             onMain(panel.video::performClick);
             await(panel::hasVideoFrame, "Second recording has its own paired video");
             onMain(panel.previous::performClick);
             await(() -> !panel.previous.isEnabled() && panel.next.isEnabled() && panel.hasVideoFrame(), "Previous retains video on the first recording");
+            onMain(panel.next::performClick);
+            onMain(panel.next::performClick);
+            await(() -> panel.previous.isEnabled() && !panel.next.isEnabled() && panel.hasVideoFrame(),
+                    "Next plays the licensed Rabbit recording with its own paired video");
+            onMain(() -> { panel.setQuality(240); return null; });
+            await(() -> panel.renderedHeight() == 240, "Licensed original rendition renders at 240p");
         } finally {
             onMain(() -> { screen.finish(); return null; });
         }

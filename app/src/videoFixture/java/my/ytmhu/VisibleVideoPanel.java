@@ -8,6 +8,7 @@ import android.graphics.SurfaceTexture;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.media.MediaFormat;
+import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.Surface;
@@ -19,17 +20,26 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 /** The interactive emulator demo and its optional instrumentation use the same panel. */
 final class VisibleVideoPanel extends LinearLayout implements TextureView.SurfaceTextureListener {
+    private static final URI LICENSED_RENDITION = URI.create("https://raw.githubusercontent.com/mdn/learning-area/"
+            + "21973263ba859ff3477919087b488157f9d618a6/html/multimedia-and-embedding/video-and-audio-content/rabbit320.mp4");
+    private static final String LICENSED_SHA256 = "d0502ba7824940e90424847cd6094c858bab778703e382a0fbb71db533e4ad30";
     final Button song, video, fit, full, previous, next, quality;
     final PlayPauseButton play;
     final SeekBar seek;
     private final Activity activity;
     private final PlaybackService service;
     private final DemoMedia media;
+    private final ExecutorService loading;
     private final FrameLayout frame;
     private final TextureView picture;
     private final TextView caption, time;
@@ -41,6 +51,9 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     private int attempt, chosenHeight;
     private long activeSince;
     private boolean wantVideo, offered, hadVideo, hasFrame, fill, fullscreen, tracking;
+    private Future<?> networkRequest;
+    private int networkGeneration;
+    private File networkVideo;
     private String error = "";
     private final Runnable clock = new Runnable() {
         @Override public void run() {
@@ -49,11 +62,12 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         }
     };
 
-    VisibleVideoPanel(Activity activity, PlaybackService service, DemoMedia media) {
+    VisibleVideoPanel(Activity activity, PlaybackService service, DemoMedia media, ExecutorService loading) {
         super(activity);
         this.activity = activity;
         this.service = service;
         this.media = media;
+        this.loading = loading;
         setOrientation(VERTICAL);
         setBackgroundColor(0xff18131b);
         LinearLayout modes = new LinearLayout(activity);
@@ -82,7 +96,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         artwork.setScaleType(ImageView.ScaleType.FIT_CENTER);
         artwork.setBackgroundColor(0xff18131b);
         artwork.setPadding(dp(12), dp(12), dp(12), dp(62));
-        artwork.setContentDescription("Synthetic recording artwork");
+        artwork.setContentDescription("Recording artwork");
         frame.addView(artwork, new FrameLayout.LayoutParams(-1, -1));
         caption = new TextView(activity);
         caption.setTextColor(Color.WHITE);
@@ -157,15 +171,65 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
             int height = format.getInteger(MediaFormat.KEY_HEIGHT);
             menu.getMenu().add(label(format)).setOnMenuItemClickListener(item -> { setQuality(height); return true; });
         }
+        if (networkEligible()) {
+            menu.getMenu().add("240p · verified HTTPS").setOnMenuItemClickListener(item -> {
+                requestNetworkVideo();
+                return true;
+            });
+        }
         menu.show();
     }
 
     void setQuality(int selected) {
+        selectQuality(selected, null);
+    }
+
+    private void selectQuality(int selected, File staged) {
+        cancelNetworkVideo();
         boolean restart = wantVideo;
         if (restart) returnToSong();
         chosenHeight = selected;
-        if (restart) startVideo();
+        networkVideo = staged;
+        if (restart || staged != null) startVideo();
         render();
+    }
+
+    private boolean networkEligible() {
+        return DemoMedia.LICENSED_ID.equals(recordingId) && rendition(240) != null;
+    }
+
+    private void requestNetworkVideo() {
+        if (networkRequest != null || !networkEligible()) return;
+        int pending = ++networkGeneration;
+        networkRequest = loading.submit(() -> {
+            File staged = null;
+            try {
+                staged = VerifiedVideoDownload.fetch(activity.getCacheDir(), LICENSED_RENDITION,
+                        "raw.githubusercontent.com", 834563, LICENSED_SHA256);
+            } catch (IOException | SecurityException unavailable) {
+                // The bundled renditions remain available when the host is offline.
+            }
+            File result = staged;
+            activity.runOnUiThread(() -> {
+                if (pending != networkGeneration) return;
+                networkRequest = null;
+                MusicApi.Track current = service.currentTrack();
+                if (current == null || !DemoMedia.LICENSED_ID.equals(current.id) || !networkEligible()) return;
+                if (result == null) {
+                    Toast.makeText(activity, "Network rendition unavailable. Local playback remains available.", Toast.LENGTH_SHORT).show();
+                    render();
+                } else {
+                    selectQuality(240, result);
+                }
+            });
+        });
+        render();
+    }
+
+    private void cancelNetworkVideo() {
+        networkGeneration++;
+        if (networkRequest != null) networkRequest.cancel(true);
+        networkRequest = null;
     }
 
     private void startVideo() {
@@ -181,6 +245,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     }
 
     private void returnToSong() {
+        cancelNetworkVideo();
         wantVideo = offered = hadVideo = hasFrame = false;
         delivered = null;
         error = "";
@@ -200,8 +265,11 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         MusicApi.Track track = service.currentTrack();
         String id = track == null ? "" : track.id;
         if (!recordingId.equals(id)) {
+            cancelNetworkVideo();
+            networkVideo = null;
             recordingId = id;
             recording = media.recordings.get(id);
+            if (rendition(chosenHeight) == null) chosenHeight = 0;
             artwork.setImageBitmap(recording == null ? null : recording.cover);
             offered = hadVideo = hasFrame = false;
             attempt = 0;
@@ -216,6 +284,11 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
                 error = "Video ended. Song mode is available.";
             } else if (service.canOfferVideo(recordingId)) {
                 if (!offered || chosenHeight == 0 && attempt < recording.renditions.size()) offerNext();
+                else if (networkVideo != null) {
+                    networkVideo = null;
+                    chosenHeight = 0;
+                    offerNext();
+                }
                 else {
                     wantVideo = false;
                     error = "Video could not play. Audio continues.";
@@ -239,7 +312,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         caption.setGravity(active ? Gravity.CENTER : Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         String status = service.status();
         caption.setText(wantVideo ? "Loading video…" : service.title() + "\n" +
-                (error.isEmpty() ? (status.isEmpty() ? DemoMedia.ARTIST : status) : error));
+                (error.isEmpty() ? (status.isEmpty() && track != null ? track.artist : status) : error));
         song.setSelected(!wantVideo);
         video.setSelected(wantVideo);
         boolean available = recording != null && !recording.renditions.isEmpty();
@@ -247,7 +320,8 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         fit.setEnabled(active);
         full.setEnabled(active);
         String qualityLabel = chosenHeight == 0 ? "Auto" : chosenHeight + "p";
-        quality.setText(qualityLabel + (active && chosenHeight == 0 && delivered != null ? " · " + label(delivered) : ""));
+        quality.setText(networkRequest != null ? "Fetching 240p…" : networkVideo != null ? "240p · HTTPS"
+                : qualityLabel + (active && chosenHeight == 0 && delivered != null ? " · " + label(delivered) : ""));
         quality.setEnabled(available);
         previous.setEnabled(service.canSkip(-1));
         next.setEnabled(service.canSkip(1));
@@ -266,11 +340,12 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     }
 
     private void offerNext() {
-        MediaFormat candidate = chosenHeight == 0 ? recording.renditions.get(attempt++) : recording.renditions.stream()
-                .filter(format -> format.getInteger(MediaFormat.KEY_HEIGHT) == chosenHeight).findFirst().orElse(null);
+        MediaFormat candidate = chosenHeight == 0 ? recording.renditions.get(attempt++) : rendition(chosenHeight);
         offered = true;
         if (candidate == null) return;
-        try (AssetFileDescriptor file = recording.open(activity, candidate)) {
+        try (AssetFileDescriptor file = networkVideo == null ? recording.open(activity, candidate)
+                : new AssetFileDescriptor(ParcelFileDescriptor.open(networkVideo, ParcelFileDescriptor.MODE_READ_ONLY),
+                        0, networkVideo.length())) {
             if (service.offerLocalVideo(recordingId, file, surface)) {
                 delivered = candidate;
                 framePicture();
@@ -278,6 +353,15 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         } catch (IOException unavailable) {
             // A later tick tries the next verified rendition in Auto mode.
         }
+    }
+
+    private MediaFormat rendition(int height) {
+        if (recording != null) {
+            for (MediaFormat format : recording.renditions) {
+                if (format.getInteger(MediaFormat.KEY_HEIGHT) == height) return format;
+            }
+        }
+        return null;
     }
 
     boolean exitFullscreen() {

@@ -358,3 +358,39 @@ Branch `experiment/track-bookmarks-0437`, based on `5d8d7f4ad1fc85879772e2ab597b
 Gradle passed 107 tests with zero failures, errors or skips. New API 27 host fixtures cover persistence across store instances, order, edit/delete, track isolation and capacity. The signed regular APK `downloads/ytm-head-unit-0.4.37-debug.apk` is 15,587,394 bytes. REA SHA-256 `280de2134f38243ae64648e81792075a02be25505b62ef2c223b01470c19c0c0`. Craft Anything found two changed entries and 66 identical entries. Minimum API 27, application ID and signer match baseline. Both permanent locks remain active. Existing authentication and lyrics files, shared behavior, app resources and tests were checked against 0.4.32 and their unchanged host tests passed. Bookmark touch flow, live account persistence, native video and device audio remain unverified in this workspace.
 
 Next playback checkpoint: isolate authorized one-ahead audio preparation on a local media fixture with capped decoder ownership, cancellation on changed queue generations and no protected playback-clock or session changes. Crossfade, gapless transitions and skip silence require native audio verification. Production Song/Video continues to require authorized catalog/media delivery and reliable OEM parked-state signaling. Dynamic visuals and other outstanding features remain tracked in the matrix.
+
+## 0.4.38 licensed recording and verified HTTPS video delivery
+
+Branch `experiment/authorized-video-delivery-0438`, based on `5b180aa6d9dcfc0974683f1ca9f16d827cd4be9c`. The pinned `ytm.rs::paired_video` lookup requires a provider-authenticated and entitled session. The pinned Now Playing code informed the existing mode, quality, framing and fullscreen controls. No supported YouTube Music catalog API for the declared counterpart, its timeline and authorized direct media delivery was available to this project. An approved provider contract and reliable OEM park signal for TEST9278B are still needed before regular Now Playing can offer catalog video. Existing Google Auth, playback service and lyric clock are untouched in this checkpoint.
+
+### User runtime recording for YTM-041
+
+`20261128-1547-47.8129092.mp4` is 26.600 seconds, 1024 × 598 H.264, 30 fps, with an AAC stream. SHA-256 `4d2be4a62769da43125c79e5ea3372723a00d7557481c11f28859d1cb99b86c5`. The attachment was inspected at half-second intervals and compared to the source fixture's clock.
+
+| Recording time | Observation |
+| --- | --- |
+| 00:00–00:03 | Studio Grid artwork and advancing elapsed time in Song. Selecting Video shows loading, then moving frames with Auto at 180p. |
+| 00:06–00:13 | The quality menu lists Auto, 180p and 144p. Playback visibly continues after selecting 144p. |
+| 00:13–00:14 | Fit/Fill changes the picture from contained to cropped. |
+| 00:16–00:21 | Immersive playback enters fullscreen and displays the Android fullscreen prompt. The regular controls and system bars return by 00:20.5. |
+| 00:20–00:26 | Colour Shift and Studio Grid alternate, with moving frames on both recordings and visible Previous/Next interactions. |
+
+The evidence applies to the recorded demo. The fixture burn-in clock repeats every four seconds within each 24-second file. Visual inspection therefore does not measure precise A/V sync or handoff offset. The recording also does not establish instrumentation results, resource release, live catalog delivery or physical head-unit compatibility. The two source files containing the looping clock were not modified.
+
+### Licensed playback and network staging
+
+The fixture adds the MDN Learning Area `rabbit320.mp4`, published under the pinned repository's CC0 1.0 dedication. The original 320 × 240 AVC/AAC media is preserved byte-for-byte. A 192 × 144 version re-encodes only video, the Song M4A remuxes the original AAC, and cover art comes from the same clip. FFmpeg decoded both videos and all three decoded audio streams returned the same SHA-256 `187b3605b37897d0731057ec8617bf310eee0e147dc2a63cab83647f53ab9ae5`. Video duration is 7.800 s and AAC duration 7.766667 s. This verifies source identity and timing metadata on the host. It does not substitute for rendered A/V measurements. [Source media](https://github.com/mdn/learning-area/blob/21973263ba859ff3477919087b488157f9d618a6/html/multimedia-and-embedding/video-and-audio-content/rabbit320.mp4) · [CC0 1.0](https://github.com/mdn/learning-area/blob/21973263ba859ff3477919087b488157f9d618a6/LICENSE)
+
+A user-selected fixture quality item stages the original media from a pinned HTTPS origin. Staging rejects redirects and external host matches, requires exact byte count and SHA-256, uses platform TLS and a timed background transfer, and exposes only a verified private file to MediaPlayer. Cancellation follows track, mode and view lifetime. The bundled media remain available if staging or decoder preparation fails. The fixture gets Internet permission for this deliberate check. The regular APK bundles no licensed fixture media and starts no new provider or media requests. Adaptive bitrate streaming requires an authorized provider manifest and remains open. Initial ranking, manual quality and local fallback reuse the existing decoder policy.
+
+### Runtime test on an SDK emulator
+
+1. Install `ytm-song-video-licensed-check-0.4.38.apk` and open **YTM Song / Video Demo** on a permitted non-automotive Android Studio emulator, API 27 or newer. Press **Next** twice from Studio Grid or select Rabbit when reached in the queue.
+2. Tap **Video**. View moving footage at Auto or choose **144p** and **240p**. Pause between observations and try a mid-clip seek. Check the elapsed time and audible continuity while switching Song/Video and quality. Return with **Previous** to Colour Shift and **Next** to Rabbit.
+3. For the first network check, select **240p · verified HTTPS** in the quality menu while connected. Once ready, the label changes to **240p · HTTPS**. Local renditions remain available if the origin is unreachable. After a successful check, a verified cached copy can satisfy later selections offline.
+4. Exercise Fit/Fill and fullscreen, return to Song, then leave the app. Record the emulator API/device image, screen and audio, any stall or mismatch and whether the video disappears when the app leaves the foreground.
+5. Optional native smoke: install `ytm-song-video-licensed-check-0.4.38-test.apk` and run `adb shell am instrument -w my.ytmhu.videofixture.test/my.ytmhu.VideoFixtureInstrumentation`. This checks local rendering and controls. The HTTPS selection still needs a manual run.
+
+Gradle passed 110 regressions with zero failures, errors or skips, and compiled both fixture APKs. The API 27 tests cover exact HTTPS origin, length and digest checks, cache revalidation and expired work. Regular signed APK `downloads/ytm-head-unit-0.4.38-debug.apk` is 15,588,626 bytes, SHA-256 `6916dca659ce2b1242ae7b2023e3d69ec469c808007c9ff1cdeb79d8a70376ab`. Licensed fixture is 19,711,478 bytes, SHA-256 `4d11b3ea1edd724af1703a1f0a9c072664a74d363780e0784469e25c10d55c48`. The optional instrumentation APK is 197,833 bytes, SHA-256 `531e913d0ebac0b1a6f92a1c8aac9b676f4bb1bc19d4d81a4ef1b3df1814917f`. Package IDs, existing signer and min API 27 verified. REA and Craft Anything confirm no new regular archive entries and four licensed asset entries in the fixture only. Both permanent protections and unchanged regression tests were verified. No permitted Android emulator/device is available here, so 0.4.38 local and network native playback remain pending. The pinned HTTPS media was retrieved and compared on the host.
+
+Next production checkpoint: require a provider-declared same-clock map at the regular service's offscreen handoff boundary and reject incompatible decoded media before taking over audio. The authorized catalog adapter, visible production output and live native checks remain open.

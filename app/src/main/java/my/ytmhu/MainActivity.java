@@ -233,9 +233,7 @@ public final class MainActivity extends Activity {
         }
         LinearLayout root = column();
         if (appearance.glass) {
-            backdrop = new FrostedBackdrop(appearance.window,
-                    prefs.flag("flat", false) ? appearance.window : appearance.end,
-                    appearance.scrim, prefs.number("brightness", 100));
+            backdrop = new FrostedBackdrop(appearance.window, appearance.end, appearance.scrim, prefs);
             root.setBackground(backdrop);
         } else {
             root.setBackgroundColor(appearance.window);
@@ -508,8 +506,7 @@ public final class MainActivity extends Activity {
     private void addMiniPlayer(FrameLayout stage) {
         miniPlayer = column();
         if (appearance.glass) {
-            miniBackdrop = new FrostedBackdrop(appearance.window, appearance.surface, appearance.scrim,
-                    prefs.number("brightness", 100));
+            miniBackdrop = new FrostedBackdrop(appearance.window, appearance.surface, appearance.scrim, prefs);
             miniPlayer.setBackground(miniBackdrop);
         } else {
             miniPlayer.setBackground(shape(appearance.surface, 8));
@@ -1147,7 +1144,8 @@ public final class MainActivity extends Activity {
     private void settingsChanged(String key) {
         switch (key) {
             case "theme": case "accent": case "accentControls": case "font": case "zoom":
-            case "flat": case "brightness": case "sidebar": case "layoutDensity": case "coverColors": case "glass":
+            case "flat": case "flatColour": case "dimBright": case "brightness": case "sidebar":
+            case "layoutDensity": case "coverColors": case "glass":
                 recreate();
                 return;
             case "performance":

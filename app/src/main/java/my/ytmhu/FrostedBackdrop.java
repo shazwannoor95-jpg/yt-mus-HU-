@@ -17,16 +17,23 @@ final class FrostedBackdrop extends Drawable {
     private final GradientDrawable fallback;
     private final int tint;
     private final int scrimAlpha, brightness;
+    private final boolean dimBright;
+    private int readabilityAlpha;
     private Bitmap blur;
     private int[] source;
     private int quality = 12;
     private GradientDrawable tintGradient;
     private GradientDrawable albumShade;
 
-    FrostedBackdrop(int base, int end, double scrim, int brightness) {
-        this.brightness = brightness;
-        fallback = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Appearance.brightness(base, brightness), Appearance.brightness(end, brightness)});
+    FrostedBackdrop(int base, int end, double scrim, AppSettings prefs) {
+        brightness = prefs.number("brightness", 100);
+        dimBright = prefs.flag("dimBright", true);
+        if (prefs.flag("flat", false)) {
+            fallback = Appearance.background(prefs, GradientDrawable.Orientation.TL_BR, base, base);
+        } else {
+            fallback = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                    new int[]{Appearance.brightness(base, brightness), Appearance.brightness(end, brightness)});
+        }
         tint = base;
         scrimAlpha = Math.max(45, Math.min(210, (int) (scrim * 255)));
     }
@@ -51,6 +58,7 @@ final class FrostedBackdrop extends Drawable {
     private void rebuild() {
         blur = null;
         tintGradient = null;
+        readabilityAlpha = 0;
         if (source != null && quality == 0) {
             int r = 0, g = 0, b = 0;
             for (int color : source) {
@@ -61,8 +69,10 @@ final class FrostedBackdrop extends Drawable {
             int length = source.length * 4;
             int accent = Color.rgb((Color.red(tint) * 3 / 4) + r / length,
                     (Color.green(tint) * 3 / 4) + g / length, (Color.blue(tint) * 3 / 4) + b / length);
+            int shown = Appearance.brightness(accent, brightness);
+            if (dimBright) shown = Appearance.readableColour(shown);
             tintGradient = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    new int[]{Appearance.brightness(accent, brightness), Appearance.brightness(tint, brightness)});
+                    new int[]{shown, Appearance.brightness(tint, brightness)});
         } else if (source != null) {
             int[] pixels = new int[quality * quality];
             for (int y = 0; y < quality; y++) {
@@ -73,8 +83,18 @@ final class FrostedBackdrop extends Drawable {
             int[] soft = smooth(pixels, quality);
             blur = Bitmap.createBitmap(soft, quality, quality, Bitmap.Config.ARGB_8888);
             int shade = tint & 0x00ffffff;
+            int topAlpha = Math.max(scrimAlpha, 138);
             albumShade = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                    new int[]{Math.max(scrimAlpha, 138) << 24 | shade, 0xe0000000 | shade});
+                    new int[]{topAlpha << 24 | shade, 0xe0000000 | shade});
+            if (dimBright) {
+                float luma = 0;
+                for (int pixel : source) luma += Appearance.luma(pixel);
+                float tintPart = topAlpha / 255f;
+                float shown = luma / source.length * (1f - tintPart) + Appearance.luma(tint) * tintPart;
+                if (brightness < 100) shown *= brightness / 100f;
+                else if (brightness > 100) shown += (1f - shown) * ((brightness - 100) * 2f / 255f);
+                readabilityAlpha = Math.round(255 * (1f - Appearance.readableDim(shown)));
+            }
         }
         invalidateSelf();
     }
@@ -120,6 +140,11 @@ final class FrostedBackdrop extends Drawable {
         if (brightness != 100) {
             paint.setColor(brightness < 100 ? Color.BLACK : Color.WHITE);
             paint.setAlpha(brightness < 100 ? (100 - brightness) * 255 / 100 : (brightness - 100) * 2);
+            canvas.drawRect(bounds, paint);
+        }
+        if (readabilityAlpha > 0) {
+            paint.setColor(Color.BLACK);
+            paint.setAlpha(readabilityAlpha);
             canvas.drawRect(bounds, paint);
         }
     }

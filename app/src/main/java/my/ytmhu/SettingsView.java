@@ -247,7 +247,14 @@ final class SettingsView extends LinearLayout {
                 new String[]{"Theme default", "Red", "Amber", "Blue", "Green"}, new String[]{"theme", "red", "amber", "blue", "green"});
         toggle("Appearance", "Colours", "Accent coloured controls", "Colour active player and filter controls with the accent.", "accentControls", true);
         toggle("Appearance", "Background", "Flat background", "Use a solid background in the browser and Now Playing.", "flat", false);
+        add("Appearance", "Background", "Flat background colour", "Bright colours are toned down for text contrast.", () -> {
+            String current = prefs.text("flatColour", "");
+            Button edit = button(Appearance.isRgbColour(current) ? current : "Theme default");
+            edit.setOnClickListener(view -> editFlatColour());
+            row("Flat background colour", "Bright colours are toned down for text contrast.", edit);
+        });
         toggle("Appearance", "Background", "Cover colours", "Tint Now Playing using the current album art.", "coverColors", true);
+        toggle("Appearance", "Background", "Dim bright covers", "Reduce bright artwork behind lyrics and text.", "dimBright", true);
         range("Appearance", "Background", "Background brightness", null, "brightness", 100, 35, 130, 5, value -> value + "%");
         choice("Appearance", "Appearance", "Font", null, "font", "system",
                 new String[]{"System", "Inter", "DM Sans", "Figtree"}, new String[]{"system", "Inter", "DMSans", "Figtree"});
@@ -633,6 +640,32 @@ final class SettingsView extends LinearLayout {
         GradientDrawable background = card(10);
         if (selected) background.setStroke(dp(2), accent);
         return background;
+    }
+
+    private void editFlatColour() {
+        android.widget.EditText colour = new android.widget.EditText(getContext());
+        colour.setSingleLine();
+        colour.setHint("#242030");
+        colour.setText(prefs.text("flatColour", ""));
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(getContext())
+                .setTitle("Flat background colour").setView(colour).setNegativeButton("Cancel", null)
+                .setNeutralButton("Theme default", (closed, which) -> {
+                    prefs.set("flatColour", "");
+                    host.changed("flatColour");
+                }).setPositiveButton("Save", null).create();
+        dialog.setOnShowListener(shown -> dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(view -> {
+                    String value = colour.getText().toString().trim();
+                    if (!Appearance.isRgbColour(value)) {
+                        colour.setError("Enter a colour like #242030.");
+                        return;
+                    }
+                    prefs.set("flatColour", value);
+                    prefs.set("flat", true);
+                    dialog.dismiss();
+                    host.changed("flatColour");
+                }));
+        dialog.show();
     }
 
     private void action(String tab, String group, String title, String detail, String caption, String id) {

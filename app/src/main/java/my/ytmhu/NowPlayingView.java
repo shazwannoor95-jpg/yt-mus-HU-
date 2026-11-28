@@ -88,8 +88,7 @@ final class NowPlayingView extends LinearLayout {
         this.menu = menu;
         setOrientation(HORIZONTAL);
         setPadding(dp(30), dp(18), dp(24), dp(12));
-        frost = appearance.glass ? new FrostedBackdrop(appearance.start,
-                prefs.flag("flat", false) ? appearance.start : appearance.end, appearance.scrim, prefs.number("brightness", 100)) : null;
+        frost = appearance.glass ? new FrostedBackdrop(appearance.start, appearance.end, appearance.scrim, prefs) : null;
         background(appearance.start);
 
         cover = new ImageView(context);
@@ -267,7 +266,8 @@ final class NowPlayingView extends LinearLayout {
                 frost.setAlbum(bitmap);
             } else {
                 int tone = bitmap.getPixel(bitmap.getWidth() / 2, bitmap.getHeight() / 2);
-                background(Color.rgb(32 + Color.red(tone) / 3, 18 + Color.green(tone) / 3, 24 + Color.blue(tone) / 3));
+                int shown = Color.rgb(32 + Color.red(tone) / 3, 18 + Color.green(tone) / 3, 24 + Color.blue(tone) / 3);
+                background(prefs.flag("dimBright", true) ? Appearance.readableColour(shown) : shown);
             }
         });
     }

@@ -133,8 +133,12 @@ final class Appearance {
         return order;
     }
 
+    static boolean isRgbColour(String value) {
+        return value.matches("#[0-9A-Fa-f]{6}");
+    }
+
     private static int hex(String value, int fallback) {
-        return value.matches("#[0-9A-Fa-f]{6}") ? Color.parseColor(value) : fallback;
+        return isRgbColour(value) ? Color.parseColor(value) : fallback;
     }
 
     private static int mix(int a, int b, double amount) {
@@ -145,8 +149,33 @@ final class Appearance {
 
     static GradientDrawable background(AppSettings prefs, GradientDrawable.Orientation direction, int from, int to) {
         int level = prefs.number("brightness", 100);
-        if (prefs.flag("flat", false)) return new GradientDrawable(direction, new int[]{brightness(from, level), brightness(from, level)});
+        if (prefs.flag("flat", false)) {
+            int flat = brightness(flatColour(prefs, from), level);
+            if (isRgbColour(prefs.text("flatColour", ""))) flat = readableColour(flat);
+            return new GradientDrawable(direction, new int[]{flat, flat});
+        }
         return new GradientDrawable(direction, new int[]{brightness(from, level), brightness(to, level)});
+    }
+
+    static int flatColour(AppSettings prefs, int fallback) {
+        return prefs.flag("flat", false) ? hex(prefs.text("flatColour", ""), fallback) : fallback;
+    }
+
+    static float luma(int colour) {
+        return (Color.red(colour) * 0.299f + Color.green(colour) * 0.587f + Color.blue(colour) * 0.114f) / 255f;
+    }
+
+    /** Readability knee and eased ceiling from the original ytm-rs art.rs. */
+    static float readableDim(float shown) {
+        if (!Float.isFinite(shown) || shown <= 0.2f) return 1f;
+        return (0.2f + 0.1f * (1f - (float) Math.exp(-(shown - 0.2f) / 0.1f))) / shown;
+    }
+
+    static int readableColour(int color) {
+        float trim = readableDim(luma(color));
+        if (trim == 1f) return color;
+        return Color.rgb(Math.round(Color.red(color) * trim), Math.round(Color.green(color) * trim),
+                Math.round(Color.blue(color) * trim));
     }
 
     static int brightness(int color, int value) {

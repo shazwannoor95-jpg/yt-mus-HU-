@@ -53,6 +53,48 @@ final class Browse {
         }
     }
 
+    static final class CollectionHeader {
+        final String title, subtitle, image, description;
+        final boolean artist;
+
+        CollectionHeader(String title, String subtitle, String image, String description, boolean artist) {
+            this.title = title;
+            this.subtitle = subtitle;
+            this.image = image;
+            this.description = description;
+            this.artist = artist;
+        }
+    }
+
+    static CollectionHeader collectionHeader(JSONObject page, String browseId) {
+        JSONObject root = child(page, "header");
+        JSONObject header = root.optJSONObject("musicImmersiveHeaderRenderer");
+        if (header == null) header = root.optJSONObject("musicVisualHeaderRenderer");
+        boolean artist = header != null || browseId.startsWith("UC");
+        if (header == null) header = root.optJSONObject("musicDetailHeaderRenderer");
+        if (header == null) header = find(page, "musicResponsiveHeaderRenderer", 0);
+        if (header == null) return new CollectionHeader("", "", "", "", artist);
+        String title = displayText(header.optJSONObject("title"));
+        String subtitle = displayText(header.optJSONObject("subtitle"));
+        if (artist && subtitle.isEmpty()) {
+            JSONObject subscription = child(child(header, "subscriptionButton"), "subscribeButtonRenderer");
+            subtitle = displayText(subscription.optJSONObject("subscriberCountText"));
+        } else if (!artist) {
+            String credits = displayText(header.optJSONObject("straplineTextOne"));
+            if (!credits.isEmpty()) subtitle = subtitle.isEmpty() ? credits : credits + " · " + subtitle;
+        }
+        JSONObject image = child(header, "thumbnail");
+        String art = image(image);
+        if (art.isEmpty()) art = thumbnail(child(image, "croppedSquareThumbnailRenderer"));
+        String description = displayText(header.optJSONObject("description"));
+        if (description.isEmpty()) {
+            JSONObject shelf = find(artist ? page : child(header, "description"), "musicDescriptionShelfRenderer", 0);
+            if (shelf != null) description = displayText(shelf.optJSONObject("description"));
+        }
+        if (description.length() > 3000) description = description.substring(0, 3000).trim() + "…";
+        return new CollectionHeader(title, subtitle, art, description, artist);
+    }
+
     static final class Mood {
         final String title, params;
 
@@ -82,11 +124,31 @@ final class Browse {
     }
 
     static List<Shelf> shelves(JSONObject page, boolean hideExplicit) {
-        List<Shelf> out = new ArrayList<>();
         JSONObject sections = find(page, "sectionListRenderer", 0);
         if (sections == null) sections = find(page, "sectionListContinuation", 0);
-        if (sections == null) return out;
-        JSONArray rows = array(sections, "contents");
+        return sections == null ? new ArrayList<>() : parseShelves(array(sections, "contents"), hideExplicit, 40);
+    }
+
+    static List<Shelf> collectionShelves(JSONObject page, boolean hideExplicit) {
+        JSONObject columns = child(child(page, "contents"), "twoColumnBrowseResultsRenderer");
+        JSONObject secondary = child(columns, "secondaryContents");
+        JSONObject sections = secondary.optJSONObject("sectionListRenderer");
+        if (sections != null && array(sections, "contents").length() > 0) {
+            return parseShelves(array(sections, "contents"), hideExplicit, 160);
+        }
+        sections = find(page, "sectionListRenderer", 0);
+        return sections == null ? new ArrayList<>() : parseShelves(array(sections, "contents"), hideExplicit, 160);
+    }
+
+    static String collectionLink(String id) {
+        if (id.matches("UC[A-Za-z0-9_-]{22}")) return MusicApi.MUSIC + "/channel/" + id;
+        if (id.matches("VL[A-Za-z0-9_-]{2,190}")) return MusicApi.MUSIC + "/playlist?list=" + id.substring(2);
+        if (id.matches("(MPREb|OLAK5uy)[A-Za-z0-9_-]{2,190}")) return MusicApi.MUSIC + "/browse/" + id;
+        return "";
+    }
+
+    private static List<Shelf> parseShelves(JSONArray rows, boolean hideExplicit, int listLimit) {
+        List<Shelf> out = new ArrayList<>();
         for (int i = 0; i < rows.length() && out.size() < 16; i++) {
             JSONObject row = item(rows, i);
             JSONObject top = row.optJSONObject("musicCardShelfRenderer");
@@ -107,7 +169,8 @@ final class Browse {
             if (title.isEmpty()) title = displayText(renderer.optJSONObject("title"));
             JSONArray contents = array(renderer, grid != null ? "items" : "contents");
             List<Card> cards = new ArrayList<>();
-            for (int j = 0; j < contents.length() && cards.size() < 40; j++) {
+            int limit = list != null ? listLimit : 40;
+            for (int j = 0; j < contents.length() && cards.size() < limit; j++) {
                 Card card = card(item(contents, j));
                 if (card != null && !(hideExplicit && card.track != null && card.track.explicit)) cards.add(card);
             }

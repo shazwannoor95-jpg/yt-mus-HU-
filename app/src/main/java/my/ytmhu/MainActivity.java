@@ -104,6 +104,7 @@ public final class MainActivity extends Activity {
     private Browse.Search searchType = Browse.Search.All;
     private String collectionId = "";
     private String collectionTitle = "";
+    private Browse.Card collectionCard;
     private String mood = "";
     private Dialog signInDialog;
     private EditText query;
@@ -119,11 +120,19 @@ public final class MainActivity extends Activity {
         final List<Browse.Shelf> shelves;
         final List<Browse.Mood> moods;
         final List<MusicApi.Track> tracks;
+        final Browse.CollectionHeader header;
+        String filter = "";
         final long loaded = android.os.SystemClock.uptimeMillis();
         int row, offset;
         final List<int[]> shelfStarts = new ArrayList<>();
 
         BrowsePage(List<Browse.Shelf> shelves, List<Browse.Mood> moods, List<MusicApi.Track> tracks) {
+            this(shelves, moods, tracks, null);
+        }
+
+        BrowsePage(List<Browse.Shelf> shelves, List<Browse.Mood> moods, List<MusicApi.Track> tracks,
+                   Browse.CollectionHeader header) {
+            this.header = header;
             this.shelves = shelves;
             this.moods = moods;
             this.tracks = tracks;
@@ -896,6 +905,10 @@ public final class MainActivity extends Activity {
     }
 
     private void loadPage() {
+        loadPage(false);
+    }
+
+    private void loadPage(boolean refresh) {
         BrowsePage previous = pages.get(browseKey);
         if (previous != null) {
             previous.row = scroll.getFirstVisiblePosition();
@@ -938,7 +951,7 @@ public final class MainActivity extends Activity {
         if ("Collection".equals(active)) key += "\n" + selectedCollection;
         final String destination = key;
         BrowsePage cached = pages.get(key);
-        if (cached != null && android.os.SystemClock.uptimeMillis() - cached.loaded < 120_000) {
+        if (!refresh && cached != null && android.os.SystemClock.uptimeMillis() - cached.loaded < 120_000) {
             renderBrowsePage(key, cached);
             return;
         }
@@ -965,8 +978,13 @@ public final class MainActivity extends Activity {
                         }
                         data = api.browse(request);
                     }
-                    loaded = new BrowsePage(Browse.shelves(data, hideExplicit),
-                            "Home".equals(active) ? Browse.moods(data) : Collections.emptyList(), null);
+                    if ("Collection".equals(active)) {
+                        loaded = new BrowsePage(Browse.collectionShelves(data, hideExplicit), Collections.emptyList(),
+                                null, Browse.collectionHeader(data, selectedCollection));
+                    } else {
+                        loaded = new BrowsePage(Browse.shelves(data, hideExplicit),
+                                "Home".equals(active) ? Browse.moods(data) : Collections.emptyList(), null);
+                    }
                 }
                 runOnUiThread(() -> {
                     if (generation != current || isDestroyed()) return;
@@ -1327,9 +1345,122 @@ public final class MainActivity extends Activity {
         }
         if ("Library".equals(page)) heading("Playlists");
         else if ("Explore".equals(page)) heading("Explore");
-        else if ("Collection".equals(page) && !collectionTitle.isEmpty()) heading(collectionTitle);
+        boolean collection = "Collection".equals(page);
+        if (collection) {
+            results.add(() -> collectionHeader(content));
+        }
         if (content.shelves.isEmpty()) results.add(() -> label("No music to show.", viewport.songSp, MUTED));
-        for (int i = 0; i < content.shelves.size(); i++) addShelf(content.shelves.get(i), content.shelfStart(i));
+        int mainTracks = collection ? mainTrackShelf(content) : -1;
+        for (int i = 0; i < content.shelves.size(); i++) {
+            if (i == mainTracks) addCollectionTracks(content, i);
+            else addShelf(content.shelves.get(i), content.shelfStart(i));
+        }
+    }
+
+    private View collectionHeader(BrowsePage content) {
+        Browse.CollectionHeader header = content.header;
+        Browse.Card fallback = collectionCard != null && collectionId.equals(collectionCard.browseId) ? collectionCard : null;
+        String title = header == null || header.title.isEmpty() ? collectionTitle : header.title;
+        String art = header == null || header.image.isEmpty() ? fallback == null ? "" : fallback.image : header.image;
+        String subtitle = header == null || header.subtitle.isEmpty() ? fallback == null ? "" : fallback.subtitle : header.subtitle;
+        LinearLayout block = column();
+        block.setPadding(dp(4), dp(8), dp(4), dp(6));
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        if (!art.isEmpty()) {
+            int size = dp(viewport.shortScreen ? 84 : 104);
+            ImageView image = cover(art);
+            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            image.setBackground(shape(appearance.control, header != null && header.artist ? size : appearance.cardRadius));
+            row.addView(image, new LinearLayout.LayoutParams(size, size));
+        }
+        LinearLayout info = column();
+        TextView titleView = label(title, viewport.titleSp, INK);
+        titleView.setTypeface(appearance.font, Typeface.BOLD);
+        titleView.setMaxLines(2);
+        info.addView(titleView);
+        if (!subtitle.isEmpty()) {
+            TextView detail = label(subtitle, viewport.metadataSp, MUTED);
+            detail.setMaxLines(2);
+            info.addView(detail);
+        }
+        if (header != null && !header.description.isEmpty()) {
+            TextView preview = label(header.description, viewport.metadataSp, MUTED);
+            preview.setMaxLines(2);
+            preview.setMinimumHeight(dp(Viewport.TOUCH));
+            preview.setGravity(Gravity.CENTER_VERTICAL);
+            preview.setContentDescription("Read description");
+            preview.setOnClickListener(view -> new AlertDialog.Builder(this).setTitle(title)
+                    .setMessage(header.description).setPositiveButton("Close", null).show());
+            info.addView(preview);
+        }
+        row.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+        block.addView(row);
+        return block;
+    }
+
+    private int mainTrackShelf(BrowsePage content) {
+        for (int i = 0; i < content.shelves.size(); i++) {
+            Browse.Shelf shelf = content.shelves.get(i);
+            if (!shelf.preferArtwork && !shelf.cards.isEmpty() && shelf.cards.stream().allMatch(card -> card.track != null)) return i;
+        }
+        return -1;
+    }
+
+    private void addCollectionTracks(BrowsePage content, int mainTracks) {
+        Browse.Shelf shelf = content.shelves.get(mainTracks);
+        String id = collectionId;
+        boolean playlist = id.startsWith("VL");
+        String sortKey = "collectionSort:" + id;
+        CollectionTracks.Order order = playlist
+                ? CollectionTracks.Order.saved(prefs.text(sortKey, "")) : CollectionTracks.Order.ORIGINAL;
+        List<Browse.Card> cards = CollectionTracks.visible(shelf.cards, content.filter, order);
+        List<MusicApi.Track> tracks = new ArrayList<>(cards.size());
+        for (Browse.Card card : cards) tracks.add(card.track);
+        if (!shelf.title.isEmpty()) heading(shelf.title);
+        results.add(() -> chipRow(row -> {
+            if (!tracks.isEmpty()) {
+                row.addView(button("Play", () -> playTracks(tracks, 0)), spacedWidth(-2, Viewport.TOUCH));
+            }
+            row.addView(button(content.filter.isEmpty() ? "Find" : "Clear filter", () -> {
+                if (!content.filter.isEmpty()) {
+                    content.filter = "";
+                    renderBrowsePage(browseKey, content);
+                } else showCollectionFilter(content);
+            }), spacedWidth(-2, Viewport.TOUCH));
+            if (playlist) {
+                Button sort = button(order == CollectionTracks.Order.ORIGINAL ? "Sort" : "Sort · " + order.label, null);
+                sort.setOnClickListener(anchor -> {
+                    PopupMenu menu = new PopupMenu(this, anchor);
+                    for (CollectionTracks.Order option : CollectionTracks.Order.values()) {
+                        addAction(menu, option.label, () -> {
+                            prefs.set(sortKey, option.name());
+                            renderBrowsePage(browseKey, content);
+                        });
+                    }
+                    menu.show();
+                });
+                row.addView(sort, spacedWidth(-2, Viewport.TOUCH));
+            }
+            row.addView(button("Refresh", () -> loadPage(true)), spacedWidth(-2, Viewport.TOUCH));
+        }));
+        if (cards.isEmpty()) results.add(() -> label("No matching songs.", viewport.songSp, MUTED));
+        for (int i = 0; i < cards.size(); i++) {
+            int index = i;
+            results.add(() -> songRow(cards.get(index), tracks, index));
+        }
+    }
+
+    private void showCollectionFilter(BrowsePage content) {
+        EditText filter = new EditText(this);
+        filter.setSingleLine();
+        filter.setHint("Song or artist");
+        filter.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(120)});
+        new AlertDialog.Builder(this).setTitle("Find in collection").setView(filter)
+                .setNegativeButton("Cancel", null).setPositiveButton("Find", (dialog, which) -> {
+                    content.filter = filter.getText().toString().trim();
+                    renderBrowsePage(browseKey, content);
+                }).show();
     }
 
     private void addShelf(Browse.Shelf shelf, int[] start) {
@@ -1379,6 +1510,16 @@ public final class MainActivity extends Activity {
             showSongMenu(view, card.track, -1);
             return true;
         });
+        else {
+            String link = Browse.collectionLink(card.browseId);
+            if (!link.isEmpty()) tile.setOnLongClickListener(view -> {
+                PopupMenu menu = new PopupMenu(this, view);
+                addAction(menu, "Copy link", () -> getSystemService(ClipboardManager.class)
+                        .setPrimaryClip(ClipData.newPlainText("YouTube Music", link)));
+                menu.show();
+                return true;
+            });
+        }
         tile.addView(cover(card.image), new LinearLayout.LayoutParams(-1, Math.max(1, width - 2 * padding)));
         TextView title = label(card.title, viewport.songSp, INK);
         title.setTypeface(appearance.font, Typeface.BOLD);
@@ -1411,6 +1552,7 @@ public final class MainActivity extends Activity {
     }
 
     private void openCollection(Browse.Card card) {
+        collectionCard = card;
         collectionId = card.browseId;
         collectionTitle = card.title;
         navigate("Collection");

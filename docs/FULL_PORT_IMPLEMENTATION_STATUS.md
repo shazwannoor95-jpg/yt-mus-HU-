@@ -76,3 +76,23 @@ adb shell am instrument -w my.ytmhu.test/my.ytmhu.VideoFixtureInstrumentation
 ```
 
 Next verify the harness on API 27 and a newer API. Then plan a verified media source and paired-version mapping before plumbing video into the single PlaybackService and MediaSession. Driver-display use still requires an OEM-supported parked-state gate. Production pairing, quality/decoder fallback, screen lifecycle, Song/Video selector and fullscreen are open. The main APK from the Now Playing branch is the installable app update.
+
+## 0.4.14 lyric animation checkpoint
+
+Branch `experiment/lyric-motion-0414`, based on `3d58f25fd954457c9c7e12d4001f7001d2a3b422`. The Now Playing and instrumentation checkpoints remain in its history. The two recordings named `20261128-0443-04.4718818.mp4` and `20261128-0443-31.6066679.mp4` were referenced in the brief. Neither was available in the workspace during implementation. The prior Mega Master Pack clips remain baseline visual references. No frame-by-frame comparison of the newer clips was possible.
+
+| Pinned upstream evidence | Android adaptation |
+| --- | --- |
+| `ui/karaoke.rs::Trans`, `transform_origin`, `Cfg::new` and LyricStyle in `preset.rs` | The full lyric group scales around its leading edge and vertical center, or horizontal center in Classic. Default scale is 0.95 to 1.0 over 166 ms, reversing on exit. Default ytm-rs opacity transition is 195 ms. Theme-defined entry/exit curves, opacity ladders and per-state durations are read from the existing presets. Themes get a readability floor where desktop blur has no cheap Android equivalent. |
+| `ui/karaoke.rs::scroll_duration/curve_duration` and `SCROLL_EASE` | ScrollView moves directly to the 0.37 or themed anchor. Nearby rows are translated so their starting screen positions remain continuous. A shared bounded frame callback settles rows independently. Default base is 750 ms with directional distance terms, using Bézier (0.86, 0, 0.2, 1). Theme overrides apply. |
+| `ui/karaoke.rs::word_look/wobble` and `ui/nowplaying.rs::synced` | Genuine TTML and enhanced LRC ranges still follow PlaybackService. Balanced adds a soft 10% sweep edge. High Quality adds subtle glyph shadow and the source's 0.05 em side shift / 1.025 horizontal scale on the active single-row word. Sung fill fades on exit over 500 ms by default. Individual glyph waves, desktop blur and complex lyric effects remain open. |
+| `ui/lyric_prefs.rs` and scrolling logic in `ui/karaoke.rs` | Visual motion adds no audio lead or lyric trim. Explicit seek revisions and discontinuities snap to the correct line. Manual scroll cancels automatic offsets. Async alternate enrichment preserves the viewport and may retarget the visible scroll. |
+| `src/backdrop.rs`, `ui/nowplaying.rs::backdrop` | Existing bounded Android backdrop remains in use. This checkpoint does not extend desktop shader/ambient effects. |
+
+Balanced and High Quality target roughly 30 and 60 motion updates per second on a 60 Hz panel. Lite uses simplified immediate follow and slower scale and opacity. Ultra Lite and system-disabled animations use static emphasis. Device FPS, installed footprint, CPU and peak memory were not measured.
+
+Gradle passed 52 regression tests, zero failures or skips. API 27 fixtures verify natural line entry/exit, group movement, stagger, opacity and seek recovery. API 31 native graphics tests verify softened karaoke pixels, wrapped text and exit fading. No Android emulator or head unit was attached. Live provider timing, visual parity on the head unit, and Google session persistence remain unverified.
+
+The signed APK is `downloads/ytm-head-unit-0.4.14-debug.apk`, 15,521,786 bytes. SHA-256 `0823108ae25e155b64bd2e6ab202e031db42ed535ffc5a198d36b7300f0e79da`. REA verified the APK digest and membership. Craft Anything found two changed entries (the manifest version and app DEX) and 66 identical entries. API minimum is 27, application ID is `my.ytmhu`, and the certificate matches 0.4.13. Protected authentication code, dependencies and tests match `3d58f25`. Protected tests passed. Account storage and session behavior were not altered by this change.
+
+Next, run the native video fixture on a permitted device and verify a source with an authorized, explicit recording relationship. Driver-display activation still needs a supported OEM parked-state signal. Independent scoped video/backend work can proceed while those prerequisites are open.

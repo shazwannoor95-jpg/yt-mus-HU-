@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package my.ytmhu;
 
-import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -14,7 +13,6 @@ import android.view.MotionEvent;
 import android.view.ViewConfiguration;
 import android.view.ViewTreeObserver;
 import android.view.View;
-import android.view.animation.PathInterpolator;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -26,6 +24,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.Iterator;
 import java.util.Set;
 import java.util.Collections;
 import java.util.List;
@@ -42,9 +41,6 @@ final class NowPlayingView extends LinearLayout {
     private static final int FOREGROUND = 0xfff5eef5;
     private static final int INACTIVE_LYRIC = 0xffb3aeb9;
     private static final int MUTED = 0xffc6b8c6;
-    private static final float[] PAST_OPACITY = {0.72f, 0.57f, 0.46f, 0.39f};
-    private static final float[] UPCOMING_OPACITY = {0.82f, 0.68f, 0.55f, 0.39f};
-    private static final int DIM_DISTANCE = PAST_OPACITY.length;
     private final Artwork artwork;
     private final LocalRomanizer romanizer = new LocalRomanizer();
     private final AppSettings prefs;
@@ -74,7 +70,10 @@ final class NowPlayingView extends LinearLayout {
     private boolean draggingLyrics;
     private long followPausedUntil;
     private int scrollRevision;
-    private ObjectAnimator lyricScroll;
+    private final Set<LyricRow> movingRows = new LinkedHashSet<>();
+    private final Runnable motionFrame = this::updateMotion;
+    private boolean motionPending, richLyrics;
+    private int scrollMotionCount, lastLyricTime = -1, lastSeekRevision;
     private String readingProvider = "", translationProvider = "";
     private boolean closed;
     private List<MusicApi.Track> lastQueue = Collections.emptyList();
@@ -215,6 +214,7 @@ final class NowPlayingView extends LinearLayout {
         if (profile == next) return;
         profile = next;
         if (quickLyricScroll()) stopLyricScroll();
+        if (profile == PerformancePolicy.Profile.ULTRA_LITE) finishMotion();
         if (frost != null) frost.setProfile(next);
         if (track != null && isShown()) bindCover(track);
     }
@@ -252,7 +252,11 @@ final class NowPlayingView extends LinearLayout {
     }
 
     void syncPosition() {
-        if (playback != null && getVisibility() == VISIBLE) tick(playback.position());
+        if (playback == null || getVisibility() != VISIBLE) return;
+        int seekRevision = playback.lyricSeekRevision();
+        boolean seeked = lastSeekRevision != seekRevision;
+        lastSeekRevision = seekRevision;
+        tick(playback.position(), seeked);
     }
 
     private void bindCover(MusicApi.Track current) {
@@ -279,6 +283,7 @@ final class NowPlayingView extends LinearLayout {
         cancelExtras();
         draggingLyrics = false;
         clearFollowPause();
+        finishMotion();
         waitingForDuration = false;
         lyricsTab.setSelected(lyricsMode);
         queueTab.setSelected(!lyricsMode);
@@ -293,6 +298,7 @@ final class NowPlayingView extends LinearLayout {
         lines.clear();
         alternates.clear();
         activeLine = -1;
+        lastLyricTime = -1;
         if (track == null) {
             rows.addView(text("Play a song to see its lyrics.", 17, MUTED));
         } else if (lyrics != null) {
@@ -346,15 +352,21 @@ final class NowPlayingView extends LinearLayout {
         } else {
             List<Lyrics.Line> display = lyrics.displayLines();
             int spacing = dp(Math.round(22 * prefs.number("lyricSpacing", 100) / 100f));
+            richLyrics = lyrics.timed() && lyrics.lines.stream().anyMatch(line -> !line.words.isEmpty());
             for (Lyrics.Line line : display) {
-                LinearLayout group = column();
-                int color = line.millis < 0 ? FOREGROUND : lyricColor(lines.size(), -1, false);
+                LyricRow group = new LyricRow();
+                int color = line.millis < 0 ? FOREGROUND : Color.WHITE;
+                if (line.millis >= 0) {
+                    group.setAlpha(appearance.lyricMotion.lineOpacity(lines.size() + 1, richLyrics));
+                    group.setScaleX(appearance.lyricMotion.restScale);
+                    group.setScaleY(appearance.lyricMotion.restScale);
+                }
                 TextView view = line.words.isEmpty() ? lyricsLine(line.text, color) : karaokeLine(line, color);
                 group.setPadding(dp(8), spacing / 2, dp(6), spacing - spacing / 2);
                 group.addView(view);
                 if (line.millis >= 0 && !line.text.isEmpty()) group.setOnClickListener(clicked -> {
                     if (playback != null) {
-                        resumeFollow();
+                        clearFollowPause();
                         playback.seekTo(line.millis + prefs.lyricOffset());
                         syncPosition();
                     }
@@ -554,7 +566,8 @@ final class NowPlayingView extends LinearLayout {
 
     private void showExtras(List<Lyrics.Line> display, org.json.JSONObject values,
                             List<LocalRomanizer.Reading> local, boolean roman, boolean translate, String target) {
-        int scrollY = scroll.getScrollY();
+        boolean retarget = scrollMotionCount > 0 && following() && activeLine >= 0;
+        int scrollY = retarget ? displayedScrollY() : scroll.getScrollY();
         View anchor = scrollY > 0 ? firstVisibleGroup(scrollY) : null;
         int oldTop = anchor == null ? 0 : anchor.getTop();
         int revision = scrollRevision;
@@ -566,13 +579,13 @@ final class NowPlayingView extends LinearLayout {
                 if (value.isEmpty() && reading.complete) value = reading.text;
                 if (value.isEmpty()) value = extra(values, line.text, "romanization");
                 if (value.isEmpty()) value = reading.text;
-                showAlternate(alternates.get(i).get(0), value, alternateColor(i));
+                showAlternate(alternates.get(i).get(0), value, FOREGROUND);
             }
             if (translate) {
                 String value = LyricExtras.clean(line.translation(target), line.text);
                 if (value.isEmpty()) value = extra(values, line.text, "translation");
                 TextView view = alternates.get(i).get(roman ? 1 : 0);
-                showAlternate(view, value, alternateColor(i));
+                showAlternate(view, value, FOREGROUND);
                 if (!value.isEmpty()) {
                     String provider = extra(values, line.text, "provider");
                     view.setContentDescription(LyricExtras.clean(line.translation(target), line.text).isEmpty() && !provider.isEmpty()
@@ -583,12 +596,14 @@ final class NowPlayingView extends LinearLayout {
             boolean hasAlternate = alternates.get(i).stream().anyMatch(view -> view.getVisibility() == VISIBLE);
             lines.get(i).setVisibility(!hasAlternate || prefs.flag("lyricOriginal", true) ? VISIBLE : GONE);
         }
-        if (lyricScroll != null && lyricScroll.isRunning() && following() && activeLine >= 0) {
-            followActive(activeLine, lines.get(activeLine));
-        } else if (anchor != null) afterLayout(() -> {
-            if (anchor.getParent() == rows && scrollRevision == revision && scroll.getScrollY() == scrollY) {
+        if (!rows.isLayoutRequested()) return;
+        if (retarget) stopLyricScroll();
+        if (anchor != null || retarget) afterLayout(() -> {
+            if (scrollRevision != revision || anchor != null && anchor.getParent() != rows) return;
+            if (anchor != null && (retarget || scroll.getScrollY() == scrollY)) {
                 scroll.scrollTo(0, scrollY + anchor.getTop() - oldTop);
             }
+            if (retarget && activeLine >= 0) followActive(activeLine, lines.get(activeLine), true);
         });
     }
 
@@ -627,26 +642,43 @@ final class NowPlayingView extends LinearLayout {
     }
 
     void tick(int position) {
+        tick(position, false);
+    }
+
+    private void tick(int position, boolean seeked) {
         if (!lyricsMode || !hasTimedLyrics() || lines.isEmpty()) return;
         int time = position - prefs.lyricOffset();
         int index = lyrics.activeAt(time);
-        boolean followExpired = !draggingLyrics && followPausedUntil > 0 && SystemClock.uptimeMillis() >= followPausedUntil;
-        if (activeLine == index) {
+        int previousTime = lastLyricTime;
+        lastLyricTime = time;
+        boolean jump = seeked || time < previousTime - 120 || time > previousTime + 1250;
+        boolean expired = !draggingLyrics && followPausedUntil > 0 && SystemClock.uptimeMillis() >= followPausedUntil;
+        if (activeLine == index && !jump) {
             updateWord(time);
-            if (followExpired) resumeFollow();
+            if (expired) resumeFollow();
             return;
         }
-        if (followExpired) clearFollowPause();
+        if (expired) clearFollowPause();
         int previous = activeLine;
-        if (previous >= 0 && lines.get(previous) instanceof KaraokeLineView) {
-            ((KaraokeLineView) lines.get(previous)).position(-1);
+        boolean animate = !jump && previousTime >= 0 && playback != null && playback.playing() && motionEnabled();
+        if (jump) finishMotion();
+        if (previous != index && previous >= 0 && lines.get(previous) instanceof KaraokeLineView) {
+            KaraokeLineView word = (KaraokeLineView) lines.get(previous);
+            if (animate) ((LyricRow) word.getParent()).fadeWord(word, SystemClock.uptimeMillis());
+            else word.position(-1);
         }
         activeLine = index;
-        updateLyricColours(previous);
-        updateLyricColours(index);
+        if (jump || Math.abs(previous - index) > 2) {
+            for (int i = 0; i < lines.size(); i++) updateLyricState(i, false);
+        } else {
+            int radius = appearance.lyricMotion.dimRadius(richLyrics);
+            int start = Math.max(0, Math.min(previous, index) - radius);
+            int end = Math.min(lines.size() - 1, Math.max(previous, index) + radius);
+            for (int i = start; i <= end; i++) updateLyricState(i, animate);
+        }
         updateWord(time);
         if (index >= 0) {
-            followActive(index, lines.get(index));
+            followActive(index, lines.get(index), animate);
         } else if (following() && time < lyrics.lines.get(0).millis) {
             ++scrollRevision;
             stopLyricScroll();
@@ -656,32 +688,26 @@ final class NowPlayingView extends LinearLayout {
 
     private void updateWord(int time) {
         if (hasActiveWordTiming()) {
-            ((KaraokeLineView) lines.get(activeLine)).position(time - prefs.number("lyricsWordTrim", 0));
+            KaraokeLineView word = (KaraokeLineView) lines.get(activeLine);
+            ((LyricRow) word.getParent()).clearWordFade();
+            word.setEffects(appearance.lyricMotion, profile);
+            word.position(time - prefs.number("lyricsWordTrim", 0));
         }
     }
 
-    private void updateLyricColours(int around) {
-        for (int index = Math.max(0, around - DIM_DISTANCE);
-             index < Math.min(lines.size(), around + DIM_DISTANCE + 1); index++) {
-            TextView line = lines.get(index);
-            int color = lyricColor(index, activeLine, false);
-            if (line.getCurrentTextColor() != color) line.setTextColor(color);
-            int alternate = alternateColor(index);
-            for (TextView extra : alternates.get(index)) {
-                if (extra.getCurrentTextColor() != alternate) extra.setTextColor(alternate);
-            }
-        }
-    }
-
-    private int alternateColor(int index) {
-        return hasTimedLyrics() ? lyricColor(index, activeLine, true) : FOREGROUND;
-    }
-
-    private int lyricColor(int index, int active, boolean alternate) {
-        if (index == active) return alternate ? FOREGROUND : activeLyricColour();
-        float[] opacity = index < active ? PAST_OPACITY : UPCOMING_OPACITY;
-        float dim = opacity[Math.min(opacity.length, Math.abs(index - active)) - 1];
-        return (alternate ? FOREGROUND : Color.WHITE) & 0x00ffffff | Math.round(dim * 255) << 24;
+    private void updateLyricState(int index, boolean animate) {
+        TextView line = lines.get(index);
+        LyricRow group = (LyricRow) line.getParent();
+        boolean active = index == activeLine;
+        int color = active ? activeLyricColour() : Color.WHITE;
+        if (line.getCurrentTextColor() != color) line.setTextColor(color);
+        LyricMotion style = appearance.lyricMotion;
+        float alpha = style.lineOpacity(index - activeLine, richLyrics);
+        float scale = active ? style.activeScale : style.restScale;
+        Lyrics.Line lyric = lyrics.lines.get(index);
+        int end = lyric.end >= 0 ? lyric.end : index + 1 < lines.size() ? lyrics.lines.get(index + 1).millis : lyric.millis;
+        LyricMotion.Timing opacity = active ? style.active : index < activeLine ? style.past : style.regular;
+        group.emphasize(scale, alpha, opacity, end - lyric.millis, active, animate);
     }
 
     private int activeLyricColour() {
@@ -709,11 +735,11 @@ final class NowPlayingView extends LinearLayout {
     private void resumeFollow() {
         draggingLyrics = false;
         clearFollowPause();
-        if (activeLine >= 0) followActive(activeLine, lines.get(activeLine));
+        if (activeLine >= 0) followActive(activeLine, lines.get(activeLine), false);
         else scroll.scrollTo(0, 0);
     }
 
-    private void followActive(int index, TextView line) {
+    private void followActive(int index, TextView line, boolean animate) {
         if (!following()) return;
         int revision = ++scrollRevision;
         afterLayout(() -> {
@@ -725,27 +751,186 @@ final class NowPlayingView extends LinearLayout {
             int top = group.getTop() + group.getHeight() / 2 - Math.round(height * appearance.lyricAnchor);
             top = Math.min(group.getTop(), Math.max(top, group.getBottom() - height));
             top = Math.max(0, Math.min(top, rows.getHeight() - height));
-            stopLyricScroll();
-            int distance = Math.abs(scroll.getScrollY() - top);
-            if (quickLyricScroll() || distance <= 1) {
+            int from = scroll.getScrollY();
+            int delta = top - from;
+            if (!animate || quickLyricScroll() || Math.abs(delta) > height) {
+                stopLyricScroll();
                 scroll.scrollTo(0, top);
-            } else {
-                lyricScroll = ObjectAnimator.ofInt(scroll, "scrollY", scroll.getScrollY(), top);
-                lyricScroll.setDuration(Math.min(420, 180 + distance * 2L / Math.max(1, dp(1))));
-                lyricScroll.setInterpolator(new PathInterpolator(0.22f, 0.7f, 0.24f, 1f));
-                lyricScroll.start();
+            } else if (Math.abs(delta) > 1) {
+                int start = firstGroupIndex(Math.min(from, top) - height / 2);
+                int end = firstGroupIndex(Math.max(from, top) + height * 2);
+                scroll.scrollTo(0, top);
+                long now = SystemClock.uptimeMillis();
+                for (int i = start; i <= end && i < lines.size(); i++) {
+                    LyricRow row = (LyricRow) lines.get(i).getParent();
+                    row.move(delta, i - index, now);
+                }
             }
         });
     }
 
+    private int firstGroupIndex(int y) {
+        int low = 0, high = lines.size();
+        while (low < high) {
+            int middle = (low + high) >>> 1;
+            View group = (View) lines.get(middle).getParent();
+            if (group.getBottom() <= y) low = middle + 1;
+            else high = middle;
+        }
+        return low;
+    }
+
+    private boolean motionEnabled() {
+        return profile != PerformancePolicy.Profile.ULTRA_LITE && android.animation.ValueAnimator.areAnimatorsEnabled();
+    }
+
     private boolean quickLyricScroll() {
-        return prefs.flag("quickLyrics", false) || profile.ordinal() <= PerformancePolicy.Profile.LITE.ordinal();
+        return !motionEnabled() || prefs.flag("quickLyrics", false) || profile == PerformancePolicy.Profile.LITE;
+    }
+
+    private int displayedScrollY() {
+        int top = scroll.getScrollY();
+        if (scrollMotionCount == 0 || lines.isEmpty()) return top;
+        int center = Math.min(lines.size() - 1, firstGroupIndex(top + scroll.getHeight() / 2));
+        View row = (View) lines.get(center).getParent();
+        return Math.max(0, top - Math.round(row.getTranslationY()));
     }
 
     private void stopLyricScroll() {
-        if (lyricScroll == null) return;
-        lyricScroll.cancel();
-        lyricScroll = null;
+        if (scrollMotionCount == 0) return;
+        int top = displayedScrollY();
+        for (LyricRow group : movingRows) group.clearMove();
+        scroll.scrollTo(0, top);
+    }
+
+    private void scheduleMotion(LyricRow group) {
+        movingRows.add(group);
+        if (motionPending) return;
+        motionPending = true;
+        postNextMotionFrame();
+    }
+
+    private void postNextMotionFrame() {
+        // Align to a display frame while allowing roughly one, two or four 60 Hz
+        // intervals. Animation values use uptime, independent of skipped frames.
+        int delay = profile == PerformancePolicy.Profile.HIGH_QUALITY ? 8
+                : profile == PerformancePolicy.Profile.BALANCED ? 24 : 56;
+        postOnAnimationDelayed(motionFrame, delay);
+    }
+
+    private void updateMotion() {
+        long now = SystemClock.uptimeMillis();
+        Iterator<LyricRow> iterator = movingRows.iterator();
+        while (iterator.hasNext()) {
+            if (!iterator.next().advance(now)) iterator.remove();
+        }
+        motionPending = !movingRows.isEmpty();
+        if (motionPending) postNextMotionFrame();
+    }
+
+    private void finishMotion() {
+        for (LyricRow row : movingRows) row.advance(Long.MAX_VALUE);
+        movingRows.clear();
+        removeCallbacks(motionFrame);
+        motionPending = false;
+    }
+
+    private final class LyricRow extends LinearLayout {
+        private LyricMotion.Transition scale, opacity, shift, wordFade;
+        private KaraokeLineView fadingWord;
+
+        LyricRow() {
+            super(NowPlayingView.this.getContext());
+            setOrientation(VERTICAL);
+        }
+
+        @Override public boolean hasOverlappingRendering() { return false; }
+
+        @Override protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            setPivotX(centerLyrics() ? w / 2f : getLayoutDirection() == LAYOUT_DIRECTION_RTL ? w : 0f);
+            setPivotY(h / 2f);
+        }
+
+        void emphasize(float targetScale, float targetAlpha, LyricMotion.Timing timing, int duration,
+                       boolean active, boolean animate) {
+            if (!animate) {
+                scale = opacity = null;
+                setScaleX(targetScale);
+                setScaleY(targetScale);
+                setAlpha(targetAlpha);
+                return;
+            }
+            LyricMotion style = appearance.lyricMotion;
+            long now = SystemClock.uptimeMillis();
+            if (scale == null || !scale.targets(targetScale)) {
+                scale = getScaleX() == targetScale ? null
+                        : new LyricMotion.Transition(getScaleX(), targetScale, now, style.scaleMs,
+                                active ? style.enter : style.exit);
+            }
+            if (opacity == null || !opacity.targets(targetAlpha)) {
+                opacity = getAlpha() == targetAlpha ? null
+                        : new LyricMotion.Transition(getAlpha(), targetAlpha, now + timing.delay,
+                                timing.duration(duration), style.opacity);
+            }
+            if (scale != null || opacity != null) scheduleMotion(this);
+        }
+
+        void move(float delta, int relative, long now) {
+            if (shift == null) scrollMotionCount++;
+            float from = getTranslationY() + delta;
+            setTranslationY(from);
+            LyricMotion style = appearance.lyricMotion;
+            shift = new LyricMotion.Transition(from, 0f, now, style.scrollDuration(relative, delta), style.scroll);
+            scheduleMotion(this);
+        }
+
+        void clearMove() {
+            if (shift == null) return;
+            shift = null;
+            scrollMotionCount--;
+            setTranslationY(0f);
+        }
+
+        void fadeWord(KaraokeLineView word, long now) {
+            if (word.activeSpan() < 0) return;
+            clearWordFade();
+            fadingWord = word;
+            LyricMotion style = appearance.lyricMotion;
+            wordFade = new LyricMotion.Transition(1f, 0f, now + style.wordFadeDelay,
+                    style.wordFadeMs, LyricMotion.EASE);
+            scheduleMotion(this);
+        }
+
+        void clearWordFade() {
+            if (fadingWord == null) return;
+            fadingWord.position(-1);
+            fadingWord.setExitOpacity(1f);
+            fadingWord = null;
+            wordFade = null;
+        }
+
+        boolean advance(long now) {
+            if (scale != null) {
+                float value = scale.value(now);
+                setScaleX(value);
+                setScaleY(value);
+                if (scale.finished(now)) scale = null;
+            }
+            if (opacity != null) {
+                setAlpha(Math.max(0f, Math.min(1f, opacity.value(now))));
+                if (opacity.finished(now)) opacity = null;
+            }
+            if (shift != null) {
+                if (shift.finished(now)) clearMove();
+                else setTranslationY(shift.value(now));
+            }
+            if (wordFade != null) {
+                if (wordFade.finished(now)) clearWordFade();
+                else fadingWord.setExitOpacity(wordFade.value(now));
+            }
+            return scale != null || opacity != null || shift != null || wordFade != null;
+        }
     }
 
     private void afterLayout(Runnable action) {
@@ -784,6 +969,8 @@ final class NowPlayingView extends LinearLayout {
                 + "\nActive word/syllable (zero-based): " + (karaoke == null || karaoke.activeSpan() < 0
                         ? "none" : karaoke.activeSpan() + " (" + karaoke.fillPercent() + "%)")
                 + "\nAlternate alignment: " + (timed ? "line" : "none")
+                + "\nLyric motion: " + (!timed || !motionEnabled() ? "static emphasis"
+                        : quickLyricScroll() ? "scale and opacity, immediate follow" : "scale, opacity and staggered follow")
                 + "\nProvider attempts: " + (lyrics == null ? "no loaded result" : lyrics.attempts)
                 + "\nLyrics cache: " + (lyrics != null && lyrics.cached ? "hit" : "not used")
                 + "\nGroups: " + groups + "\nValid timestamps: " + timestamps
@@ -811,6 +998,7 @@ final class NowPlayingView extends LinearLayout {
         cancelExtras();
         draggingLyrics = false;
         clearFollowPause();
+        finishMotion();
     }
 
     private void renderQueue() {
@@ -874,6 +1062,7 @@ final class NowPlayingView extends LinearLayout {
     void close() {
         closed = true;
         stopLyricScroll();
+        finishMotion();
         cancelExtras();
         network.shutdownNow();
     }

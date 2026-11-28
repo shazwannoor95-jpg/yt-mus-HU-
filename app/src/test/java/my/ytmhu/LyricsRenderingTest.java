@@ -61,6 +61,11 @@ public final class LyricsRenderingTest {
             assertTrue(middle > 0);
             assertTrue(full > middle);
             assertEquals(start, highlightedPixels(line, 800));
+            line.setEffects(new LyricMotion(null), PerformancePolicy.Profile.BALANCED);
+            int feathered = highlightedPixels(line, 1500);
+            assertTrue(feathered > 0 && feathered < middle);
+            line.setExitOpacity(0.1f);
+            assertTrue(highlightedPixels(line, 1500) < feathered);
         }
     }
 

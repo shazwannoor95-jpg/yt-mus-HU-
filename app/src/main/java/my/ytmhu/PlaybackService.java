@@ -217,8 +217,13 @@ public final class PlaybackService extends Service {
 
     boolean buffering() { return state == PlaybackState.STATE_BUFFERING; }
 
+    private int seekRevision;
+
+    int lyricSeekRevision() { return seekRevision; }
+
     void seekTo(int where) {
         if (!prepared) return;
+        seekRevision++;
         pendingSeek = Math.max(0, Math.min(where, duration()));
         if (inFlightSeek < 0) startSeek();
         publish(state, message);

@@ -62,6 +62,91 @@ public final class SyncedLyricsRuntimeTest {
         assertEquals("plain", Lyrics.bestMatch(options, "Song", "Artist", 0).getString("plainLyrics"));
     }
 
+    @Test public void naturalTransitionMovesWholeGroupsAtDifferentRatesAndSeekSnaps() throws Exception {
+        try (org.robolectric.android.controller.ActivityController<Activity> activity =
+                     Robolectric.buildActivity(Activity.class).setup()) {
+            org.robolectric.android.controller.ServiceController<PlaybackService> controller =
+                    Robolectric.buildService(PlaybackService.class).create();
+            PlaybackService service = controller.get();
+            Artwork art = new Artwork();
+            AppSettings prefs = new AppSettings(activity.get());
+            prefs.set("lyricTranslation", false);
+            Appearance appearance = new Appearance(activity.get(), prefs);
+            LyricMotion motion = appearance.lyricMotion;
+            assertEquals(166, motion.scaleMs);
+            assertEquals(195, motion.regular.millis);
+            assertTrue(motion.scrollDuration(1, 100) > motion.scrollDuration(-1, 100));
+            assertEquals(motion.scrollDuration(-1, 100), motion.scrollDuration(1, -100));
+            JSONObject override = new JSONObject("{\"rest_scale\":0.972,\"active_scale\":1.012,"
+                    + "\"scale_secs\":0.41,\"scroll_curve\":[620,16,650,58,12]}");
+            LyricMotion styled = new LyricMotion(override);
+            assertEquals(410, styled.scaleMs);
+            assertEquals(1.012f, styled.activeScale, 0.0001f);
+            assertEquals(650, styled.scrollDuration(0, 100));
+
+            NowPlayingView player = new NowPlayingView(activity.get(), prefs, appearance, art,
+                    (anchor, track, index) -> {}, () -> {});
+            try {
+                activity.get().setContentView(player);
+                service.enqueue(new MusicApi.Track("motion", "Song", "Artist", "", ""), false);
+                field(PlaybackService.class, "index").setInt(service, 0);
+                MediaPlayer media = new MediaPlayer();
+                ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource("motion-fixture.m4a"),
+                        new ShadowMediaPlayer.MediaInfo(30_000, 0));
+                media.setDataSource("motion-fixture.m4a");
+                media.prepare();
+                field(PlaybackService.class, "player").set(service, media);
+                field(PlaybackService.class, "prepared").setBoolean(service, true);
+                service.changed = () -> player.update(service);
+                List<Lyrics.Line> display = new ArrayList<>();
+                for (int i = 0; i < 18; i++) {
+                    display.add(new Lyrics.Line(i * 1000, "Motion " + i, "Reading " + i,
+                            Collections.emptyMap()));
+                }
+                shadowOf(media).setCurrentPosition(8_900);
+                setLyrics(player, service, new Lyrics(display, "", "Motion fixture", "ja"));
+                layout(player);
+                publish(service, PlaybackState.STATE_PLAYING);
+                View outgoing = (View) AdaptiveUiTest.text(player, "Motion 8").getParent();
+                View incoming = (View) AdaptiveUiTest.text(player, "Motion 9").getParent();
+                View upcoming = (View) AdaptiveUiTest.text(player, "Motion 10").getParent();
+                assertSame(incoming, AdaptiveUiTest.text(player, "Reading 9").getParent());
+                assertEquals(1f, outgoing.getScaleX(), 0.001f);
+                assertEquals(0.95f, incoming.getScaleX(), 0.001f);
+                assertEquals(0f, incoming.getPivotX(), 0.001f);
+                ScrollView scroll = (ScrollView) field(NowPlayingView.class, "scroll").get(player);
+                int before = scroll.getScrollY();
+                assertTrue(service.playing());
+                assertEquals(8900, field(NowPlayingView.class, "lastLyricTime").getInt(player));
+                shadowOf(media).setCurrentPosition(9_010);
+                player.syncPosition();
+                layout(player);
+                assertActive(player, 9, 9_000);
+                assertTrue(player.diagnostics() + "\nScroll " + before + " → " + scroll.getScrollY()
+                        + ", row " + incoming.getTop() + ", height " + scroll.getHeight() + ", translate=" + incoming.getTranslationY(),
+                        incoming.getTranslationY() > 0f);
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+                assertTrue(incoming.getScaleX() > 0.95f && incoming.getScaleX() < 1f);
+                assertTrue(outgoing.getScaleX() > 0.95f && outgoing.getScaleX() < 1f);
+                assertTrue(incoming.getAlpha() > 0.82f && incoming.getAlpha() < 1f);
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(260));
+                assertTrue(upcoming.getTranslationY() > outgoing.getTranslationY());
+                assertEquals(1f, incoming.getScaleX(), 0.001f);
+                assertEquals(0.95f, outgoing.getScaleX(), 0.001f);
+                service.seekTo(3_400);
+                layout(player);
+                assertActive(player, 3, 3_000);
+                assertEquals(0f, incoming.getTranslationY(), 0.001f);
+                assertEquals(0.95f, incoming.getScaleX(), 0.001f);
+                assertEquals(1f, ((View) AdaptiveUiTest.text(player, "Motion 3").getParent()).getScaleX(), 0.001f);
+            } finally {
+                player.close();
+                art.close();
+                controller.destroy();
+            }
+        }
+    }
+
     @Test public void mediaClockDrivesThreeLayersSeekAndManualRecoveryOnLowMemory() throws Exception {
         try (org.robolectric.android.controller.ActivityController<Activity> activity =
                      Robolectric.buildActivity(Activity.class).setup()) {

@@ -14,6 +14,7 @@ import static my.ytmhu.MusicApi.find;
 import static my.ytmhu.MusicApi.item;
 
 final class Browse {
+    static final int MAX_COLLECTION_TRACKS = 500;
     static final String SAVED_PLAYLISTS = "4qmFsgIrEhdGRW11c2ljX2xpa2VkX3BsYXlsaXN0cxoQZ2dNR0tnUUlBQkFCb0FZQg%3D%3D";
 
     enum Search {
@@ -42,14 +43,19 @@ final class Browse {
     }
 
     static final class Shelf {
-        final String title;
+        final String title, cursor;
         final List<Card> cards;
         final boolean preferArtwork;
 
         Shelf(String title, List<Card> cards, boolean preferArtwork) {
+            this(title, cards, preferArtwork, "");
+        }
+
+        Shelf(String title, List<Card> cards, boolean preferArtwork, String cursor) {
             this.title = title;
             this.cards = cards;
             this.preferArtwork = preferArtwork;
+            this.cursor = cursor;
         }
     }
 
@@ -134,10 +140,44 @@ final class Browse {
         JSONObject secondary = child(columns, "secondaryContents");
         JSONObject sections = secondary.optJSONObject("sectionListRenderer");
         if (sections != null && array(sections, "contents").length() > 0) {
-            return parseShelves(array(sections, "contents"), hideExplicit, 160);
+            return parseShelves(array(sections, "contents"), hideExplicit, MAX_COLLECTION_TRACKS);
         }
         sections = find(page, "sectionListRenderer", 0);
-        return sections == null ? new ArrayList<>() : parseShelves(array(sections, "contents"), hideExplicit, 160);
+        return sections == null ? new ArrayList<>() : parseShelves(array(sections, "contents"), hideExplicit, MAX_COLLECTION_TRACKS);
+    }
+
+    static Shelf playlistPage(JSONObject response, boolean hideExplicit) {
+        JSONObject appended = find(response, "appendContinuationItemsAction", 0);
+        JSONArray rows = appended == null ? null : appended.optJSONArray("continuationItems");
+        JSONObject container = appended;
+        if (rows == null) {
+            JSONObject continuation = child(response, "continuationContents");
+            container = continuation.optJSONObject("musicPlaylistShelfContinuation");
+            if (container == null) container = continuation.optJSONObject("musicShelfContinuation");
+            if (container == null) return null;
+            rows = container.optJSONArray("contents");
+            if (rows == null) return null;
+        }
+        return new Shelf("", readCards(rows, hideExplicit, MAX_COLLECTION_TRACKS), false, cursor(container, rows));
+    }
+
+    static Shelf appendPlaylistPage(Shelf current, Shelf next) {
+        int remaining = MAX_COLLECTION_TRACKS - current.cards.size();
+        List<Card> cards = new ArrayList<>(current.cards);
+        if (remaining > 0) cards.addAll(next.cards.subList(0, Math.min(remaining, next.cards.size())));
+        String cursor = cards.size() < MAX_COLLECTION_TRACKS && !current.cursor.equals(next.cursor)
+                ? next.cursor : "";
+        return new Shelf(current.title, cards, current.preferArtwork, cursor);
+    }
+
+    private static String cursor(JSONObject shelf, JSONArray rows) {
+        JSONObject token = child(item(array(shelf, "continuations"), 0), "nextContinuationData");
+        String value = token.optString("continuation");
+        if (value.isEmpty() && rows.length() > 0) {
+            JSONObject tail = child(item(rows, rows.length() - 1), "continuationItemRenderer");
+            value = child(child(tail, "continuationEndpoint"), "continuationCommand").optString("token");
+        }
+        return value.length() <= 4096 ? value : "";
     }
 
     static String collectionLink(String id) {
@@ -168,21 +208,28 @@ final class Browse {
             String title = displayText(header.optJSONObject("title"));
             if (title.isEmpty()) title = displayText(renderer.optJSONObject("title"));
             JSONArray contents = array(renderer, grid != null ? "items" : "contents");
-            List<Card> cards = new ArrayList<>();
             int limit = list != null ? listLimit : 40;
-            for (int j = 0; j < contents.length() && cards.size() < limit; j++) {
-                Card card = card(item(contents, j));
-                if (card != null && !(hideExplicit && card.track != null && card.track.explicit)) cards.add(card);
-            }
+            List<Card> cards = readCards(contents, hideExplicit, limit);
             int specifiedRows = renderer.optInt("numItemsPerColumn", 0);
             String display = renderer.optString("itemSize");
             boolean artwork = grid != null || specifiedRows == 1 || display.contains("LARGE");
             for (int j = 0; j < contents.length() && !artwork; j++) {
                 artwork = item(contents, j).has("musicTwoRowItemRenderer");
             }
-            if (!cards.isEmpty()) out.add(new Shelf(title, cards, artwork));
+            String next = list != null && listLimit == MAX_COLLECTION_TRACKS && cards.size() < limit
+                    ? cursor(renderer, contents) : "";
+            if (!cards.isEmpty() || !next.isEmpty()) out.add(new Shelf(title, cards, artwork, next));
         }
         return out;
+    }
+
+    private static List<Card> readCards(JSONArray contents, boolean hideExplicit, int limit) {
+        List<Card> cards = new ArrayList<>();
+        for (int j = 0; j < contents.length() && cards.size() < limit; j++) {
+            Card card = card(item(contents, j));
+            if (card != null && !(hideExplicit && card.track != null && card.track.explicit)) cards.add(card);
+        }
+        return cards;
     }
 
     private static Card topResult(JSONObject renderer) {

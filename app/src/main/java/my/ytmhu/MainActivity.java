@@ -122,6 +122,7 @@ public final class MainActivity extends Activity {
         final List<MusicApi.Track> tracks;
         final Browse.CollectionHeader header;
         String filter = "";
+        boolean loadingMore;
         final long loaded = android.os.SystemClock.uptimeMillis();
         int row, offset;
         final List<int[]> shelfStarts = new ArrayList<>();
@@ -909,10 +910,15 @@ public final class MainActivity extends Activity {
     }
 
     private void loadPage(boolean refresh) {
+        loadPage(refresh, "");
+    }
+
+    private void loadPage(boolean refresh, String continuation) {
         BrowsePage previous = pages.get(browseKey);
         if (previous != null) {
             previous.row = scroll.getFirstVisiblePosition();
             previous.offset = scroll.rowOffset();
+            previous.loadingMore = false;
         }
         browseKey = "";
         final int current = ++generation;
@@ -951,6 +957,34 @@ public final class MainActivity extends Activity {
         if ("Collection".equals(active)) key += "\n" + selectedCollection;
         final String destination = key;
         BrowsePage cached = pages.get(key);
+        int continuationShelf = !continuation.isEmpty() && cached != null && "Collection".equals(active)
+                && selectedCollection.startsWith("VL") ? mainTrackShelf(cached) : -1;
+        if (continuationShelf >= 0 && continuation.equals(cached.shelves.get(continuationShelf).cursor)) {
+            cached.loadingMore = true;
+            renderBrowsePage(key, cached);
+            pageTask = network.submit(() -> {
+                try {
+                    api.setSession(cookies);
+                    Browse.Shelf next = Browse.playlistPage(api.browse(new JSONObject().put("continuation", continuation)),
+                            hideExplicit);
+                    if (next == null) throw new java.io.IOException("Missing playlist page");
+                    runOnUiThread(() -> {
+                        if (generation != current || isDestroyed()) return;
+                        cached.shelves.set(continuationShelf,
+                                Browse.appendPlaylistPage(cached.shelves.get(continuationShelf), next));
+                        finishPlaylistPage(destination, cached);
+                    });
+                } catch (Exception unavailable) {
+                    runOnUiThread(() -> {
+                        if (generation != current || isDestroyed()) return;
+                        finishPlaylistPage(destination, cached);
+                        android.widget.Toast.makeText(this, "Couldn't load more songs. Try again.",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
+            return;
+        }
         if (!refresh && cached != null && android.os.SystemClock.uptimeMillis() - cached.loaded < 120_000) {
             renderBrowsePage(key, cached);
             return;
@@ -1008,6 +1042,13 @@ public final class MainActivity extends Activity {
                 });
             }
         });
+    }
+
+    private void finishPlaylistPage(String destination, BrowsePage content) {
+        content.loadingMore = false;
+        content.row = scroll.getFirstVisiblePosition();
+        content.offset = scroll.rowOffset();
+        renderBrowsePage(destination, content);
     }
 
     private void renderBrowsePage(String key, BrowsePage content) {
@@ -1402,7 +1443,8 @@ public final class MainActivity extends Activity {
     private int mainTrackShelf(BrowsePage content) {
         for (int i = 0; i < content.shelves.size(); i++) {
             Browse.Shelf shelf = content.shelves.get(i);
-            if (!shelf.preferArtwork && !shelf.cards.isEmpty() && shelf.cards.stream().allMatch(card -> card.track != null)) return i;
+            if (!shelf.preferArtwork && (!shelf.cards.isEmpty() || !shelf.cursor.isEmpty())
+                    && shelf.cards.stream().allMatch(card -> card.track != null)) return i;
         }
         return -1;
     }
@@ -1448,6 +1490,14 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < cards.size(); i++) {
             int index = i;
             results.add(() -> songRow(cards.get(index), tracks, index));
+        }
+        if (playlist && !shelf.cursor.isEmpty()) {
+            results.add(() -> {
+                Button more = button(content.loadingMore ? "Loading more…" : "Load more songs",
+                        () -> loadPage(false, shelf.cursor));
+                more.setEnabled(!content.loadingMore);
+                return more;
+            });
         }
     }
 

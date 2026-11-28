@@ -62,6 +62,45 @@ public final class CollectionBrowseTest {
         assertEquals(first, entries.get(0));
     }
 
+    @Test public void playlistContinuationKeepsIntentionalDuplicatesAndStopsRepeatedCursor() throws Exception {
+        JSONObject tail = new JSONObject().put("continuationItemRenderer", new JSONObject()
+                .put("continuationEndpoint", new JSONObject()
+                        .put("continuationCommand", new JSONObject().put("token", "cursor-two"))));
+        JSONArray entries = new JSONArray().put(song("Second", "Artist")).put(tail);
+        JSONObject response = new JSONObject().put("onResponseReceivedActions", new JSONArray()
+                .put(new JSONObject().put("appendContinuationItemsAction",
+                        new JSONObject().put("continuationItems", entries))));
+        Browse.Shelf next = Browse.playlistPage(response, false);
+        assertNotNull(next);
+        assertEquals("cursor-two", next.cursor);
+        assertEquals(1, next.cards.size());
+        Browse.Shelf current = new Browse.Shelf("Playlist", Collections.singletonList(card("First", "Artist")),
+                false, "cursor-one");
+        Browse.Shelf combined = Browse.appendPlaylistPage(current, next);
+        assertEquals("abcdefghijk", combined.cards.get(0).track.id);
+        assertEquals("abcdefghijk", combined.cards.get(1).track.id);
+        assertEquals("Second", combined.cards.get(1).track.title);
+        assertEquals("cursor-two", combined.cursor);
+        assertEquals("", Browse.appendPlaylistPage(combined, next).cursor);
+        assertNull(Browse.playlistPage(new JSONObject(), false));
+    }
+
+    @Test public void playlistContinuationReadsLegacyShelfAndBoundsCachedTracks() throws Exception {
+        JSONObject nextData = new JSONObject().put("nextContinuationData",
+                new JSONObject().put("continuation", "legacy-next"));
+        JSONObject body = new JSONObject().put("continuationContents", new JSONObject()
+                .put("musicPlaylistShelfContinuation", new JSONObject()
+                        .put("continuations", new JSONArray().put(nextData))
+                        .put("contents", new JSONArray().put(song("New item", "Artist")))));
+        Browse.Shelf next = Browse.playlistPage(body, false);
+        assertEquals("legacy-next", next.cursor);
+        Browse.Shelf full = new Browse.Shelf("Playlist",
+                Collections.nCopies(Browse.MAX_COLLECTION_TRACKS, card("Existing", "Artist")), false, "legacy");
+        Browse.Shelf bounded = Browse.appendPlaylistPage(full, next);
+        assertEquals(Browse.MAX_COLLECTION_TRACKS, bounded.cards.size());
+        assertEquals("", bounded.cursor);
+    }
+
     private static JSONObject sections(JSONObject renderer) throws Exception {
         return new JSONObject().put("sectionListRenderer", new JSONObject().put("contents", new JSONArray().put(renderer)));
     }

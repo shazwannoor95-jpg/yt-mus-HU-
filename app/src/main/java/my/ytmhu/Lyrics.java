@@ -33,6 +33,7 @@ final class Lyrics {
 
     static final class Line {
         final int millis, end;
+        final int voice;
         final List<Word> words;
         final String text, roman;
         final java.util.Map<String, String> translations;
@@ -44,8 +45,13 @@ final class Lyrics {
         }
 
         Line(int millis, int end, String text, String roman, java.util.Map<String, String> translations, List<Word> words) {
+            this(millis, end, text, roman, translations, words, 0);
+        }
+
+        Line(int millis, int end, String text, String roman, java.util.Map<String, String> translations, List<Word> words, int voice) {
             this.millis = millis;
             this.end = end;
+            this.voice = voice;
             this.words = Collections.unmodifiableList(words);
             this.text = text;
             this.roman = roman == null ? "" : roman;
@@ -428,6 +434,22 @@ final class Lyrics {
         }
         if (low == 0) return -1;
         Line previous = lines.get(low - 1);
-        return previous.end >= 0 && millis >= previous.end ? -1 : low - 1;
+        if (previous.end < 0 || millis < previous.end) return low - 1;
+        return otherVoiceAt(lines, low - 1, millis);
+    }
+
+    int companionAt(int active, int millis) {
+        if (active < 0 || lines.get(active).end < 0) return -1;
+        return otherVoiceAt(lines, active, millis);
+    }
+
+    private static int otherVoiceAt(List<Line> lines, int reference, int millis) {
+        int voice = lines.get(reference).voice;
+        if (voice == 0) return -1;
+        for (int i = reference - 1; i >= Math.max(0, reference - 8); i--) {
+            Line line = lines.get(i);
+            if (line.voice != 0 && line.voice != voice && line.millis <= millis && line.end > millis) return i;
+        }
+        return -1;
     }
 }

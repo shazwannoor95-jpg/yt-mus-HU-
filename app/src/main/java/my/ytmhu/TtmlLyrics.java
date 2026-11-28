@@ -43,6 +43,7 @@ final class TtmlLyrics {
             }
         }
         List<Lyrics.Line> lines = new ArrayList<>();
+        Map<String, Integer> voices = new HashMap<>();
         NodeList bodies = root.getElementsByTagNameNS("*", "body");
         if (bodies.getLength() > 0) {
             NodeList paragraphs = ((Element) bodies.item(0)).getElementsByTagNameNS("*", "p");
@@ -53,6 +54,10 @@ final class TtmlLyrics {
                 String key = attribute(line, "key");
                 if (key.isEmpty()) key = attribute(line, "id");
                 int end = millis(attribute(line, "end"));
+                String agent = line.getAttributeNS("http://www.w3.org/ns/ttml#metadata", "agent");
+                if (agent.matches("[A-Za-z0-9_.-]{1,48}") && !voices.containsKey(agent) && voices.size() < 2) {
+                    voices.put(agent, voices.size() + 1);
+                }
                 StringBuilder text = new StringBuilder();
                 List<Lyrics.Word> words = new ArrayList<>();
                 appendText(line, text, words);
@@ -68,7 +73,8 @@ final class TtmlLyrics {
                         aligned.add(new Lyrics.Word(word.start, word.end, from, to));
                     }
                 }
-                lines.add(new Lyrics.Line(begin, end > begin ? end : -1, trimmed, roman.get(key), translations.get(key), aligned));
+                lines.add(new Lyrics.Line(begin, end > begin ? end : -1, trimmed, roman.get(key), translations.get(key),
+                        aligned, voices.getOrDefault(agent, 0)));
             }
         }
         lines.sort(Comparator.comparingInt(line -> line.millis));

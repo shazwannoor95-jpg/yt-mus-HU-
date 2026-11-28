@@ -69,6 +69,82 @@ public final class LyricsRenderingTest {
         }
     }
 
+    @Test
+    @Config(sdk = 31)
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    public void sourceTimedWaveDrawsDifferentFramesWithoutMovingThePlaybackBoundary() throws Exception {
+        try (org.robolectric.android.controller.ActivityController<Activity> controller =
+                     Robolectric.buildActivity(Activity.class).setup()) {
+            KaraokeLineView line = new KaraokeLineView(controller.get(),
+                    Collections.singletonList(new Lyrics.Word(1000, 2400, 0, 4)), Color.YELLOW);
+            line.setText("WAVE");
+            line.setTextColor(Color.WHITE);
+            line.setTextSize(34);
+            line.setPadding(8, 20, 0, 4);
+            controller.get().setContentView(line);
+            AdaptiveUiTest.layout(line, 250, 110);
+            LyricMotion style = new LyricMotion(new JSONObject("{\"wobble\":false,\"letter_wave\":{\"crest\":0.2}}"));
+            line.setEffects(style, PerformancePolicy.Profile.HIGH_QUALITY);
+            line.position(1750);
+            Bitmap wave = Bitmap.createBitmap(250, 110, Bitmap.Config.ARGB_8888);
+            Bitmap normal = Bitmap.createBitmap(250, 110, Bitmap.Config.ARGB_8888);
+            try {
+                line.draw(new Canvas(wave));
+                assertNotNull(org.robolectric.util.ReflectionHelpers.getField(line, "clusters"));
+                int percent = line.fillPercent();
+                line.setEffects(style, PerformancePolicy.Profile.BALANCED);
+                line.draw(new Canvas(normal));
+                assertFalse(wave.sameAs(normal));
+                assertEquals(percent, line.fillPercent());
+                line.position(999);
+                assertEquals(-1, line.activeSpan());
+            } finally {
+                wave.recycle();
+                normal.recycle();
+            }
+        }
+    }
+
+    @Test public void twoNamedTtmlVoicesKeepIndependentTimingAndVisualState() throws Exception {
+        Lyrics pair = TtmlLyrics.parse("<tt xmlns='http://www.w3.org/ns/ttml' xmlns:ttm='http://www.w3.org/ns/ttml#metadata'>"
+                + "<body><div><p ttm:agent='v1' begin='1s' end='3s'><span begin='1s' end='3s'>Lead</span></p>"
+                + "<p ttm:agent='v2' begin='1.5s' end='2.5s'><span begin='1.5s' end='2.5s'>Reply</span></p></div></body></tt>");
+        assertEquals(1, pair.activeAt(2000));
+        assertEquals(0, pair.companionAt(1, 2000));
+        assertEquals(0, pair.activeAt(2600));
+        assertEquals(-1, pair.activeAt(3000));
+        try (org.robolectric.android.controller.ActivityController<Activity> controller =
+                     Robolectric.buildActivity(Activity.class).setup()) {
+            Activity activity = controller.get();
+            Artwork art = new Artwork();
+            AppSettings prefs = new AppSettings(activity);
+            prefs.set("lyricRoman", false);
+            prefs.set("lyricTranslation", false);
+            NowPlayingView view = new NowPlayingView(activity, prefs, new Appearance(activity, prefs), art,
+                    (anchor, track, index) -> {}, () -> {});
+            try {
+                activity.setContentView(view);
+                org.robolectric.util.ReflectionHelpers.setField(view, "track", new MusicApi.Track("fixture", "Song", "Artist", "", ""));
+                org.robolectric.util.ReflectionHelpers.setField(view, "lyrics", pair);
+                org.robolectric.util.ReflectionHelpers.setField(view, "lyricsMode", true);
+                org.robolectric.util.ReflectionHelpers.callInstanceMethod(view, "render");
+                view.tick(2000);
+                KaraokeLineView lead = (KaraokeLineView) AdaptiveUiTest.text(view, "Lead");
+                KaraokeLineView reply = (KaraokeLineView) AdaptiveUiTest.text(view, "Reply");
+                assertEquals(50, lead.fillPercent());
+                assertEquals(50, reply.fillPercent());
+                assertEquals(1f, ((View) lead.getParent()).getScaleX(), 0.01f);
+                assertEquals(1f, ((View) reply.getParent()).getScaleX(), 0.01f);
+                view.tick(2600);
+                assertEquals(80, lead.fillPercent());
+                assertEquals(-1, reply.activeSpan());
+            } finally {
+                view.close();
+                art.close();
+            }
+        }
+    }
+
     private static int highlightedPixels(KaraokeLineView line, int time) {
         line.position(time);
         Bitmap bitmap = Bitmap.createBitmap(line.getWidth(), line.getHeight(), Bitmap.Config.ARGB_8888);

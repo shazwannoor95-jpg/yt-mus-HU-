@@ -10,10 +10,13 @@ import android.graphics.Paint;
 import android.graphics.Shader;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.icu.text.BreakIterator;
 import android.text.Layout;
 import android.widget.TextView;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Locale;
 
 /** Sweeps provider-aligned text ranges across the laid-out rows. */
 final class KaraokeLineView extends TextView {
@@ -23,6 +26,7 @@ final class KaraokeLineView extends TextView {
     private final Path active = new Path();
     private final Path sweep = new Path();
     private final Path row = new Path();
+    private final Path clusterClip = new Path();
     private final RectF bounds = new RectF();
     private Layout cachedLayout;
     private int cachedIndex = -1;
@@ -36,6 +40,17 @@ final class KaraokeLineView extends TextView {
     private boolean soft, enhanced;
     private float exitOpacity = 1f;
     private int elapsed;
+    private List<Cluster> clusters;
+
+    private static final class Cluster {
+        final float left, right;
+        final LyricMotion.LetterWave.Motion motion;
+        Cluster(float left, float right, LyricMotion.LetterWave.Motion motion) {
+            this.left = left;
+            this.right = right;
+            this.motion = motion;
+        }
+    }
 
     KaraokeLineView(Context context, List<Lyrics.Word> words, int highlight) {
         super(context);
@@ -53,6 +68,8 @@ final class KaraokeLineView extends TextView {
         style = next;
         soft = useSoft;
         enhanced = useEnhanced;
+        cachedLayout = null;
+        clusters = null;
         invalidate();
     }
 
@@ -76,12 +93,14 @@ final class KaraokeLineView extends TextView {
             fill = Math.min(1f, (float) (millis - word.start) / (word.end - word.start));
         }
         int age = span < 0 ? 0 : millis - words.get(span).start;
-        boolean moving = enhanced && style != null && style.wordPopSeconds > 0f
-                && elapsed < style.wordPopSeconds * 1000f && age != elapsed;
+        boolean moving = enhanced && style != null && age != elapsed && span >= 0
+                && (elapsed < style.wordPopSeconds * 1000f || clusters != null
+                && elapsed < (long) words.get(span).end - words.get(span).start + style.wave.floatMs);
         if (index == span && fraction == fill && !moving) return;
         elapsed = age;
         index = span;
         fraction = fill;
+        if (span < 0) clusters = null;
         invalidate();
     }
 
@@ -99,12 +118,41 @@ final class KaraokeLineView extends TextView {
         if (fraction > 0f) {
             int wordCanvas = canvas.save();
             applyWordPop(canvas, layout);
-            canvas.clipPath(active);
-            if (fraction >= 1) paint(canvas, layout, active, null);
-            else paintSweep(canvas, layout);
+            if (clusters != null && exitOpacity == 1f) paintWave(canvas, layout);
+            else {
+                canvas.clipPath(active);
+                if (fraction >= 1) paint(canvas, layout, active, null);
+                else paintSweep(canvas, layout);
+            }
             canvas.restoreToCount(wordCanvas);
         }
         canvas.restoreToCount(save);
+    }
+
+    private void paintWave(Canvas canvas, Layout layout) {
+        float limit = clusters.get(0).left + width * fraction;
+        int top = layout.getLineTop(firstRow), bottom = layout.getLineBottom(firstRow);
+        Lyrics.Word word = words.get(index);
+        boolean held = word.end - word.start >= style.wave.heldMs;
+        float feather = Math.min(width * fraction, Math.max(1f, width * 0.10f));
+        if (fraction < 1f) {
+            if (gradient == null) gradient = new LinearGradient(0, 0, 1, 0, highlight, highlight & 0xffffff, Shader.TileMode.CLAMP);
+            shaderMatrix.setScale(feather, 1f);
+            shaderMatrix.postTranslate(limit - feather, top);
+            gradient.setLocalMatrix(shaderMatrix);
+        }
+        for (Cluster cluster : clusters) {
+            if (cluster.left >= limit) break;
+            float progress = cluster.motion.at(elapsed);
+            int save = canvas.save();
+            canvas.translate(0f, -getTextSize() * style.wave.lift(progress));
+            float scale = style.wave.scale(progress, held);
+            canvas.scale(scale, scale, (cluster.left + cluster.right) * 0.5f, layout.getLineBaseline(firstRow));
+            clusterClip.rewind();
+            clusterClip.addRect(cluster.left, top, Math.min(cluster.right, limit), bottom, Path.Direction.CW);
+            paint(canvas, layout, clusterClip, fraction < 1f && cluster.right > limit - feather ? gradient : null);
+            canvas.restoreToCount(save);
+        }
     }
 
     private void paintSweep(Canvas canvas, Layout layout) {
@@ -198,6 +246,38 @@ final class KaraokeLineView extends TextView {
             setRowBounds(layout, line);
             width += bounds.width();
         }
+        clusters = prepareClusters(layout, word);
+    }
+
+    private List<Cluster> prepareClusters(Layout layout, Lyrics.Word word) {
+        if (!enhanced || style == null || !style.wave.enabled || firstRow != lastRow
+                || word.to - word.from > 48 || word.end - word.start < style.wave.minMs) return null;
+        String display = getText().subSequence(word.from, word.to).toString();
+        for (int i = 0; i < display.length();) {
+            int point = display.codePointAt(i);
+            Character.UnicodeScript script = Character.UnicodeScript.of(point);
+            if (layout.isRtlCharAt(word.from + i) || (Character.isLetter(point)
+                    && script != Character.UnicodeScript.LATIN && script != Character.UnicodeScript.CYRILLIC
+                    && script != Character.UnicodeScript.HIRAGANA && script != Character.UnicodeScript.KATAKANA
+                    && script != Character.UnicodeScript.HAN && script != Character.UnicodeScript.HANGUL)) return null;
+            i += Character.charCount(point);
+        }
+        BreakIterator iterator = BreakIterator.getCharacterInstance(Locale.ROOT);
+        iterator.setText(display);
+        float[] edges = new float[style.wave.maxClusters + 1];
+        int count = 0;
+        for (int offset = iterator.first(); offset != BreakIterator.DONE; offset = iterator.next()) {
+            if (count == edges.length) return null;
+            float position = layout.getPrimaryHorizontal(word.from + offset);
+            if (count > 0 && position <= edges[count - 1]) return null;
+            edges[count++] = position;
+        }
+        if (count <= 2 || Math.abs(edges[count - 1] - edges[0] - width) > 1f) return null;
+        List<Cluster> result = new ArrayList<>(count - 1);
+        for (int i = 1; i < count; i++) {
+            result.add(new Cluster(edges[i - 1], edges[i], style.wave.plan(i - 1, count - 1, word.end - word.start)));
+        }
+        return result;
     }
 
     private void setRowBounds(Layout layout, int line) {

@@ -18,6 +18,8 @@ final class LyricMotion {
     final int scaleMs, followLeadMs, wordFadeMs, wordFadeDelay;
     final Interpolator enter, exit, opacity, scroll;
     final Timing regular, past, active;
+    final LetterWave wave;
+    final boolean alternateVoiceAlignment;
     private final float[] pastLines, upcomingLines, pastWords, upcomingWords;
     private final int scrollMs;
     private final float[] scrollCurve;
@@ -49,6 +51,9 @@ final class LyricMotion {
                 ? number(style, "wobble_secs", 1f, 0.01f, 2f) : 0f;
         glowEm = number(style, "glow_rem", 0.8f, 0f, 2f);
         glowAlpha = number(style, "glow_alpha", 0.5f, 0f, 1f);
+        JSONObject wavePreset = style.optJSONObject("letter_wave");
+        wave = new LetterWave(wavePreset == null ? new JSONObject() : wavePreset);
+        alternateVoiceAlignment = !"same".equals(style.optString("agent_align"));
     }
 
     float lineOpacity(int relative, boolean rich) {
@@ -129,6 +134,59 @@ final class LyricMotion {
         }
         int duration(int lineMillis) {
             return Math.max(1, Math.min(2000, Math.round(lineMillis * fraction) + millis));
+        }
+    }
+
+    static final class LetterWave {
+        static final int MAX_CLUSTERS = 8;
+        private static final float CREST = 0.4f;
+        private static final Interpolator EASE_OUT = new PathInterpolator(0f, 0f, 0.58f, 1f);
+        final boolean enabled;
+        final int minMs, floatMs, heldMs, maxClusters;
+        private final float crest, settle, emphasis, rest;
+
+        LetterWave(JSONObject style) {
+            enabled = style.optBoolean("on", true);
+            floatMs = Math.round(1000 * number(style, "secs", 0.9f, 0.01f, 2f));
+            minMs = Math.round(1000 * number(style, "min_secs", 0f, 0f, 5f));
+            heldMs = Math.round(1000 * number(style, "long_secs", 1.5f, 0f, 5f));
+            int cap = style.optInt("max_letters", 0);
+            maxClusters = cap <= 0 ? MAX_CLUSTERS : Math.min(MAX_CLUSTERS, cap);
+            crest = number(style, "crest", 0.05f, -0.25f, 0.25f);
+            settle = number(style, "settle", 0.02f, -0.25f, 0.25f);
+            emphasis = number(style, "emphasis", 1.11f, 1f, 1.25f);
+            rest = number(style, "rest_scale", 1f, 0.6f, 1.25f);
+        }
+
+        Motion plan(int cluster, int count, int spanMs) {
+            // Upstream letter_waves uses the swipe's 1.6× duration and 10% lead.
+            float swipe = spanMs * 1.6f;
+            float begin = swipe * (cluster / (float) count + 0.1f) / 1.6f;
+            float finish = swipe * ((cluster + 1f) / count + 0.2f) / 1.6f;
+            float touched = begin - spanMs * 0.1f;
+            float duration = (finish - begin);
+            float rise = floatMs * CREST;
+            return duration > rise ? new Motion(touched, duration / CREST)
+                    : new Motion(touched + duration - rise, floatMs);
+        }
+
+        float lift(float progress) {
+            if (progress <= 0f) return 0f;
+            if (progress < CREST) return crest * EASE_IN_OUT.getInterpolation(progress / CREST);
+            return crest + (settle - crest) * EASE_OUT.getInterpolation((progress - CREST) / (1f - CREST));
+        }
+
+        float scale(float progress, boolean held) {
+            if (progress <= 0f) return rest;
+            float peak = held ? emphasis : 1f;
+            if (progress < CREST) return rest + (peak - rest) * EASE_IN_OUT.getInterpolation(progress / CREST);
+            return peak + (1f - peak) * EASE_OUT.getInterpolation((progress - CREST) / (1f - CREST));
+        }
+
+        static final class Motion {
+            final float delay, duration;
+            Motion(float delay, float duration) { this.delay = delay; this.duration = duration; }
+            float at(int age) { return Math.max(0f, Math.min(1f, (age - delay) / duration)); }
         }
     }
 

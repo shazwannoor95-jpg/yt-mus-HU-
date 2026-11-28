@@ -472,7 +472,9 @@ public final class MainActivity extends Activity {
     private void showPlaybackOptions(View anchor) {
         PopupMenu popup = new PopupMenu(this, anchor);
         addAction(popup, playback != null && playback.isShuffle() ? "Turn shuffle off" : "Turn shuffle on", this::toggleShuffle);
-        addAction(popup, playback != null && playback.isRepeat() ? "Turn repeat off" : "Turn repeat on", this::toggleRepeat);
+        String repeatMode = playback != null && playback.isRepeatOne() ? "One"
+                : playback != null && playback.isRepeat() ? "All" : "Off";
+        addAction(popup, "Repeat · " + repeatMode, this::toggleRepeat);
         addAction(popup, "Seek to position", this::showSeek);
         addAction(popup, "Media volume", this::showVolume);
         addAction(popup, "Lyrics", () -> openPlayer(true));
@@ -1906,7 +1908,13 @@ public final class MainActivity extends Activity {
         if (miniLike != null) miniLike.setEnabled(song != null);
         if (miniDislike != null) miniDislike.setEnabled(song != null);
         if (shuffle != null) shuffle.setTextColor(playback != null && playback.isShuffle() ? accent() : INK);
-        if (repeat != null) repeat.setTextColor(playback != null && playback.isRepeat() ? accent() : INK);
+        if (repeat != null) {
+            boolean one = playback != null && playback.isRepeatOne();
+            boolean repeating = playback != null && playback.isRepeat();
+            repeat.setText(one ? Icons.withLabel(Icons.REPEAT, "1", appearance.icons) : Icons.REPEAT);
+            repeat.setContentDescription(one ? "Repeat one" : repeating ? "Repeat all" : "Repeat off");
+            repeat.setTextColor(repeating ? accent() : INK);
+        }
         if (expanded.getVisibility() == View.VISIBLE) expanded.update(playback);
         syncLyricFrames();
         renderProgress();

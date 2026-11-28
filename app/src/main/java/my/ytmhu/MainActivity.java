@@ -510,6 +510,15 @@ public final class MainActivity extends Activity {
             addAction(popup, "Bookmarks", this::showBookmarks);
         }
         if (playback != null && playback.canSetLoop()) addAction(popup, "A/B loop", this::showLoopOptions);
+        if (playback != null && playback.canClearQueue()) {
+            addAction(popup, "Clear queue", () -> {
+                if (playback != null && playback.clearQueue()) toast("Queue cleared. Undo is in Playback options.");
+            });
+        } else if (playback != null && playback.canUndoClearQueue()) {
+            addAction(popup, "Undo clear queue", () -> {
+                if (playback != null && playback.undoClearQueue()) toast("Queue restored.");
+            });
+        }
         if (playback != null) {
             int sleep = playback.sleepSelection();
             String timer = sleep == SleepTimer.SONG_END ? "Sleep timer · End of song"

@@ -28,6 +28,59 @@ import org.robolectric.shadows.util.DataSource;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 27)
 public final class QueueRestoreTest {
+    @Test public void clearAndUndoKeepTheRecordingClockAndRestoreBothQueueOrders() throws Exception {
+        org.robolectric.android.controller.ServiceController<PlaybackService> controller =
+                queueWithSelectedCopy();
+        try {
+            PlaybackService service = controller.get();
+            MusicApi.Track current = service.currentTrack();
+            List<MusicApi.Track> before = service.queueSnapshot();
+            Object original = field("originalQueue").get(service);
+            int generation = field("generation").getInt(service);
+            assertTrue(service.clearQueue());
+            assertEquals(Collections.singletonList(current), service.queueSnapshot());
+            assertEquals(0, service.queueIndex());
+            assertEquals(2300, service.position());
+            assertTrue(service.undoClearQueue());
+            assertEquals(before, service.queueSnapshot());
+            assertSame(original, field("originalQueue").get(service));
+            assertSame(current, service.currentTrack());
+            assertEquals(1, service.queueIndex());
+            assertEquals(2300, service.position());
+            assertEquals(generation, field("generation").getInt(service));
+        } finally {
+            controller.destroy();
+        }
+    }
+
+    @Test public void clearingUndoExpiresAndCannotOverwriteAnEditedQueue() throws Exception {
+        org.robolectric.android.controller.ServiceController<PlaybackService> controller =
+                queueWithSelectedCopy();
+        try {
+            PlaybackService service = controller.get();
+            assertTrue(service.clearQueue());
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(15));
+            assertFalse(service.undoClearQueue());
+            service.enqueue(track("nextsong001", "New entry", false), false);
+            assertTrue(service.clearQueue());
+            assertTrue(service.canUndoClearQueue());
+            service.enqueue(track("nextsong002", "Different entry", false), false);
+            assertFalse(service.undoClearQueue());
+            assertEquals("Different entry", service.queueSnapshot().get(1).title);
+        } finally {
+            controller.destroy();
+        }
+    }
+
+    private static org.robolectric.android.controller.ServiceController<PlaybackService> queueWithSelectedCopy() {
+        MusicApi.Track first = track("abcdefghijk", "First", false);
+        MusicApi.Track selected = track("abcdefghijk", "Second copy", false);
+        MusicApi.Track last = track("lmnopqrstuv", "Last", false);
+        new QueueStore(RuntimeEnvironment.getApplication()).save(Arrays.asList(last, selected, first),
+                Arrays.asList(first, selected, last), 1, 2300, 0, true);
+        return Robolectric.buildService(PlaybackService.class).create();
+    }
+
     @Test public void restoresDuplicateQueueEntriesAndOriginalOrderWithoutPlaying() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
         QueueStore store = new QueueStore(app);

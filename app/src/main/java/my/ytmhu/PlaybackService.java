@@ -55,6 +55,7 @@ public final class PlaybackService extends Service {
     private final AbLoop loop = new AbLoop();
     private int loopGeneration = -1;
     private List<MusicApi.Track> originalQueue = new ArrayList<>();
+    private ClearedQueue clearedQueue;
     private MediaSession session;
     private MediaPlayer player;
     private VideoSwitch video;
@@ -241,6 +242,55 @@ public final class PlaybackService extends Service {
         if (index == position) index = target;
         else if (index == target) index = position;
         publish(state, message);
+    }
+
+    boolean canClearQueue() { return index >= 0 && queue.size() > 1; }
+
+    boolean clearQueue() {
+        if (!canClearQueue()) return false;
+        List<MusicApi.Track> remaining = new ArrayList<>(Collections.singletonList(currentTrack()));
+        ClearedQueue undo = new ClearedQueue(queue, originalQueue, remaining, index, generation);
+        queue = remaining;
+        originalQueue = new ArrayList<>(remaining);
+        index = 0;
+        clearedQueue = undo;
+        main.removeCallbacks(expireQueueUndo);
+        main.postDelayed(expireQueueUndo, 15_000);
+        publish(state, message);
+        return true;
+    }
+
+    boolean canUndoClearQueue() {
+        return clearedQueue != null && clearedQueue.remaining == queue && queue.size() == 1
+                && index == 0 && generation == clearedQueue.generation;
+    }
+
+    boolean undoClearQueue() {
+        if (!canUndoClearQueue()) return false;
+        ClearedQueue undo = clearedQueue;
+        clearedQueue = null;
+        main.removeCallbacks(expireQueueUndo);
+        queue = undo.previous;
+        originalQueue = undo.original;
+        index = undo.index;
+        publish(state, message);
+        return true;
+    }
+
+    private final Runnable expireQueueUndo = () -> clearedQueue = null;
+
+    private static final class ClearedQueue {
+        final List<MusicApi.Track> previous, original, remaining;
+        final int index, generation;
+
+        ClearedQueue(List<MusicApi.Track> previous, List<MusicApi.Track> original, List<MusicApi.Track> remaining,
+                int index, int generation) {
+            this.previous = previous;
+            this.original = original;
+            this.remaining = remaining;
+            this.index = index;
+            this.generation = generation;
+        }
     }
 
     void skip(int delta) {
@@ -887,6 +937,10 @@ public final class PlaybackService extends Service {
     }
 
     private void publish(int nextState, String text) {
+        if (clearedQueue != null && !canUndoClearQueue()) {
+            clearedQueue = null;
+            main.removeCallbacks(expireQueueUndo);
+        }
         state = nextState;
         message = text;
         if (nextState == PlaybackState.STATE_BUFFERING) restoredQueue = false;
@@ -958,6 +1012,7 @@ public final class PlaybackService extends Service {
     @Override public void onDestroy() {
         clearSleepTimer();
         main.removeCallbacks(positionCheckpoint);
+        main.removeCallbacks(expireQueueUndo);
         writeQueueCheckpoint();
         destroyed = true;
         network.shutdownNow();

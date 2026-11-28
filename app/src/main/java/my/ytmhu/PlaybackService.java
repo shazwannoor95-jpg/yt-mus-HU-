@@ -58,6 +58,7 @@ public final class PlaybackService extends Service {
     private MediaSession session;
     private MediaPlayer player;
     private VideoSwitch video;
+    private AuthorizedVideoFile localVideo;
     private java.util.Map<String, java.io.File> demoAudio = Collections.emptyMap();
     private boolean restoringSong;
     private AudioManager audio;
@@ -169,6 +170,41 @@ public final class PlaybackService extends Service {
     List<MusicApi.Track> queueSnapshot() { return new ArrayList<>(queue); }
     int queueIndex() { return index; }
     MusicApi.Track currentTrack() { return index >= 0 ? queue.get(index) : null; }
+
+    boolean beginLocalVideo(AuthorizedVideoFile file) {
+        if (destroyed || localVideo != null || !DemoPlaybackPolicy.localPlaybackPermitted(this)) return false;
+        writeQueueCheckpoint();
+        clearSleepTimer();
+        localVideo = file;
+        queue = new ArrayList<>(Collections.singletonList(file.track));
+        originalQueue = new ArrayList<>(queue);
+        shuffle = false;
+        repeat = REPEAT_OFF;
+        select(0);
+        return true;
+    }
+
+    boolean setLocalVideoSurface(AuthorizedVideoFile file, Surface surface) {
+        if (destroyed || file != localVideo || currentTrack() != file.track || !prepared || player == null
+                || !DemoPlaybackPolicy.localPlaybackPermitted(this) || surface != null && !surface.isValid()) return false;
+        try {
+            player.setSurface(surface);
+            return true;
+        } catch (IllegalArgumentException | IllegalStateException unavailable) {
+            return false;
+        }
+    }
+
+    void finishLocalVideo(AuthorizedVideoFile file) {
+        if (localVideo != file || destroyed) return;
+        stopPlayback();
+        localVideo = null;
+        file.close();
+        queue.clear();
+        originalQueue.clear();
+        restoreQueue();
+        publish(state, message);
+    }
 
     void installDemoAudio(java.util.Map<String, java.io.File> inputs) {
         if (!DemoPlaybackPolicy.permitted(this)) throw new IllegalStateException("Demo playback unavailable");
@@ -633,6 +669,12 @@ public final class PlaybackService extends Service {
                 .putString(MediaMetadata.METADATA_KEY_ARTIST, track.artist).build());
         session.setActive(true);
         publish(PlaybackState.STATE_BUFFERING, "Loading…");
+        if (localVideo != null && track == localVideo.track) {
+            java.io.File source = localVideo.file;
+            prepare(Collections.singletonList(new MusicApi.AudioSource(
+                    android.net.Uri.fromFile(source).toString(), "", source.length(), 0)), 0, current);
+            return;
+        }
         if (DemoPlaybackPolicy.PACKAGE.equals(getPackageName())) {
             java.io.File local = demoAudio.get(track.id);
             if (local == null || !local.isFile()) fail("Bundled demo audio is unavailable.");
@@ -718,6 +760,10 @@ public final class PlaybackService extends Service {
 
     private void trackCompleted(MediaPlayer done, int current) {
         if (done != player || generation != current) return;
+        if (localVideo != null && currentTrack() == localVideo.track) {
+            stopPlayback();
+            return;
+        }
         if (sleepTimer.songEnd()) {
             holdAfterSong();
             return;
@@ -777,7 +823,7 @@ public final class PlaybackService extends Service {
             return;
         }
         if (!restoringSong) startPreparedPlayer();
-        reporter.play(currentTrack(), duration());
+        if (localVideo == null) reporter.play(currentTrack(), duration());
         publish(PlaybackState.STATE_PLAYING, queue.get(index).artist);
     }
 
@@ -868,7 +914,7 @@ public final class PlaybackService extends Service {
     };
 
     private void writeQueueCheckpoint() {
-        if (queueStore == null) return;
+        if (queueStore == null || localVideo != null) return;
         try {
             queueStore.save(queue, originalQueue, index, position(), repeat, shuffle);
         } catch (IllegalStateException playerChanged) {
@@ -916,6 +962,7 @@ public final class PlaybackService extends Service {
         destroyed = true;
         network.shutdownNow();
         releasePlayer();
+        if (localVideo != null) localVideo.close();
         reporter.close();
         audio.abandonAudioFocusRequest(focus);
         session.release();

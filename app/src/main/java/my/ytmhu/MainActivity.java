@@ -55,6 +55,7 @@ import java.util.concurrent.Future;
 
 public final class MainActivity extends Activity {
     private static final int SAVE_AUDIO = 21;
+    private static final int OPEN_LOCAL_VIDEO = 22;
     private static final int INK = 0xfff4eef4;
     private static final int MUTED = 0xffc6b8cc;
     private AppSettings prefs;
@@ -89,6 +90,9 @@ public final class MainActivity extends Activity {
     private Artwork artwork;
     private PlaybackService playback;
     private MusicApi.Track pendingDownload;
+    private AuthorizedVideoFile pendingLocalVideo;
+    private LocalVideoDialog localVideoDialog;
+    private boolean openingLocalVideo;
     private final ExecutorService downloads = Executors.newSingleThreadExecutor();
     private boolean dictionaryInstalling;
     private LinearLayout browser;
@@ -213,6 +217,7 @@ public final class MainActivity extends Activity {
             restoredPlayer = "";
             if ("mini".equals(restore)) toggleMiniPlayer();
             else if (!restore.isEmpty()) openPlayer("lyrics".equals(restore));
+            openPendingLocalVideo();
         }
         @Override public void onServiceDisconnected(ComponentName name) {
             playback = null;
@@ -516,7 +521,63 @@ public final class MainActivity extends Activity {
         addAction(popup, "Up next", () -> openPlayer(false));
         addAction(popup, "Mini player", this::toggleMiniPlayer);
         addAction(popup, "Now Playing", this::toggleExpanded);
+        if (DemoPlaybackPolicy.localPlaybackPermitted(this)) {
+            addAction(popup, "Open local video", this::chooseLocalVideo);
+        }
         popup.show();
+    }
+
+    private void chooseLocalVideo() {
+        if (openingLocalVideo || pendingLocalVideo != null || localVideoDialog != null) return;
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/mp4");
+        try {
+            startActivityForResult(picker, OPEN_LOCAL_VIDEO);
+        } catch (android.content.ActivityNotFoundException missing) {
+            toast("No Android file picker is installed.");
+        }
+    }
+
+    private void prepareLocalVideo(Uri uri) {
+        if (!DemoPlaybackPolicy.localPlaybackPermitted(this) || openingLocalVideo || pendingLocalVideo != null) return;
+        openingLocalVideo = true;
+        PerformancePolicy.Profile profile = performance.profile();
+        android.util.DisplayMetrics screen = getResources().getDisplayMetrics();
+        int shortEdge = Math.min(screen.widthPixels, screen.heightPixels);
+        toast("Preparing local video…");
+        downloads.execute(() -> {
+            try {
+                AuthorizedVideoFile file = AuthorizedVideoFile.stage(getApplicationContext(), uri, profile, shortEdge);
+                runOnUiThread(() -> {
+                    openingLocalVideo = false;
+                    if (isDestroyed() || isFinishing()) file.close();
+                    else {
+                        pendingLocalVideo = file;
+                        openPendingLocalVideo();
+                    }
+                });
+            } catch (java.io.IOException unavailable) {
+                runOnUiThread(() -> {
+                    openingLocalVideo = false;
+                    if (!isDestroyed()) toast(unavailable.getMessage());
+                });
+            }
+        });
+    }
+
+    private void openPendingLocalVideo() {
+        if (pendingLocalVideo == null || playback == null || !bound) return;
+        AuthorizedVideoFile file = pendingLocalVideo;
+        pendingLocalVideo = null;
+        if (expanded.getVisibility() == View.VISIBLE) closePlayer();
+        miniPlayer.setVisibility(View.GONE);
+        if (!playback.beginLocalVideo(file)) {
+            file.close();
+            toast("Local video is unavailable in this playback session.");
+            return;
+        }
+        localVideoDialog = new LocalVideoDialog(this, playback, file, downloads, performance::profile);
+        localVideoDialog.setOnDismissListener(dialog -> localVideoDialog = null);
+        localVideoDialog.show();
     }
 
     private void showBookmarks() {
@@ -767,6 +828,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onStop() {
+        if (localVideoDialog != null) localVideoDialog.dismiss();
         suggestions.clear();
         main.removeCallbacks(clock);
         performance.stop();
@@ -808,6 +870,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onDestroy() {
+        if (pendingLocalVideo != null) pendingLocalVideo.close();
         suggestions.close();
         if (trackDetailsTask != null) trackDetailsTask.cancel(true);
         ++generation;
@@ -2412,6 +2475,10 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == OPEN_LOCAL_VIDEO) {
+            if (result == RESULT_OK && data != null && data.getData() != null) prepareLocalVideo(data.getData());
+            return;
+        }
         if (request != SAVE_AUDIO) return;
         MusicApi.Track track = pendingDownload;
         pendingDownload = null;

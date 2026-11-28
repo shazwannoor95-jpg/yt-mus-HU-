@@ -36,6 +36,7 @@ final class SettingsView extends LinearLayout {
         String performanceStatus();
         String deviceCapabilities();
         String connectionLabel();
+        String dictionaryStatus();
         void run(String action);
         void tabChanged(String selected);
         void changed(String key);
@@ -50,7 +51,7 @@ final class SettingsView extends LinearLayout {
     private final Viewport viewport;
     private final EditText search;
     private Button compactTab;
-    private TextView effectiveProfile, deviceDetails;
+    private TextView effectiveProfile, deviceDetails, dictionaryStatus;
     private final List<Entry> entries = new ArrayList<>();
     private final ScrollView scroller;
     private String tab, filter = "";
@@ -196,7 +197,17 @@ final class SettingsView extends LinearLayout {
                 new String[]{"Theme default", "Regular", "Bold"}, new String[]{"theme", "regular", "bold"});
         toggle("Lyrics", "Lyrics look", "Quick line changes", "Jump to the current line instead of scrolling smoothly.", "quickLyrics", false);
         toggle("Lyrics", "Romanization & Translation", "Romanization",
-                "Show Latin readings when available. Missing lines may be sent to Unison.", "lyricRoman", false);
+                "Show source readings or local romanization. Missing readings may be requested from Unison.", "lyricRoman", false);
+        add("Lyrics", "Romanization & Translation", "Japanese dictionary", "Optional offline kanji readings", () -> {
+            dictionaryStatus = label(host.dictionaryStatus(), viewport.metadataSp, muted, false);
+            contents.addView(dictionaryStatus);
+            Button manage = button("Manage");
+            manage.setOnClickListener(view -> host.run("japanese-dictionary"));
+            row("Japanese dictionary", null, manage);
+        });
+        choice("Lyrics", "Romanization & Translation", "Han-only lyrics",
+                "Choose a reading system for Han text without a known language.", "lyricHanLanguage", "auto",
+                new String[]{"Auto", "Japanese", "Chinese"}, new String[]{"auto", "ja", "zh"});
         range("Lyrics", "Romanization & Translation", "Romanization size", null,
                 "lyricRomanSize", 75, 50, 125, 5, value -> value + "%");
         toggle("Lyrics", "Romanization & Translation", "Translation",
@@ -234,7 +245,7 @@ final class SettingsView extends LinearLayout {
         choice("Appearance", "Display & Layout", "Sidebar", null, "sidebar", prefs.sidebar(),
                 new String[]{"Auto", "Collapsed", "Expanded"}, new String[]{"auto", "rail", "expanded"});
         action("Appearance", "Display & Layout", "Reset display settings", null, "Reset", "reset-layout");
-        toggle("Appearance", "Appearance", "Always show seek knob", "Keep the position marker visible even when the player is idle.", "seekKnob", true);
+        toggle("Appearance", "Appearance", "Always show seek knob", "Keep the position marker visible when you are not seeking.", "seekKnob", true);
 
         if (!appearance.themes.isEmpty()) {
             add("Appearance", "Themes", "Theme", "Browse the upstream themes and previews.", this::themeGallery);
@@ -274,12 +285,16 @@ final class SettingsView extends LinearLayout {
 
         action("About", "Updates", "Check now", "Check GitHub for a newer Android APK. Updates are installed through Android.", "Check", "updates");
         action("About", "Updates", "What’s new in " + BuildVersion.VERSION,
-                "Sign-in recovery, solid playback icons and optional lyric romanization and translation.", null, "");
+                "Offline romanization on Android 8.1, optional Japanese dictionary and clearer lyrics messages.", null, "");
         action("About", "About", "YTM Head Unit " + BuildVersion.VERSION, "Android port of parts of ytm-rs. Android API 27 and newer.", null, "");
-        action("About", "About", "Lyrics", "LRCLIB and YouTube Music.", null, "");
+        action("About", "About", "Lyrics", "LRCLIB, YouTube Music and optional Better Lyrics Unison. Local readings use Kuromoji/IPADIC, Korean Romanizer and Unicode Unihan.", null, "");
         action("About", "About", "Fonts and icons", "Inter, DM Sans and Figtree (SIL OFL). App icon from ytm-rs.", null, "");
         action("About", "About", "Source code", "GPL-3.0-only. Includes upstream attributions.", "Open GitHub", "source");
         action("About", "About", "Upstream ytm-rs", "Desktop project, releases and credits.", "Open GitHub", "upstream");
+    }
+
+    void updateDictionary() {
+        if (dictionaryStatus != null) dictionaryStatus.setText(host.dictionaryStatus());
     }
 
     void updatePerformance() {

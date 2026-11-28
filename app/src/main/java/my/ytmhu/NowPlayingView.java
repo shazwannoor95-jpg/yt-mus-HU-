@@ -28,6 +28,7 @@ final class NowPlayingView extends LinearLayout {
     private static final int FOREGROUND = 0xfff5eef5;
     private static final int MUTED = 0xffc6b8c6;
     private final Artwork artwork;
+    private final LocalRomanizer romanizer = new LocalRomanizer();
     private final AppSettings prefs;
     private final Appearance appearance;
     private final SongMenu menu;
@@ -47,7 +48,7 @@ final class NowPlayingView extends LinearLayout {
     private Future<?> lyricsTask, extrasTask;
     private LyricExtras extrasRequest;
     private final List<List<TextView>> alternates = new ArrayList<>();
-    private TextView extrasStatus;
+    private TextView romanStatus, translationStatus;
     private int lyricsGeneration;
     private int activeLine = -1;
     private boolean closed;
@@ -246,9 +247,8 @@ final class NowPlayingView extends LinearLayout {
                 rows.addView(group);
             }
             if (roman || translate) {
-                extrasStatus = text("", 13, MUTED);
-                extrasStatus.setVisibility(GONE);
-                rows.addView(extrasStatus);
+                romanStatus = roman ? alternateStatus() : null;
+                translationStatus = translate ? alternateStatus() : null;
                 showExtras(display, new org.json.JSONObject(), Collections.emptyList(), roman, translate,
                         prefs.text("lyricTarget", "en"));
                 loadExtras(display, roman, translate);
@@ -267,61 +267,114 @@ final class NowPlayingView extends LinearLayout {
         return view;
     }
 
+    private TextView alternateStatus() {
+        TextView status = text("", 13, MUTED);
+        status.setVisibility(GONE);
+        rows.addView(status);
+        return status;
+    }
+
+    private boolean currentExtras(Lyrics original, LyricExtras request) {
+        return !closed && lyricsMode && original == lyrics && extrasRequest == request;
+    }
+
+    void clearRomanizationCache() { romanizer.clear(); }
+
     private void loadExtras(List<Lyrics.Line> display, boolean roman, boolean translate) {
         cancelExtras();
         Lyrics original = lyrics;
         String target = prefs.text("lyricTarget", "en");
-        List<String> requested = LyricExtras.needed(display, roman, translate, target);
-        if (requested.isEmpty()) return;
+        String hanPreference = prefs.text("lyricHanLanguage", "auto");
+        String title = track == null ? "" : track.title;
         LyricExtras request = new LyricExtras(getContext());
         extrasRequest = request;
         extrasTask = network.submit(() -> {
-            org.json.JSONObject values;
-            try { values = request.load(requested, target, original.language); }
-            catch (Exception unavailable) { values = new org.json.JSONObject(); }
-            org.json.JSONObject received = values;
-            List<String> local = new ArrayList<>();
+            String inferred = roman ? LocalRomanizer.language(original.language, title, display) : original.language;
+            String language = !"auto".equals(hanPreference) && inferred.isEmpty() ? hanPreference : inferred;
+            List<LocalRomanizer.Reading> local = new ArrayList<>();
+            LocalRomanizer.DictionaryState dictionaryState = LocalRomanizer.DictionaryState.MISSING;
             if (roman) {
-                java.util.HashMap<String, String> readings = new java.util.HashMap<>();
-                for (Lyrics.Line line : display) {
-                    if (Thread.currentThread().isInterrupted()) return;
-                    String reading = extra(received, line.text, "romanization");
-                    if (line.roman.isEmpty() && reading.isEmpty()) {
-                        try {
-                            reading = readings.computeIfAbsent(line.text, text -> LyricExtras.localRomanization(text, original.language));
-                        } catch (RuntimeException unavailable) { reading = ""; }
+                try (LocalRomanizer.Batch batch = romanizer.new Batch(getContext(), new JapaneseDictionary(getContext()))) {
+                    for (Lyrics.Line line : display) {
+                        if (Thread.currentThread().isInterrupted()) return;
+                        local.add(line.roman.isEmpty() ? batch.read(line.text, language) : LocalRomanizer.Reading.ORIGINAL);
                     }
-                    local.add(reading);
+                    dictionaryState = batch.dictionaryState();
                 }
             }
+            boolean fetchTranslation = translate && !sameLanguage(original.language, target);
+            List<String> requested = LyricExtras.needed(display, local, roman, fetchTranslation, target);
+            LocalRomanizer.DictionaryState status = dictionaryState;
+            if (!requested.isEmpty() && roman) {
+                post(() -> {
+                    if (currentExtras(original, request)) {
+                        showExtras(display, new org.json.JSONObject(), local, true, translate, target);
+                    }
+                });
+            }
+            boolean unavailable = false;
+            org.json.JSONObject values = new org.json.JSONObject();
+            if (!requested.isEmpty() && !Thread.currentThread().isInterrupted()) {
+                try { values = request.load(requested, target, original.language.isEmpty() ? language : original.language); }
+                catch (Exception failure) { unavailable = true; }
+            }
+            if (Thread.currentThread().isInterrupted()) return;
+            org.json.JSONObject received = values;
+            boolean providerUnavailable = unavailable;
             post(() -> {
-                if (closed || !lyricsMode || original != lyrics || extrasRequest != request) return;
+                if (!currentExtras(original, request)) return;
                 showExtras(display, received, local, roman, translate, target);
-                boolean missing = false;
+                boolean missingRoman = false;
+                boolean missingTranslation = false;
+                boolean japaneseHan = false;
                 for (int i = 0; i < display.size(); i++) {
                     Lyrics.Line line = display.get(i);
                     if (line.text.trim().isEmpty() || "♪".equals(line.text.trim())) continue;
-                    if ((roman && LyricExtras.nonLatin(line.text) && alternates.get(i).get(0).getVisibility() != VISIBLE)
-                            || (translate && alternates.get(i).get(roman ? 1 : 0).getVisibility() != VISIBLE
-                                && !target.equalsIgnoreCase(original.language))) {
-                        missing = true;
+                    if (roman && line.roman.isEmpty() && !local.get(i).complete && extra(received, line.text, "romanization").isEmpty()) {
+                        missingRoman = true;
+                        japaneseHan |= LocalRomanizer.japaneseHan(line.text, language);
+                    }
+                    if (fetchTranslation && line.translation(target).isEmpty() && extra(received, line.text, "translation").isEmpty()) {
+                        missingTranslation = true;
                     }
                 }
-                if (missing) {
-                    extrasStatus.setText("Some romanization or translation is unavailable.");
-                    extrasStatus.setVisibility(VISIBLE);
+                if (missingRoman) {
+                    String message = "Some lines have no reliable romanization. Original lyrics are kept.";
+                    if (japaneseHan && status == LocalRomanizer.DictionaryState.MISSING) {
+                        message = "For kanji readings, install the Japanese dictionary in Settings › Lyrics (" + JapaneseDictionary.DOWNLOAD_SIZE + ").";
+                    } else if (japaneseHan && status == LocalRomanizer.DictionaryState.MEMORY) {
+                        message = "Japanese dictionary paused to save memory. Reopen Lyrics when more memory is available.";
+                    } else if (japaneseHan && status == LocalRomanizer.DictionaryState.ERROR) {
+                        message = "Japanese dictionary could not open. Reinstall it in Settings › Lyrics.";
+                    } else if (language.isEmpty() && LocalRomanizer.hasHan(display)) {
+                        message += " For Chinese lyrics, choose Chinese in Settings › Lyrics › Han-only lyrics.";
+                    }
+                    showAlternate(romanStatus, message, false);
+                }
+                if (missingTranslation) {
+                    String message = providerUnavailable
+                            ? "Translation service unavailable. Check the connection and reopen Lyrics to retry."
+                            : "Some lines have no translation in the selected language. Try another language in Settings › Lyrics.";
+                    showAlternate(translationStatus, message, false);
                 }
             });
         });
     }
 
+    private static boolean sameLanguage(String first, String second) {
+        return first.split("[-_]", 2)[0].equalsIgnoreCase(second.split("[-_]", 2)[0]);
+    }
+
     private void showExtras(List<Lyrics.Line> display, org.json.JSONObject values,
-                            List<String> local, boolean roman, boolean translate, String target) {
+                            List<LocalRomanizer.Reading> local, boolean roman, boolean translate, String target) {
         for (int i = 0; i < display.size(); i++) {
             Lyrics.Line line = display.get(i);
             if (roman) {
-                String value = line.roman.isEmpty() ? extra(values, line.text, "romanization") : line.roman;
-                if (value.isEmpty() && i < local.size()) value = local.get(i);
+                String value = line.roman;
+                LocalRomanizer.Reading reading = i < local.size() ? local.get(i) : LocalRomanizer.Reading.NONE;
+                if (value.isEmpty() && reading.complete) value = reading.text;
+                if (value.isEmpty()) value = extra(values, line.text, "romanization");
+                if (value.isEmpty()) value = reading.text;
                 showAlternate(alternates.get(i).get(0), value, i == activeLine);
             }
             if (translate) {

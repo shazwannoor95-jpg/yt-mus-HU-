@@ -56,6 +56,49 @@ public final class PlaybackControlTest {
         }
     }
 
+    @Test public void seekThumbPreferenceIsAppliedToPlayableTrack() throws Exception {
+        Bundle state = new Bundle();
+        state.putString("page", "Account");
+        try (org.robolectric.android.controller.ActivityController<MainActivity> activity =
+                     Robolectric.buildActivity(MainActivity.class).create(state)) {
+            org.robolectric.android.controller.ServiceController<PlaybackService> controller =
+                    Robolectric.buildService(PlaybackService.class).create();
+            try {
+                MainActivity screen = activity.get();
+                PlaybackService service = controller.get();
+                android.media.MediaPlayer media = new android.media.MediaPlayer();
+                String fixture = "fixture.m4a";
+                org.robolectric.shadows.ShadowMediaPlayer.addMediaInfo(
+                        org.robolectric.shadows.util.DataSource.toDataSource(fixture),
+                        new org.robolectric.shadows.ShadowMediaPlayer.MediaInfo(12_000, 0));
+                media.setDataSource(fixture);
+                media.prepare();
+                java.lang.reflect.Field player = PlaybackService.class.getDeclaredField("player");
+                player.setAccessible(true);
+                player.set(service, media);
+                java.lang.reflect.Field prepared = PlaybackService.class.getDeclaredField("prepared");
+                prepared.setAccessible(true);
+                prepared.setBoolean(service, true);
+                field("playback").set(screen, service);
+
+                android.widget.SeekBar seek = (android.widget.SeekBar) field("seek").get(screen);
+                AppSettings prefs = new AppSettings(screen);
+                java.lang.reflect.Method render = MainActivity.class.getDeclaredMethod("renderProgress");
+                render.setAccessible(true);
+                prefs.set("seekKnob", false);
+                render.invoke(screen);
+                assertTrue(seek.isEnabled());
+                assertEquals(12_000, seek.getMax());
+                assertEquals(0, seek.getThumb().getAlpha());
+                prefs.set("seekKnob", true);
+                render.invoke(screen);
+                assertEquals(255, seek.getThumb().getAlpha());
+            } finally {
+                controller.destroy();
+            }
+        }
+    }
+
     private static java.lang.reflect.Field field(String name) throws Exception {
         java.lang.reflect.Field field = MainActivity.class.getDeclaredField(name);
         field.setAccessible(true);

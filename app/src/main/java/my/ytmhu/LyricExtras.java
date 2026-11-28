@@ -2,7 +2,6 @@
 package my.ytmhu;
 
 import android.content.Context;
-import android.os.Build;
 import android.util.AtomicFile;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -42,13 +41,17 @@ final class LyricExtras {
                 && Character.UnicodeScript.of(c) != Character.UnicodeScript.LATIN);
     }
 
-    static List<String> needed(List<Lyrics.Line> lines, boolean roman, boolean translate, String target) {
+    static List<String> needed(List<Lyrics.Line> lines, List<LocalRomanizer.Reading> local,
+                               boolean roman, boolean translate, String target) {
         Set<String> unique = new LinkedHashSet<>();
         int bytes = 0;
-        for (Lyrics.Line line : lines) {
+        for (int index = 0; index < lines.size(); index++) {
+            Lyrics.Line line = lines.get(index);
             String text = line.text.trim();
             if (text.isEmpty() || text.equals("♪") || unique.contains(text)) continue;
-            if (!(roman && line.roman.isEmpty() && nonLatin(text)) && !(translate && line.translation(target).isEmpty())) continue;
+            boolean missingRoman = roman && line.roman.isEmpty() && nonLatin(text)
+                    && (index >= local.size() || !local.get(index).complete);
+            if (!missingRoman && !(translate && line.translation(target).isEmpty())) continue;
             bytes += text.getBytes(StandardCharsets.UTF_8).length;
             if (unique.size() >= 240 || bytes > BYTE_LIMIT / 2) break;
             unique.add(text);
@@ -143,18 +146,4 @@ final class LyricExtras {
         }
     }
 
-    static String localRomanization(String line, String language) {
-        if (Build.VERSION.SDK_INT < 29 || !nonLatin(line)) return "";
-        // Generic ICU Han readings can be wrong for Japanese kanji.
-        if ((language.startsWith("ja") || line.codePoints().anyMatch(c -> c >= 0x3040 && c <= 0x30ff))
-                && line.codePoints().anyMatch(c -> Character.UnicodeScript.of(c) == Character.UnicodeScript.HAN)) return "";
-        return Icu.romanize(line);
-    }
-
-    @android.annotation.TargetApi(29)
-    private static final class Icu {
-        private static final ThreadLocal<android.icu.text.Transliterator> LATIN =
-                ThreadLocal.withInitial(() -> android.icu.text.Transliterator.getInstance("Any-Latin"));
-        static String romanize(String text) { return clean(LATIN.get().transliterate(text), text); }
-    }
 }

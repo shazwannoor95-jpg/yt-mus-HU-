@@ -10,8 +10,8 @@ android {
         applicationId 'my.ytmhu'
         minSdk 27
         targetSdk 32
-        versionCode 12
-        versionName '0.4.7'
+        versionCode 13
+        versionName '0.4.8'
     }
 
     compileOptions {
@@ -29,7 +29,21 @@ android {
     }
 }
 
+configurations {
+    japaneseDictionaryFixture
+}
+
+tasks.withType(Test).configureEach {
+    inputs.files(configurations.japaneseDictionaryFixture)
+    doFirst {
+        systemProperty 'ytm.test.japanese.dictionary', configurations.japaneseDictionaryFixture.singleFile.absolutePath
+    }
+}
+
 dependencies {
+    japaneseDictionaryFixture('com.atilika.kuromoji:kuromoji-ipadic:0.9.0') { transitive = false }
+    implementation 'com.atilika.kuromoji:kuromoji-core:0.9.0'
+    implementation 'net.crizin:korean-romanizer:2.0.1'
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.14.1'
 }

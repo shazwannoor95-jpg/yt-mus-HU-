@@ -89,6 +89,7 @@ public final class MainActivity extends Activity {
     private PlaybackService playback;
     private MusicApi.Track pendingDownload;
     private final ExecutorService downloads = Executors.newSingleThreadExecutor();
+    private boolean dictionaryInstalling;
     private LinearLayout browser;
     private NowPlayingView expanded;
     private boolean bound;
@@ -417,10 +418,14 @@ public final class MainActivity extends Activity {
             @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) {
                 if (user && !seeking && playback != null) playback.seekTo(progress);
             }
-            @Override public void onStartTrackingTouch(SeekBar bar) { seeking = true; }
+            @Override public void onStartTrackingTouch(SeekBar bar) {
+                seeking = true;
+                if (bar.getThumb() != null) bar.getThumb().setAlpha(255);
+            }
             @Override public void onStopTrackingTouch(SeekBar bar) {
                 seeking = false;
                 if (playback != null) playback.seekTo(bar.getProgress());
+                renderProgress();
             }
         });
         utility.addView(seek, new LinearLayout.LayoutParams(0, dp(Viewport.TOUCH), viewport.twoLinePlayer ? 1 : 1.25f));
@@ -639,6 +644,7 @@ public final class MainActivity extends Activity {
         performance.trim(level);
         if (level >= TRIM_MEMORY_UI_HIDDEN || level == TRIM_MEMORY_RUNNING_CRITICAL) {
             artwork.trim();
+            expanded.clearRomanizationCache();
             pages.keySet().removeIf(key -> !key.equals(browseKey));
         }
     }
@@ -648,6 +654,7 @@ public final class MainActivity extends Activity {
         if (performance == null) return;
         performance.trim(TRIM_MEMORY_COMPLETE);
         artwork.trim();
+        expanded.clearRomanizationCache();
         pages.keySet().removeIf(key -> !key.equals(browseKey));
     }
 
@@ -1024,6 +1031,7 @@ public final class MainActivity extends Activity {
                 String user = ListenBrainz.account(prefs);
                 return user.isEmpty() ? "Send played tracks to ListenBrainz after connecting." : "Connected as " + user;
             }
+            @Override public String dictionaryStatus() { return japaneseDictionaryStatus(); }
             @Override public void run(String action) { settingsAction(action); }
             @Override public void tabChanged(String selected) { settingsTab = selected; }
             @Override public void changed(String key) { settingsChanged(key); }
@@ -1044,7 +1052,7 @@ public final class MainActivity extends Activity {
             case "performance":
                 performance.choose(prefs.text("performance", "AUTO"));
                 return;
-            case "lyricRoman": case "lyricRomanSize": case "lyricTranslation": case "lyricTranslationSize": case "lyricTarget":
+            case "lyricRoman": case "lyricRomanSize": case "lyricTranslation": case "lyricTranslationSize": case "lyricTarget": case "lyricHanLanguage":
                 expanded.refreshLyricAppearance();
                 break;
             case "lrclib": case "ytLyrics": case "unisonLyrics": case "lyricsFirst":
@@ -1087,10 +1095,58 @@ public final class MainActivity extends Activity {
                         .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
                 break;
             case "listenbrainz": manageListenBrainz(); break;
+            case "japanese-dictionary": manageJapaneseDictionary(); break;
             case "updates": checkUpdate(); break;
             case "source": openLink(BuildVersion.REPO); break;
             case "upstream": openLink(BuildVersion.UPSTREAM); break;
         }
+    }
+
+    private String japaneseDictionaryStatus() {
+        if (dictionaryInstalling) return "Downloading Japanese dictionary…";
+        return new JapaneseDictionary(this).installed()
+                ? "Japanese dictionary installed (" + JapaneseDictionary.DOWNLOAD_SIZE + ")."
+                : "Japanese dictionary not installed. Download and storage: " + JapaneseDictionary.DOWNLOAD_SIZE + ".";
+    }
+
+    private void manageJapaneseDictionary() {
+        if (dictionaryInstalling) return;
+        JapaneseDictionary dictionary = new JapaneseDictionary(this);
+        boolean installed = dictionary.installed();
+        new AlertDialog.Builder(this).setTitle("Japanese dictionary")
+                .setMessage(japaneseDictionaryStatus() + "\nProvides contextual kanji readings offline. Devices under memory pressure can still display kana-only readings.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton(installed ? "Done" : "Download", (dialog, which) -> {
+                    if (!installed) installJapaneseDictionary(dictionary);
+                })
+                .setNeutralButton(installed ? "Remove" : null, (dialog, which) -> {
+                    if (dictionary.archive.delete()) {
+                        expanded.clearRomanizationCache();
+                        if (settingsView != null) settingsView.updateDictionary();
+                    } else toast("Could not remove the Japanese dictionary.");
+                }).show();
+    }
+
+    private void installJapaneseDictionary(JapaneseDictionary dictionary) {
+        dictionaryInstalling = true;
+        if (settingsView != null) settingsView.updateDictionary();
+        downloads.execute(() -> {
+            String message;
+            try {
+                dictionary.install();
+                message = "Japanese dictionary installed.";
+            } catch (Exception error) {
+                message = "Dictionary could not install. Check your connection and free at least 14 MiB, then retry.";
+            }
+            String result = message;
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                dictionaryInstalling = false;
+                expanded.clearRomanizationCache();
+                if (settingsView != null) settingsView.updateDictionary();
+                toast(result);
+            });
+        });
     }
 
     private int accent() { return prefs.flag("accentControls", true) ? appearance.accent : INK; }
@@ -1663,7 +1719,7 @@ public final class MainActivity extends Activity {
         }
         if (seek != null) {
             seek.setEnabled(duration > 0);
-            if (seek.getThumb() != null) seek.getThumb().setAlpha(prefs.flag("seekKnob", true) || duration > 0 ? 255 : 0);
+            if (seek.getThumb() != null) seek.getThumb().setAlpha(prefs.flag("seekKnob", true) ? 255 : 0);
             seek.setMax(Math.max(1, duration));
             seek.setProgress(position);
         }

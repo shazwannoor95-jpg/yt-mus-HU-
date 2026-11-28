@@ -11,19 +11,33 @@ temp=$(mktemp -d "$output/apk.XXXXXXXX")
 trap 'rm -rf -- "$temp"' EXIT
 mkdir "$temp/classes" "$temp/dex"
 
+maven_jar() {
+    local coordinate="$1" expected="$2" jar="$temp/${1##*/}"
+    curl --fail --silent --show-error --max-time 60 \
+        "https://repo.maven.apache.org/maven2/$coordinate" > "$jar"
+    printf '%s  %s
+' "$expected" "$jar" | sha256sum --check --status
+}
+maven_jar com/atilika/kuromoji/kuromoji-core/0.9.0/kuromoji-core-0.9.0.jar \
+    9dec317cab2879474d39bffea4f3f481288d87952c9b5e19d6897b0d5e0d3613
+maven_jar net/crizin/korean-romanizer/2.0.1/korean-romanizer-2.0.1.jar \
+    6814d94496a7839db8b5e0d3cd03d875f592fe30eb7c24f47caae404fd9276e7
+libraries=("$temp/kuromoji-core-0.9.0.jar" "$temp/korean-romanizer-2.0.1.jar")
+classpath="$android_jar:${libraries[0]}:${libraries[1]}"
+
 mapfile -d '' sources < <(find app/src/main/java -name '*.java' -print0)
 if [[ -n "${ECJ_JAR:-}" || ! $(command -v javac) ]]; then
     java -jar "${ECJ_JAR:-$tool_dir/ecj.jar}" -8 -encoding UTF-8 \
-        -classpath "$android_jar" -d "$temp/classes" "${sources[@]}"
+        -classpath "$classpath" -d "$temp/classes" "${sources[@]}"
 else
-    javac --release 8 -encoding UTF-8 -classpath "$android_jar" -d "$temp/classes" "${sources[@]}"
+    javac --release 8 -encoding UTF-8 -classpath "$classpath" -d "$temp/classes" "${sources[@]}"
 fi
 
 "$build_tools/aapt2" compile --dir app/src/main/res -o "$temp/resources.zip"
 "$build_tools/aapt2" link -I "$android_jar" --manifest app/src/main/AndroidManifest.xml -A app/src/main/assets \
     -o "$temp/unsigned.apk" "$temp/resources.zip"
 mapfile -d '' classes < <(find "$temp/classes" -name '*.class' -print0)
-"$build_tools/d8" --min-api 27 --lib "$android_jar" --output "$temp/dex" "${classes[@]}"
+"$build_tools/d8" --min-api 27 --lib "$android_jar" --output "$temp/dex" "${classes[@]}" "${libraries[@]}"
 (cd "$temp/dex" && zip -q ../unsigned.apk classes.dex)
 "$build_tools/zipalign" -f 4 "$temp/unsigned.apk" "$temp/aligned.apk"
 

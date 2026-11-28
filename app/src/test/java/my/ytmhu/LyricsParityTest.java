@@ -80,7 +80,7 @@ public final class LyricsParityTest {
         assertEquals("Hello", values.getJSONObject("Привет").getString("translation"));
         assertThrows(java.io.IOException.class, () -> LyricExtras.align(originals, new JSONArray()));
         Lyrics.Line repeated = new Lyrics.Line(100, "你好");
-        assertEquals(1, LyricExtras.needed(Arrays.asList(repeated, repeated), true, false, "en").size());
+        assertEquals(1, LyricExtras.needed(Arrays.asList(repeated, repeated), Collections.emptyList(), true, false, "en").size());
     }
 
     @Test public void oldWebViewAdviceIsSpecific() {
@@ -88,8 +88,4 @@ public final class LyricsParityTest {
         assertEquals("", GoogleSignIn.webViewAdvice("130.0.1"));
     }
 
-    @Test @Config(sdk = 31) public void offlineIcuRomanizationWorksForCyrillic() {
-        assertEquals("Privet", LyricExtras.localRomanization("Привет", "ru"));
-        assertEquals("", LyricExtras.localRomanization("今日は", "ja"));
-    }
 }

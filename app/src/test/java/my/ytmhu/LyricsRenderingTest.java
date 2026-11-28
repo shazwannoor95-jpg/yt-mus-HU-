@@ -39,6 +39,50 @@ public final class LyricsRenderingTest {
         exerciseRendering(true);
     }
 
+    @Test
+    @Config(sdk = 31, qualifiers = "w1024dp-h600dp-land-mdpi")
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    public void timedSweepActuallyPaintsAcrossWrappedTextAndRewinds() {
+        try (org.robolectric.android.controller.ActivityController<Activity> controller =
+                     Robolectric.buildActivity(Activity.class).setup()) {
+            String text = "The source span wraps across rows";
+            KaraokeLineView line = new KaraokeLineView(controller.get(),
+                    Collections.singletonList(new Lyrics.Word(1000, 2000, 0, text.length())), Color.YELLOW);
+            line.setText(text);
+            line.setTextColor(Color.WHITE);
+            line.setTextSize(22);
+            controller.get().setContentView(line);
+            AdaptiveUiTest.layout(line, 134, 200);
+            assertTrue(line.getLayout().getLineCount() > 1);
+            int start = highlightedPixels(line, 1000);
+            int middle = highlightedPixels(line, 1500);
+            int full = highlightedPixels(line, 2000);
+            assertEquals(0, start);
+            assertTrue(middle > 0);
+            assertTrue(full > middle);
+            assertEquals(start, highlightedPixels(line, 800));
+        }
+    }
+
+    private static int highlightedPixels(KaraokeLineView line, int time) {
+        line.position(time);
+        Bitmap bitmap = Bitmap.createBitmap(line.getWidth(), line.getHeight(), Bitmap.Config.ARGB_8888);
+        try {
+            line.draw(new Canvas(bitmap));
+            int count = 0;
+            for (int y = 0; y < bitmap.getHeight(); y++) {
+                for (int x = 0; x < bitmap.getWidth(); x++) {
+                    int color = bitmap.getPixel(x, y);
+                    if (Color.alpha(color) > 127 && Color.red(color) > 220 && Color.green(color) > 220
+                            && Color.blue(color) < 40) count++;
+                }
+            }
+            return count;
+        } finally {
+            bitmap.recycle();
+        }
+    }
+
     @Test public void missingOrInvalidProviderResultsKeepSourceTextAndDiagnosticsSeparate() throws Exception {
         List<String> lines = Collections.singletonList("学校");
         assertThrows(java.io.IOException.class, () -> LyricExtras.alignCloud(lines,
@@ -83,6 +127,9 @@ public final class LyricsRenderingTest {
                 TextView english = (TextView) AdaptiveUiTest.text(player, "Good morning");
                 assertTrue(source.getTextSize() > roman.getTextSize());
                 assertTrue(roman.getTextSize() > english.getTextSize());
+                assertNotNull(roman.getBackground());
+                assertNull(english.getBackground());
+                if (capture) assertTrue(source.getTypeface().isBold());
                 assertEquals(Color.WHITE, source.getCurrentTextColor());
                 assertNull(((View) source.getParent()).getBackground());
 

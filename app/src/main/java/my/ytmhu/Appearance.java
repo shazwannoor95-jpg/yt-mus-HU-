@@ -24,6 +24,7 @@ final class Appearance {
     final String progressColour;
     final int thumbRadius, cardRadius, searchRadius, coverRadius, barAlpha, lyricsSize, titleSize, artistSize;
     final double scrim;
+    final float lyricAnchor;
     final String themeId, themeName;
 
     Appearance(Context context, AppSettings prefs) {
@@ -67,6 +68,8 @@ final class Appearance {
         searchRadius = bounded(app, "search_radius", 21, 32);
         coverRadius = bounded(cover, "radius", 12, 30);
         lyricsSize = Math.max(16, Math.min(34, bounded(lyrics, "rem", 16, 27) * 3 / 2));
+        double anchor = lyrics == null ? 0.37 : lyrics.optDouble("anchor", 0.37);
+        lyricAnchor = (float) Math.max(0.10, Math.min(0.70, Double.isFinite(anchor) ? anchor : 0.37));
         titleSize = Math.max(17, bounded(now, "title_px", 24, 35));
         artistSize = Math.max(12, bounded(now, "artist_px", 16, 21));
         centerNowPlaying = "center".equals(string(now, "title_align"));

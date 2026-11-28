@@ -66,13 +66,35 @@ public final class AutomaticLyricsTest {
                      Robolectric.buildActivity(Activity.class).setup()) {
             KaraokeLineView view = new KaraokeLineView(controller.get(), line.words, Color.YELLOW);
             view.setText(line.text);
-            view.position(2500, true);
-            java.lang.reflect.Field fraction = KaraokeLineView.class.getDeclaredField("fraction");
-            fraction.setAccessible(true);
-            assertEquals(0.5f, fraction.getFloat(view), 0.001f);
-            view.position(1500, false);
-            assertEquals(1f, fraction.getFloat(view), 0.001f);
+            view.position(2500);
+            assertEquals(1, view.activeSpan());
+            assertEquals(50, view.fillPercent());
+            view.position(1250);
+            assertEquals(0, view.activeSpan());
+            assertEquals(25, view.fillPercent());
+            view.position(999);
+            assertEquals(-1, view.activeSpan());
+            assertEquals(0, view.fillPercent());
         }
+    }
+
+    @Test public void enhancedLrcKeepsOnlyExplicitInOrderWordIntervals() {
+        java.util.List<Lyrics.Line> lines = Lyrics.parse("[offset:+100]\n"
+                + "[00:01.0]<00:01.00>今<00:01.70> 日<00:02.10> text\n"
+                + "[00:03.00]<00:03.70>bad<00:03.50> order\n"
+                + "[00:04.00]<00:04.00>too long<00:06.00>\n"
+                + "[00:05.00][00:07.00]<00:05.00>repeat<00:05.50>");
+        assertEquals(5, lines.size());
+        Lyrics.Line first = lines.get(0);
+        assertEquals("今 日 text", first.text);
+        assertEquals(900, first.millis);
+        assertEquals(2, first.words.size());
+        Lyrics.Word second = first.words.get(1);
+        assertEquals(1600, second.start);
+        assertEquals(2000, second.end);
+        assertEquals("日", first.text.substring(second.from, second.to));
+        assertEquals("bad order", lines.get(1).text);
+        for (int i = 1; i < lines.size(); i++) assertTrue(lines.get(i).words.isEmpty());
     }
 
     @Test public void typographyCanMatchButLiveVersionCannot() throws Exception {

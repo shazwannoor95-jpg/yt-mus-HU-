@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 
 final class Lyrics {
     private static final Pattern TIMESTAMP = Pattern.compile("\\[(\\d{1,3}):([0-5]\\d)(?:[.:](\\d{1,3}))?\\]");
+    private static final Pattern WORD_TIMESTAMP = Pattern.compile("<(\\d{1,3}):([0-5]\\d)(?:[.:](\\d{1,3}))?>");
     private static final Pattern OFFSET = Pattern.compile("(?im)^\\[offset:([+-]?\\d{1,7})\\]");
 
     static final class Word {
@@ -65,14 +66,22 @@ final class Lyrics {
     final List<Line> lines;
     final String plain;
     final String source, language;
+    final String attempts;
+    final boolean cached;
 
     private Lyrics(List<Line> lines, String plain, String source) { this(lines, plain, source, ""); }
 
     Lyrics(List<Line> lines, String plain, String source, String language) {
+        this(lines, plain, source, language, "not recorded", false);
+    }
+
+    private Lyrics(List<Line> lines, String plain, String source, String language, String attempts, boolean cached) {
         this.language = language;
         this.lines = lines;
         this.plain = plain;
         this.source = source;
+        this.attempts = attempts;
+        this.cached = cached;
     }
 
     interface Source {
@@ -87,21 +96,49 @@ final class Lyrics {
         String first = preferredProvider(prefs);
         boolean allowUnison = prefs.flag("unisonLyrics", true);
         boolean allowLrclib = prefs.flag("lrclib", true);
+        boolean allowYouTube = prefs.flag("ytLyrics", true);
         String key = track.id + "\n" + track.title + "\n" + track.artist + "\n" + duration
-                + "\n" + first + "\n" + allowUnison + "\n" + allowLrclib;
+                + "\n" + first + "\n" + allowUnison + "\n" + allowLrclib + "\n" + allowYouTube;
         Lyrics cached = TIMED_CACHE.get(key);
-        if (cached != null) return cached;
+        if (cached != null) return new Lyrics(cached.lines, cached.plain, cached.source, cached.language,
+                cached.attempts, true);
         String[] order = ("auto".equals(first) || "unison".equals(first)) ? new String[]{"unison", "lrclib", "youtube"}
                 : "youtube".equals(first) ? new String[]{"youtube", "lrclib", "unison"}
                 : new String[]{"lrclib", "youtube", "unison"};
+        List<String> attempts = new ArrayList<>();
         Lyrics selected = select(order, duration, provider -> {
-            switch (provider) {
-                case "unison": return allowUnison ? unison(track, duration) : null;
-                case "youtube": return prefs.flag("ytLyrics", true)
-                        ? new Lyrics(Collections.emptyList(), new MusicApi(prefs).plainLyrics(track.id), "YouTube Music") : null;
-                default: return allowLrclib ? lrclib(track, duration) : null;
+            Lyrics result;
+            boolean enabled;
+            try {
+                switch (provider) {
+                    case "unison":
+                        enabled = allowUnison;
+                        result = enabled ? unison(track, duration) : null;
+                        break;
+                    case "youtube":
+                        enabled = allowYouTube;
+                        result = enabled ? new Lyrics(Collections.emptyList(), new MusicApi(prefs).plainLyrics(track.id), "YouTube Music") : null;
+                        break;
+                    default:
+                        enabled = allowLrclib;
+                        result = enabled ? lrclib(track, duration) : null;
+                }
+            } catch (Exception failure) {
+                attempts.add(provider + ": request or parse failed");
+                throw failure;
             }
+            String outcome;
+            if (!enabled) outcome = "disabled";
+            else if (result == null) outcome = "no matching result";
+            else if (result.timedFor(duration)) outcome = result.lines.stream().anyMatch(line -> !line.words.isEmpty())
+                    ? "accepted timed text with word/syllable spans" : "accepted line timing";
+            else if (result.timed()) outcome = "rejected unusable or out-of-range timing";
+            else outcome = result.plain.trim().isEmpty() ? "empty result" : "plain text";
+            attempts.add(provider + ": " + outcome);
+            return result;
         });
+        selected = new Lyrics(selected.lines, selected.plain, selected.source, selected.language,
+                String.join("; ", attempts), false);
         if (selected.timed() && selected.lines.size() <= 240
                 && selected.lines.stream().mapToInt(line -> line.text.length() + line.roman.length()
                         + line.translations.values().stream().mapToInt(String::length).sum() + line.words.size() * 16).sum() <= 20_000) {
@@ -320,17 +357,62 @@ final class Lyrics {
             int until = 0;
             List<Integer> times = new ArrayList<>();
             while (marker.find() && raw.substring(until, marker.start()).trim().isEmpty()) {
-                String fraction = marker.group(3);
-                int ms = fraction == null ? 0 : Integer.parseInt((fraction + "00").substring(0, 3));
-                times.add(Math.max(0, Integer.parseInt(marker.group(1)) * 60000
-                        + Integer.parseInt(marker.group(2)) * 1000 + ms - shift));
+                times.add(timestamp(marker, shift));
                 until = marker.end();
             }
+            if (times.isEmpty()) continue;
             String text = raw.substring(until).trim();
-            for (int time : times) lines.add(new Line(time, text));
+            if (times.size() == 1) lines.add(enhancedLine(times.get(0), text, shift));
+            else {
+                // An absolute word range cannot be reused for every repeated line stamp.
+                String plain = WORD_TIMESTAMP.matcher(text).replaceAll("").trim();
+                for (int time : times) lines.add(new Line(time, plain));
+            }
         }
         lines.sort(Comparator.comparingInt(line -> line.millis));
+        for (int i = 0; i + 1 < lines.size(); i++) {
+            Line line = lines.get(i);
+            if (!line.words.isEmpty() && line.words.get(line.words.size() - 1).end > lines.get(i + 1).millis) {
+                lines.set(i, new Line(line.millis, line.text));
+            }
+        }
         return lines;
+    }
+
+    private static int timestamp(Matcher marker, int shift) {
+        String fraction = marker.group(3);
+        int ms = fraction == null ? 0 : Integer.parseInt((fraction + "00").substring(0, 3));
+        return Math.max(0, Integer.parseInt(marker.group(1)) * 60000
+                + Integer.parseInt(marker.group(2)) * 1000 + ms - shift);
+    }
+
+    private static Line enhancedLine(int time, String value, int shift) {
+        Matcher marker = WORD_TIMESTAMP.matcher(value);
+        if (!marker.find()) return new Line(time, value);
+        StringBuilder text = new StringBuilder(value.substring(0, marker.start()));
+        List<Word> words = new ArrayList<>();
+        int start = timestamp(marker, shift);
+        int until = marker.end();
+        boolean ordered = start >= time;
+        while (marker.find()) {
+            int end = timestamp(marker, shift);
+            int from = text.length();
+            text.append(value, until, marker.start());
+            int to = text.length();
+            while (from < to && Character.isWhitespace(text.charAt(from))) from++;
+            while (to > from && Character.isWhitespace(text.charAt(to - 1))) to--;
+            ordered &= end >= start;
+            if (from < to && end > start && words.size() < 256) words.add(new Word(start, end, from, to));
+            start = end;
+            until = marker.end();
+        }
+        text.append(value, until, value.length());
+        String plain = text.toString().trim();
+        int lead = text.indexOf(plain);
+        if (!ordered || words.isEmpty()) return new Line(time, plain);
+        List<Word> aligned = new ArrayList<>(words.size());
+        for (Word word : words) aligned.add(new Word(word.start, word.end, word.from - lead, word.to - lead));
+        return new Line(time, -1, plain, null, null, aligned);
     }
 
     int activeAt(int millis) {

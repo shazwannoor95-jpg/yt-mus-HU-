@@ -45,7 +45,8 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     private final Button light;
     private final FrameLayout frame;
     private final TextureView picture;
-    private final TextView caption, time;
+    final TextView caption;
+    private final TextView time;
     private final ImageView artwork;
     private Surface surface;
     private DemoMedia.Recording recording;
@@ -199,11 +200,15 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     private void selectQuality(int selected, File staged) {
         cancelNetworkVideo();
         boolean restart = wantVideo;
-        if (restart) returnToSong();
+        if (restart) service.endVideo();
         chosenHeight = selected;
         networkVideo = staged;
-        if (restart || staged != null) startVideo();
-        render();
+        if (restart) {
+            ambient.reset();
+            preparePresentation();
+            render();
+        } else if (staged != null) startVideo();
+        else render();
     }
 
     private boolean networkEligible() {
@@ -247,13 +252,17 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
     private void startVideo() {
         if (surface == null || recording == null || recording.renditions.isEmpty()) return;
         if (!service.playing() && service.canPlay()) service.toggle();
+        preparePresentation();
+        render();
+    }
+
+    private void preparePresentation() {
         error = "";
         wantVideo = true;
         offered = hadVideo = hasFrame = false;
         delivered = null;
         attempt = 0;
         activeSince = 0;
-        render();
     }
 
     private void returnToSong() {
@@ -272,6 +281,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         returnToSong();
         service.skip(direction);
         if (resumeVideo) wantVideo = true;
+        render();
     }
 
     private void render() {
@@ -282,6 +292,7 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
             ambient.reset();
             networkVideo = null;
             recordingId = id;
+            error = "";
             recording = media.recordings.get(id);
             if (rendition(chosenHeight) == null) chosenHeight = 0;
             artwork.setImageBitmap(recording == null ? null : recording.cover);
@@ -293,9 +304,11 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         boolean active = service.videoActive();
         boolean preparing = service.videoPreparing();
         if (wantVideo && !active && !preparing) {
-            if (hadVideo || recording == null || recording.renditions.isEmpty()) {
+            if (recording == null) {
                 wantVideo = false;
-                error = "Video ended. Song mode is available.";
+            } else if (hadVideo || recording.renditions.isEmpty()) {
+                wantVideo = false;
+                error = hadVideo ? "Video ended. Song mode is available." : "No compatible video. Audio continues.";
             } else if (service.canOfferVideo(recordingId)) {
                 if (!offered || chosenHeight == 0 && attempt < recording.renditions.size()) offerNext();
                 else if (networkVideo != null) {
@@ -322,18 +335,18 @@ final class VisibleVideoPanel extends LinearLayout implements TextureView.Surfac
         hadVideo = active;
         if (!wantVideo && fullscreen) toggleFullscreen();
         boolean visible = active && hasFrame;
-        artwork.setVisibility(active ? GONE : VISIBLE);
+        artwork.setVisibility(visible ? GONE : VISIBLE);
         caption.setVisibility(visible ? GONE : VISIBLE);
-        caption.setGravity(active ? Gravity.CENTER : Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        caption.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         String status = service.status();
-        caption.setText(wantVideo ? "Loading video…" : service.title() + "\n" +
-                (error.isEmpty() ? (status.isEmpty() && track != null ? track.artist : status) : error));
+        caption.setText(wantVideo ? (service.playing() ? "Loading video…" : "Resume playback to load video.")
+                : service.title() + "\n" + (error.isEmpty() ? (status.isEmpty() && track != null ? track.artist : status) : error));
         song.setSelected(!wantVideo);
         video.setSelected(wantVideo);
         boolean available = recording != null && !recording.renditions.isEmpty();
         video.setEnabled(!wantVideo && surface != null && available && service.canPlay());
         fit.setEnabled(active);
-        full.setEnabled(active);
+        full.setEnabled(active || fullscreen);
         refreshAmbient();
         String qualityLabel = chosenHeight == 0 ? "Auto" : chosenHeight + "p";
         quality.setText(networkRequest != null ? "Fetching 240p…" : networkVideo != null ? "240p · HTTPS"

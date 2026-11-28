@@ -420,3 +420,22 @@ Gradle passed 114 host regressions with zero failures, errors or skips, includin
 Use the emulator steps in 0.4.38 with the 0.4.41 fixture. For the ambient test, use Fit, play Rabbit and toggle Ambient. Moving tint around the video is expected on Balanced and High Quality. Fill and lower profiles use a black background. Compare an ordinary Song/Video handoff with a manual HTTPS selection, then check recovery by ending Video or leaving the player.
 
 Production still needs an authorized discovery and delivery contract that binds provider-declared video bytes to their map, native transition and A/V timing verification, and reliable OEM parked-state verification. The next independent playback checkpoint is a one-ahead decoder preflight with authorized local media, queued-generation cancellation and protected clock isolation. Crossfade, gapless playback, skip silence and continuous adaptive video quality remain open.
+
+## 0.4.42 recorded video transitions and recovery
+
+The supplied `20261128-1652-03.7819128.mp4` runs 69.300 seconds at 1018 × 606 and 30 fps, with an AAC track. SHA-256 `763a90a6b19c9c792507c0ce9c9bddcd4498a0502b49eb3cb1cfd05e2ec7f7de`.
+
+| Time | Evidence |
+| --- | --- |
+| 00:15–00:23 | Rabbit shows moving frames with Auto 240p and the brown frame-derived glow. Choosing 144p around 00:22 briefly displays the poster and loading state. Video resumes around 00:23 and the displayed position progresses from about 0:06 to 0:07. |
+| 00:24–00:29 | At Rabbit's end the player returns to Song. After resuming, the stale “Video ended. Song mode is available.” text is visible under Studio Grid. |
+| 00:37.43–00:39.00 | The app's main area is black and the transport controls disappear before Studio Grid returns. The capture establishes a 1.57-second blackout in the sampled area. It does not identify the Activity or surface event that caused it. |
+| 00:43–00:53 and 01:02–01:08 | Previous/Next, moving Rabbit frames, manual 144p, Fit/Fill, ambient changes and fullscreen entry and exit are visible. The second end/restart repeats the stale caption. |
+
+The quality menu shows the HTTPS option. The recording does not establish transfer completion or distinguish network and cache. The AAC track averages −78 dBFS and has a −44.8 dBFS peak, which is insufficient for verifying audible continuity or A/V synchronization. Elapsed position display gives approximate evidence during one change and cannot measure handoff drift.
+
+The fixture now clears track-scoped status at identity changes and separates normal queue completion from decoder failure. It holds artwork until the first frame and retains pause and fullscreen when changing quality. A paused change displays a resume instruction and keeps Exit fullscreen available. These changes address the stale caption and a separate code-confirmed blank-stage window while awaiting a frame. The full-area blackout remains a runtime investigation. Native smoke now also covers paused quality selection and end/restart status.
+
+Pinned `backend.rs::music_video` tries the signed-in Premium pairing through `ytm.rs::paired_video` and its exact `counterparts` queue wrapper. Its signed-out `searched_video` fallback checks recording clues but has no authoritative map. The desktop stream path resolves fragmented AVC using internal Innertube player metadata requested under a visionOS client identity. The renderer reads byte ranges and follows the desktop audio clock. The Android on-device decoder is reusable. This project does not have a supported catalog interface providing both authorized media and a signed/verified pairing timeline. A search suggestion alone cannot authorize the bytes or establish same-clock alignment. The next independent integration is a user-selected local MP4 in the regular player, gated to the permitted non-automotive SDK emulator.
+
+Gradle passed 114 host regressions and compiled the updated native smoke. Regular APK is 15,590,458 bytes, SHA-256 `d81862da75943783d5f5e2f323c6341c81c0c072157a4fb8b06a6e5726edb59a`. Existing fixture is 19,714,646 bytes, SHA-256 `8ddde11102c9fee240f2eeca8c3460dbefb16bc03a0b252be79bd3c1f4be43ba`. Instrumentation is 197,833 bytes, SHA-256 `7da6785472b5714d848da8da67ed8622d640cb0fb6c66c15f3487dd906b5c5c8`. The signer, min API 27 and both protection boundaries were checked. The attached recording predates these changes. A new emulator run is pending.

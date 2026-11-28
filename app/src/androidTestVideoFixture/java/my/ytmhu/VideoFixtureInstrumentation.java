@@ -52,8 +52,12 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
             require(onMain(() -> "Fit".contentEquals(panel.fit.getText())), "Fill applied");
             onMain(panel.full::performClick);
             require(onMain(() -> "Exit fullscreen".contentEquals(panel.full.getText())), "Fullscreen opens");
+            onMain(() -> { panel.setQuality(144); return null; });
+            await(() -> "Resume playback to load video.".contentEquals(panel.caption.getText()),
+                    "Changing quality keeps the paused transport and shows a recovery instruction");
+            require(onMain(() -> "Exit fullscreen".contentEquals(panel.full.getText())), "Quality keeps fullscreen");
             onMain(panel.full::performClick);
-            onMain(() -> { seekToMiddle(panel); return null; });
+            onMain(() -> { seek(panel, 0.5f); return null; });
             await(() -> panel.seek.getProgress() > 8_000 && panel.seek.getProgress() < 16_000, "Touch seek moved into the track");
             onMain(panel.song::performClick);
             await(() -> panel.song.isSelected() && !panel.hasVideoFrame(), "Song stops showing video");
@@ -71,15 +75,20 @@ public final class VideoFixtureInstrumentation extends Instrumentation {
                     "Next plays the licensed Rabbit recording with its own paired video");
             onMain(() -> { panel.setQuality(240); return null; });
             await(() -> panel.renderedHeight() == 240, "Licensed original rendition renders at 240p");
+            onMain(() -> { seek(panel, 0.97f); return null; });
+            await(() -> panel.song.isSelected() && !panel.hasVideoFrame() && !panel.video.isEnabled(), "Last video finishes");
+            onMain(panel.play::performClick);
+            await(() -> panel.caption.getText().toString().startsWith("Studio Grid\n"), "Playback restarts the queue");
+            require(onMain(() -> !panel.caption.getText().toString().contains("Video ended")), "Previous track error is cleared");
         } finally {
             onMain(() -> { screen.finish(); return null; });
         }
     }
 
-    private void seekToMiddle(VisibleVideoPanel panel) {
+    private void seek(VisibleVideoPanel panel, float fraction) {
         long now = SystemClock.uptimeMillis();
         for (int action : new int[]{MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP}) {
-            MotionEvent event = MotionEvent.obtain(now, now, action, panel.seek.getWidth() / 2f, panel.seek.getHeight() / 2f, 0);
+            MotionEvent event = MotionEvent.obtain(now, now, action, panel.seek.getWidth() * fraction, panel.seek.getHeight() / 2f, 0);
             try { panel.seek.dispatchTouchEvent(event); }
             finally { event.recycle(); }
         }

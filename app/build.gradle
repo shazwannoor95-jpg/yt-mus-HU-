@@ -10,8 +10,8 @@ android {
         applicationId 'my.ytmhu'
         minSdk 27
         targetSdk 32
-        versionCode 46
-        versionName '0.4.41'
+        versionCode 47
+        versionName '0.4.42'
         testInstrumentationRunner 'my.ytmhu.VideoFixtureInstrumentation'
     }
 

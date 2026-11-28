@@ -501,6 +501,9 @@ public final class MainActivity extends Activity {
                 : playback != null && playback.isRepeat() ? "All" : "Off";
         addAction(popup, "Repeat · " + repeatMode, this::toggleRepeat);
         addAction(popup, "Seek to position", this::showSeek);
+        if (PlaybackBookmarks.supports(song) && playback.duration() > 0) {
+            addAction(popup, "Bookmarks", this::showBookmarks);
+        }
         if (playback != null && playback.canSetLoop()) addAction(popup, "A/B loop", this::showLoopOptions);
         if (playback != null) {
             int sleep = playback.sleepSelection();
@@ -514,6 +517,55 @@ public final class MainActivity extends Activity {
         addAction(popup, "Mini player", this::toggleMiniPlayer);
         addAction(popup, "Now Playing", this::toggleExpanded);
         popup.show();
+    }
+
+    private void showBookmarks() {
+        PlaybackService service = playback;
+        MusicApi.Track recording = service == null ? null : service.currentTrack();
+        if (!PlaybackBookmarks.supports(recording) || service.duration() <= 0) return;
+        PlaybackBookmarks bookmarks = new PlaybackBookmarks(this);
+        List<PlaybackBookmarks.Bookmark> entries = bookmarks.forRecording(recording.id);
+        String[] items = new String[entries.size() + 1];
+        items[0] = "Add bookmark at current position";
+        for (int i = 0; i < entries.size(); i++) {
+            PlaybackBookmarks.Bookmark entry = entries.get(i);
+            items[i + 1] = time(entry.position) + (entry.note.isEmpty() ? "" : " · " + entry.note);
+        }
+        new AlertDialog.Builder(this).setTitle("Bookmarks").setItems(items, (dialog, which) -> {
+            if (which == 0) {
+                if (playback == service && service.currentTrack() == recording && service.duration() > 0) {
+                    int position = Math.min(service.position(), service.duration() - 1);
+                    String note = "";
+                    for (PlaybackBookmarks.Bookmark entry : entries) if (entry.position == position) note = entry.note;
+                    editBookmark(bookmarks, recording.id, position, note);
+                } else toast("The playing track has changed.");
+                return;
+            }
+            PlaybackBookmarks.Bookmark entry = entries.get(which - 1);
+            new AlertDialog.Builder(this).setTitle(items[which])
+                    .setPositiveButton("Seek", (click, option) -> {
+                        if (playback == service && service.currentTrack() == recording && entry.position < service.duration()) {
+                            service.seekTo(entry.position);
+                        } else toast("This bookmark is unavailable for the current playback.");
+                    }).setNeutralButton("Edit note", (click, option) -> editBookmark(bookmarks, entry.recording, entry.position, entry.note))
+                    .setNegativeButton("Delete", (click, option) -> {
+                        bookmarks.delete(entry);
+                        toast("Bookmark deleted.");
+                    }).show();
+        }).setNegativeButton("Close", null).show();
+    }
+
+    private void editBookmark(PlaybackBookmarks bookmarks, String recording, int position, String note) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("Optional note");
+        input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(PlaybackBookmarks.NOTE_LIMIT)});
+        input.setText(note);
+        new AlertDialog.Builder(this).setTitle("Bookmark at " + time(position)).setView(input)
+                .setNegativeButton("Cancel", null).setPositiveButton("Save", (dialog, which) -> {
+                    if (bookmarks.save(recording, position, input.getText().toString())) toast("Bookmark saved.");
+                    else toast("Bookmark storage is full. Delete an existing bookmark to add another.");
+                }).show();
     }
 
     private void showSleepTimer() {

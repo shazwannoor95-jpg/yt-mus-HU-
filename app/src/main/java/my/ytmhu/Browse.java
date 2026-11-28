@@ -97,22 +97,30 @@ final class Browse {
     static final class CollectionHeader {
         final String title, subtitle, image, description;
         final boolean artist;
+        final String editablePlaylistId;
 
         CollectionHeader(String title, String subtitle, String image, String description, boolean artist) {
+            this(title, subtitle, image, description, artist, "");
+        }
+
+        CollectionHeader(String title, String subtitle, String image, String description, boolean artist, String editablePlaylistId) {
             this.title = title;
             this.subtitle = subtitle;
             this.image = image;
             this.description = description;
             this.artist = artist;
+            this.editablePlaylistId = editablePlaylistId;
         }
     }
 
     static CollectionHeader collectionHeader(JSONObject page, String browseId) {
         JSONObject root = child(page, "header");
+        JSONObject editable = editablePlaylistHeader(page, browseId);
         JSONObject header = root.optJSONObject("musicImmersiveHeaderRenderer");
         if (header == null) header = root.optJSONObject("musicVisualHeaderRenderer");
         boolean artist = header != null || browseId.startsWith("UC");
         if (header == null) header = root.optJSONObject("musicDetailHeaderRenderer");
+        if (header == null && editable != null) header = editable;
         if (header == null) header = find(page, "musicResponsiveHeaderRenderer", 0);
         if (header == null) return new CollectionHeader("", "", "", "", artist);
         String title = displayText(header.optJSONObject("title"));
@@ -132,8 +140,20 @@ final class Browse {
             JSONObject shelf = find(artist ? page : child(header, "description"), "musicDescriptionShelfRenderer", 0);
             if (shelf != null) description = displayText(shelf.optJSONObject("description"));
         }
-        if (description.length() > 3000) description = description.substring(0, 3000).trim() + "…";
-        return new CollectionHeader(title, subtitle, art, description, artist);
+        int limit = editable != null ? PlaylistEdits.DESCRIPTION_LIMIT : 3000;
+        if (description.length() > limit) description = description.substring(0, limit - 1).trim() + "…";
+        return new CollectionHeader(title, subtitle, art, description, artist, editable != null ? browseId.substring(2) : "");
+    }
+
+    private static JSONObject editablePlaylistHeader(JSONObject page, String browseId) {
+        if (!browseId.startsWith("VL") || !PlaylistEdits.isPlaylistId(browseId.substring(2))) return null;
+        JSONObject columns = child(child(page, "contents"), "twoColumnBrowseResultsRenderer");
+        JSONObject tab = child(item(array(columns, "tabs"), 0), "tabRenderer");
+        JSONObject section = child(child(tab, "content"), "sectionListRenderer");
+        JSONObject editable = child(item(array(section, "contents"), 0), "musicEditablePlaylistDetailHeaderRenderer");
+        String id = editable.optString("playlistId");
+        if (!id.isEmpty() && !id.equals(browseId.substring(2))) return null;
+        return child(editable, "header").optJSONObject("musicResponsiveHeaderRenderer");
     }
 
     static final class Mood {

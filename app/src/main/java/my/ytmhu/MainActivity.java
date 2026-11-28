@@ -1640,6 +1640,7 @@ public final class MainActivity extends Activity {
                 row.addView(chip, spacedWidth(-2, Viewport.TOUCH));
             }
         }));
+        if (libraryTab == Browse.Library.Playlists) results.add(() -> button("New playlist", () -> showPlaylistEditor(null)));
     }
 
     private void showLibrary(BrowsePage content) {
@@ -1710,7 +1711,103 @@ public final class MainActivity extends Activity {
         }
         row.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
         block.addView(row);
+        if (header != null && !account.isEmpty() && !header.editablePlaylistId.isEmpty()) {
+            Button edit = button("Edit playlist", () -> showPlaylistEditor(header));
+            if (viewport.width >= 680) row.addView(edit, spacedWidth(-2, Viewport.TOUCH));
+            else block.addView(edit, new LinearLayout.LayoutParams(-2, dp(Viewport.TOUCH)));
+        }
         return block;
+    }
+
+    private void showPlaylistEditor(Browse.CollectionHeader existing) {
+        if (!requireAccount()) return;
+        boolean create = existing == null;
+        LinearLayout form = column();
+        form.setPadding(dp(20), dp(4), dp(20), 0);
+        if (create) form.addView(label("New playlists are private.", viewport.metadataSp, MUTED));
+        EditText title = new EditText(this);
+        title.setSingleLine();
+        title.setHint("Playlist name");
+        title.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(PlaylistEdits.TITLE_LIMIT)});
+        form.addView(title);
+        EditText description = new EditText(this);
+        description.setHint("Description");
+        description.setMinLines(2);
+        description.setMaxLines(4);
+        description.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(PlaylistEdits.DESCRIPTION_LIMIT)});
+        form.addView(description);
+        if (!create) {
+            title.setText(existing.title);
+            description.setText(existing.description);
+        }
+        // Keep fields that were not edited out of the provider request.
+        String initialTitle = title.getText().toString().trim();
+        String initialDescription = description.getText().toString();
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(create ? "New playlist" : "Edit playlist")
+                .setView(form).setNegativeButton("Cancel", null).setPositiveButton(create ? "Create" : "Save", null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String name = title.getText().toString().trim();
+            if (!PlaylistEdits.validTitle(name)) {
+                title.setError("Enter a name without angle brackets.");
+                return;
+            }
+            String notes = description.getText().toString();
+            String changedName = create || !name.equals(initialTitle) ? name : null;
+            String changedDescription = create || !notes.equals(initialDescription) ? notes : null;
+            if (changedName == null && changedDescription == null) {
+                dialog.dismiss();
+                return;
+            }
+            submitPlaylistEdit(dialog, create ? "" : existing.editablePlaylistId, changedName, changedDescription);
+        }));
+        dialog.show();
+    }
+
+    private void submitPlaylistEdit(AlertDialog dialog, String id, String title, String description) {
+        if (!requireAccount()) return;
+        String session = GoogleSignIn.cookies();
+        if (!MusicApi.hasSession(session)) {
+            toast("The current account isn't available for this change.");
+            return;
+        }
+        String selectedAccount = account;
+        boolean create = id.isEmpty();
+        Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        Button cancel = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+        save.setEnabled(false);
+        cancel.setEnabled(false);
+        dialog.setCancelable(false);
+        network.execute(() -> {
+            try {
+                if (!session.equals(GoogleSignIn.cookies())) throw new java.io.IOException("Account changed before write");
+                api.setSession(session);
+                String savedId = id;
+                if (create) savedId = api.createPlaylist(title, description);
+                else api.updatePlaylist(id, title, description);
+                String result = "VL" + savedId;
+                runOnUiThread(() -> {
+                    if (isDestroyed()) return;
+                    dialog.dismiss();
+                    if (refreshingAccount || !selectedAccount.equals(account) || !session.equals(GoogleSignIn.cookies())) return;
+                    pages.keySet().removeIf(key -> key.startsWith("Library\n") || key.endsWith("\n" + result));
+                    loadSidebarPlaylists();
+                    if (create && "Library".equals(page)) openTrackCollection(result, title);
+                    else if (result.equals(collectionId) && "Collection".equals(page)) {
+                        if (title != null) collectionTitle = title;
+                        loadPage(true);
+                    }
+                    toast(create ? "Private playlist created." : "Playlist updated.");
+                });
+            } catch (Exception unavailable) {
+                runOnUiThread(() -> {
+                    if (isDestroyed() || !dialog.isShowing()) return;
+                    save.setEnabled(true);
+                    cancel.setEnabled(true);
+                    dialog.setCancelable(true);
+                    toast("YouTube didn't confirm the change. Check Library before retrying.");
+                });
+            }
+        });
     }
 
     private int mainTrackShelf(BrowsePage content) {

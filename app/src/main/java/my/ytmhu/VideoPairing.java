@@ -112,9 +112,12 @@ final class VideoPairing {
     }
 
     // The existing service can safely hand off only when both files use the same song clock.
+    boolean fitsSongClock(int songMillis) {
+        return songStart == 0 && videoStart == 0 && songMillis >= songEnd && songMillis - songEnd <= DURATION_SLACK;
+    }
+
     boolean fitsSharedClock(int songMillis, int videoMillis) {
-        return songStart == 0 && videoStart == 0 && songMillis >= songEnd && videoMillis >= videoEnd
-                && songMillis - songEnd <= DURATION_SLACK && videoMillis - videoEnd <= DURATION_SLACK
+        return fitsSongClock(songMillis) && videoMillis >= videoEnd && videoMillis - videoEnd <= DURATION_SLACK
                 && equalDuration(songMillis, videoMillis);
     }
 

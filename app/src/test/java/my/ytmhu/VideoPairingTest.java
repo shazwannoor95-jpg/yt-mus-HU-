@@ -48,6 +48,11 @@ public final class VideoPairingTest {
 
     private static MusicApi.Track song() { return new MusicApi.Track(SONG, "Song", "Artist", "", ARTIST); }
 
+    static VideoPairing declareFixture(MusicApi.Track song, String videoId, int offsetMs, int durationMs) throws Exception {
+        JSONArray timeline = new JSONArray().put(segment(0, offsetMs, durationMs));
+        return VideoPairing.declared(response(song.id, pair(videoId, ARTIST, timeline)), song);
+    }
+
     private static JSONArray segments(int songStart, int videoStart) throws Exception {
         return new JSONArray().put(segment(songStart, videoStart, 12_000))
                 .put(segment(songStart + 12_000, videoStart + 12_000, 12_000));

@@ -302,22 +302,26 @@ public final class PlaybackService extends Service {
         publish(state, message);
     }
 
-    /**
-     * Starts a candidate for a source whose recording identity has already been verified.
-     * ImageReader keeps this path off-screen until a supported display policy is available.
-     */
-    boolean offerOffscreenVideo(String recordingId, AssetFileDescriptor source, ImageReader output) {
+    /** Accepts an authorized rendition for a declared counterpart on an offscreen output only. */
+    boolean offerDeclaredOffscreenVideo(VideoPairing pairing, String verifiedVideoId, AssetFileDescriptor source,
+            ImageReader output) {
+        if (pairing == null || !pairing.videoId.equals(verifiedVideoId) || !canOfferVideo(pairing.songId)
+                || !pairing.fitsSongClock(duration())) return false;
         Surface surface;
         try {
             surface = output.getSurface();
         } catch (IllegalStateException closed) {
             return false;
         }
-        return offerLocalVideo(recordingId, source, surface);
+        return prepareVideo(pairing.songId, source, surface, pairing);
     }
 
-    /** The caller must own a permitted output and a verified same-timeline local rendition. */
+    /** Visible fixture media is restricted to the dedicated, permitted SDK emulator app. */
     boolean offerLocalVideo(String recordingId, AssetFileDescriptor source, Surface surface) {
+        return DemoPlaybackPolicy.permitted(this) && prepareVideo(recordingId, source, surface, null);
+    }
+
+    private boolean prepareVideo(String recordingId, AssetFileDescriptor source, Surface surface, VideoPairing pairing) {
         if (!canOfferVideo(recordingId) || source.getDeclaredLength() <= 0) return false;
         if (surface == null || !surface.isValid()) return false;
         VideoSwitch candidate = new VideoSwitch(player, generation, surface);
@@ -330,8 +334,11 @@ public final class PlaybackService extends Service {
             next.setSurface(surface);
             next.setOnPreparedListener(ready -> {
                 if (!candidate.waiting()) return;
-                if (ready.getVideoWidth() <= 0 || ready.getVideoHeight() <= 0
-                        || !VideoPairing.equalDuration(duration(), ready.getDuration())) {
+                int songMillis = duration();
+                int videoMillis = ready.getDuration();
+                boolean matchingClock = pairing == null ? VideoPairing.equalDuration(songMillis, videoMillis)
+                        : pairing.fitsSharedClock(songMillis, videoMillis);
+                if (ready.getVideoWidth() <= 0 || ready.getVideoHeight() <= 0 || !matchingClock) {
                     discardVideo();
                     return;
                 }

@@ -30,6 +30,9 @@ import java.time.Duration;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 27, shadows = VideoHandoffTest.VideoMediaPlayerShadow.class)
 public final class VideoHandoffTest {
+    private static final String SONG_ID = "fixture-id0", VIDEO_ID = "fixture-vid";
+    private static final String ARTIST_ID = "UCabcdefghijklmnopqrstuv";
+
     @Implements(MediaPlayer.class)
     public static class VideoMediaPlayerShadow extends ShadowMediaPlayer {
         @Override @Implementation protected int getVideoWidth() { return 320; }
@@ -49,9 +52,13 @@ public final class VideoHandoffTest {
             DataSource input = DataSource.toDataSource(video.getFileDescriptor(), 0, 100);
             ShadowMediaPlayer.addMediaInfo(input, new ShadowMediaPlayer.MediaInfo(4000, 30));
 
-            assertFalse(service.offerOffscreenVideo("different-id", video, output));
+            VideoPairing pairing = VideoPairingTest.declareFixture(service.currentTrack(), VIDEO_ID, 0, 4000);
+            VideoPairing different = VideoPairingTest.declareFixture(fixtureSong("another-id0"), VIDEO_ID, 0, 4000);
+            assertNotNull(different);
+            assertFalse(service.offerDeclaredOffscreenVideo(different, VIDEO_ID, video, output));
+            assertFalse(service.offerDeclaredOffscreenVideo(pairing, "different01", video, output));
             assertTrue(song.isPlaying());
-            assertTrue(service.offerOffscreenVideo("fixture-id", video, output));
+            assertTrue(service.offerDeclaredOffscreenVideo(pairing, VIDEO_ID, video, output));
             assertTrue(service.videoPreparing());
             assertSame(song, field("player").get(service));
             assertTrue(song.isPlaying());
@@ -70,7 +77,7 @@ public final class VideoHandoffTest {
             assertFalse(service.videoActive());
             assertSame(song, field("player").get(service));
             assertSame(session, field("session").get(service));
-            assertEquals("fixture-id", service.currentTrack().id);
+            assertEquals(SONG_ID, service.currentTrack().id);
             assertTrue(song.isPlaying());
             assertTrue(service.position() >= 2200);
             assertEquals(ShadowMediaPlayer.State.END, shadowOf(candidate).getState());
@@ -89,21 +96,24 @@ public final class VideoHandoffTest {
              AssetFileDescriptor video = new AssetFileDescriptor(
                      ParcelFileDescriptor.open(clip, ParcelFileDescriptor.MODE_READ_ONLY), 0, 100)) {
             MediaPlayer song = installPlayingAudio(service);
-            ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(video.getFileDescriptor(), 0, 100),
-                    new ShadowMediaPlayer.MediaInfo(8000, 30));
-            assertTrue(service.offerOffscreenVideo("fixture-id", video, output));
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(130));
-            assertFalse(service.videoActive());
-            assertNull(field("video").get(service));
-            assertSame(song, field("player").get(service));
-            assertTrue(song.isPlaying());
+            DataSource input = DataSource.toDataSource(video.getFileDescriptor(), 0, 100);
+            VideoPairing pairing = VideoPairingTest.declareFixture(service.currentTrack(), VIDEO_ID, 0, 4000);
+            for (int duration : new int[]{3500, 8000}) {
+                ShadowMediaPlayer.addMediaInfo(input, new ShadowMediaPlayer.MediaInfo(duration, 30));
+                assertTrue(service.offerDeclaredOffscreenVideo(pairing, VIDEO_ID, video, output));
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(130));
+                assertFalse(service.videoActive());
+                assertNull(field("video").get(service));
+                assertSame(song, field("player").get(service));
+                assertTrue(song.isPlaying());
+            }
         } finally {
             controller.destroy();
             clip.delete();
         }
     }
 
-    @Test public void localRenditionWaitsForIdentityAndReleasesWhenTheSurfaceOwnerEndsIt() throws Exception {
+    @Test public void visibleFixtureRouteIsDeniedToTheRegularAppAndOffscreenReleaseReturnsToSong() throws Exception {
         org.robolectric.android.controller.ServiceController<PlaybackService> controller =
                 Robolectric.buildService(PlaybackService.class).create();
         PlaybackService service = controller.get();
@@ -115,8 +125,11 @@ public final class VideoHandoffTest {
             ShadowMediaPlayer.addMediaInfo(DataSource.toDataSource(video.getFileDescriptor(), 0, 100),
                     new ShadowMediaPlayer.MediaInfo(4000, 30));
             assertFalse(service.canOfferVideo("unrelated"));
-            assertFalse(service.offerLocalVideo("fixture-id", video, null));
-            assertTrue(service.offerLocalVideo("fixture-id", video, output.getSurface()));
+            assertFalse(service.offerLocalVideo(SONG_ID, video, output.getSurface()));
+            assertFalse(service.offerLocalVideo(SONG_ID, video, null));
+            assertFalse(service.offerDeclaredOffscreenVideo(null, VIDEO_ID, video, output));
+            VideoPairing pairing = VideoPairingTest.declareFixture(service.currentTrack(), VIDEO_ID, 0, 4000);
+            assertTrue(service.offerDeclaredOffscreenVideo(pairing, VIDEO_ID, video, output));
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(120));
             assertTrue(service.videoActive());
             MediaPlayer movie = (MediaPlayer) field("player").get(service);
@@ -132,8 +145,32 @@ public final class VideoHandoffTest {
         }
     }
 
+    @Test public void rejectsOffsetOrIncompleteSongClockBeforeAllocatingACandidate() throws Exception {
+        org.robolectric.android.controller.ServiceController<PlaybackService> controller =
+                Robolectric.buildService(PlaybackService.class).create();
+        PlaybackService service = controller.get();
+        File clip = File.createTempFile("ytm-video-clock", ".mp4");
+        try (ImageReader output = ImageReader.newInstance(320, 180, ImageFormat.PRIVATE, 3);
+             AssetFileDescriptor video = new AssetFileDescriptor(
+                     ParcelFileDescriptor.open(clip, ParcelFileDescriptor.MODE_READ_ONLY), 0, 100)) {
+            MediaPlayer song = installPlayingAudio(service);
+            VideoPairing offset = VideoPairingTest.declareFixture(service.currentTrack(), VIDEO_ID, 150, 4000);
+            VideoPairing incomplete = VideoPairingTest.declareFixture(service.currentTrack(), VIDEO_ID, 0, 2000);
+            assertNotNull(offset);
+            assertNotNull(incomplete);
+            assertFalse(service.offerDeclaredOffscreenVideo(offset, VIDEO_ID, video, output));
+            assertFalse(service.offerDeclaredOffscreenVideo(incomplete, VIDEO_ID, video, output));
+            assertNull(field("video").get(service));
+            assertSame(song, field("player").get(service));
+            assertTrue(song.isPlaying());
+        } finally {
+            controller.destroy();
+            clip.delete();
+        }
+    }
+
     private static MediaPlayer installPlayingAudio(PlaybackService service) throws Exception {
-        service.enqueue(new MusicApi.Track("fixture-id", "Local Song", "Fixture", "", ""), false);
+        service.enqueue(fixtureSong(SONG_ID), false);
         field("index").setInt(service, 0);
         MediaPlayer song = new MediaPlayer();
         String fixture = "handoff-fixture.m4a";
@@ -147,6 +184,10 @@ public final class VideoHandoffTest {
         publish.setAccessible(true);
         publish.invoke(service, PlaybackState.STATE_PLAYING, "");
         return song;
+    }
+
+    private static MusicApi.Track fixtureSong(String id) {
+        return new MusicApi.Track(id, "Local Song", "Fixture", "", ARTIST_ID);
     }
 
     private static Field field(String name) throws Exception {

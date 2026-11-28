@@ -29,7 +29,7 @@ import org.robolectric.util.ReflectionHelpers;
 @Config(sdk = 27, qualifiers = "w1024dp-h600dp-land-mdpi")
 public final class PlaylistEditsTest {
     @Test public void creationIsPrivateAndEditsIncludeOnlyTouchedFields() throws Exception {
-        JSONObject create = PlaylistEdits.create("  Road trip  ", "Notes");
+        JSONObject create = PlaylistEdits.create("  Road trip  ", "Notes", Collections.emptyList());
         assertEquals("PRIVATE", create.getString("privacyStatus"));
         assertEquals("Road trip", create.getString("title"));
         assertEquals("Notes", create.getString("description"));
@@ -39,8 +39,24 @@ public final class PlaylistEditsTest {
         JSONArray clearDescription = PlaylistEdits.update("PLowned", null, "").getJSONArray("actions");
         assertEquals(1, clearDescription.length());
         assertEquals("", clearDescription.getJSONObject(0).getString("playlistDescription"));
-        assertThrows(IllegalArgumentException.class, () -> PlaylistEdits.create("<invalid>", ""));
+        assertThrows(IllegalArgumentException.class, () -> PlaylistEdits.create("<invalid>", "", Collections.emptyList()));
         assertThrows(IllegalArgumentException.class, () -> PlaylistEdits.update("LM", "No", ""));
+    }
+
+    @Test public void queueSaveUsesOnePrivateRequestWithFirstOccurrenceOrder() throws Exception {
+        MusicApi.Track a = new MusicApi.Track("abcdefghijk", "A", "Artist", "", "");
+        MusicApi.Track b = new MusicApi.Track("12345678901", "B", "Artist", "", "");
+        MusicApi.Track local = new MusicApi.Track("local:other", "Local", "Artist", "", "");
+        List<String> captured = PlaylistEdits.queueIds(java.util.Arrays.asList(a, local, b, a));
+        JSONObject request = PlaylistEdits.create("Queue", "", captured);
+        assertEquals("PRIVATE", request.getString("privacyStatus"));
+        JSONArray songs = request.getJSONArray("videoIds");
+        assertEquals(2, songs.length());
+        assertEquals(a.id, songs.getString(0));
+        assertEquals(b.id, songs.getString(1));
+        assertFalse(PlaylistEdits.create("Empty", "", Collections.emptyList()).has("videoIds"));
+        assertThrows(IllegalArgumentException.class, () -> PlaylistEdits.create("Large", "",
+                Collections.nCopies(PlaylistEdits.MAX_QUEUE_SONGS + 1, a.id)));
     }
 
     @Test public void editableRendererMustBeInTheMatchingPlaylistHeader() throws Exception {

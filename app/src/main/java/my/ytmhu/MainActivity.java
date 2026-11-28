@@ -494,6 +494,9 @@ public final class MainActivity extends Activity {
         PopupMenu popup = new PopupMenu(this, anchor);
         MusicApi.Track song = playback == null ? null : playback.currentTrack();
         if (song != null) addAction(popup, "Song options", () -> showCurrentSongMenu(anchor));
+        if (!account.isEmpty() && playback != null && !playback.queueSnapshot().isEmpty()) {
+            addAction(popup, "Save queue as playlist", this::saveQueueAsPlaylist);
+        }
         addAction(popup, playback != null && playback.isShuffle() ? "Turn shuffle off" : "Turn shuffle on", this::toggleShuffle);
         String repeatMode = playback != null && playback.isRepeatOne() ? "One"
                 : playback != null && playback.isRepeat() ? "All" : "Off";
@@ -1722,11 +1725,32 @@ public final class MainActivity extends Activity {
     }
 
     private void showPlaylistEditor(Browse.CollectionHeader existing) {
+        showPlaylistEditor(existing, Collections.emptyList());
+    }
+
+    private void saveQueueAsPlaylist() {
+        if (playback == null || !requireAccount()) return;
+        List<String> songs;
+        try {
+            songs = PlaylistEdits.queueIds(playback.queueSnapshot());
+        } catch (IllegalArgumentException oversized) {
+            toast("Save up to " + PlaylistEdits.MAX_QUEUE_SONGS + " distinct songs at a time.");
+            return;
+        }
+        if (songs.isEmpty()) toast("No songs in the queue can be saved.");
+        else showPlaylistEditor(null, songs);
+    }
+
+    private void showPlaylistEditor(Browse.CollectionHeader existing, List<String> queueIds) {
         if (!requireAccount()) return;
         boolean create = existing == null;
         LinearLayout form = column();
         form.setPadding(dp(20), dp(4), dp(20), 0);
-        if (create) form.addView(label("New playlists are private.", viewport.metadataSp, MUTED));
+        if (create) {
+            String privacy = queueIds.isEmpty() ? "New playlists are private."
+                    : "Save " + queueIds.size() + (queueIds.size() == 1 ? " song" : " songs") + " as a private playlist.";
+            form.addView(label(privacy, viewport.metadataSp, MUTED));
+        }
         EditText title = new EditText(this);
         title.setSingleLine();
         title.setHint("Playlist name");
@@ -1760,12 +1784,12 @@ public final class MainActivity extends Activity {
                 dialog.dismiss();
                 return;
             }
-            submitPlaylistEdit(dialog, create ? "" : existing.editablePlaylistId, changedName, changedDescription);
+            submitPlaylistEdit(dialog, create ? "" : existing.editablePlaylistId, changedName, changedDescription, queueIds);
         }));
         dialog.show();
     }
 
-    private void submitPlaylistEdit(AlertDialog dialog, String id, String title, String description) {
+    private void submitPlaylistEdit(AlertDialog dialog, String id, String title, String description, List<String> queueIds) {
         boolean create = id.isEmpty();
         Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
         Button cancel = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
@@ -1773,7 +1797,7 @@ public final class MainActivity extends Activity {
         cancel.setEnabled(false);
         dialog.setCancelable(false);
         writePlaylist(() -> {
-            if (create) return api.createPlaylist(title, description);
+            if (create) return api.createPlaylist(title, description, queueIds);
             api.updatePlaylist(id, title, description);
             return id;
         }, savedId -> {

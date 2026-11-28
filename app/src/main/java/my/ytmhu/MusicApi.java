@@ -392,9 +392,9 @@ final class MusicApi {
                 .put("actions", new JSONArray().put(edit))));
     }
 
-    String createPlaylist(String title, String description) throws Exception {
+    String createPlaylist(String title, String description, List<String> videoIds) throws Exception {
         if (!hasSession(cookies)) throw new IOException("Sign in to create a playlist.");
-        JSONObject response = web("playlist/create", PlaylistEdits.create(title, description));
+        JSONObject response = web("playlist/create", PlaylistEdits.create(title, description, videoIds));
         checkWrite(response);
         String id = response.optString("playlistId");
         if (!PlaylistEdits.isPlaylistId(id)) throw new IOException("YouTube did not confirm playlist creation.");

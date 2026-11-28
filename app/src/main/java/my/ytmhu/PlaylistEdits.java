@@ -4,10 +4,15 @@ package my.ytmhu;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 final class PlaylistEdits {
     static final int TITLE_LIMIT = 150;
     static final int DESCRIPTION_LIMIT = 5000;
+    static final int MAX_QUEUE_SONGS = 200;
 
     static boolean isPlaylistId(String id) { return id.matches("PL[A-Za-z0-9_-]{2,188}"); }
     static boolean isEntryId(String id) { return id.matches("[A-Za-z0-9_+=/-]{1,512}"); }
@@ -16,11 +21,28 @@ final class PlaylistEdits {
         return !title.trim().isEmpty() && title.length() <= TITLE_LIMIT && !title.contains("<") && !title.contains(">");
     }
 
-    static JSONObject create(String title, String description) throws JSONException {
+    static JSONObject create(String title, String description, List<String> videoIds) throws JSONException {
         if (title == null) throw new IllegalArgumentException("Playlist name required");
         check(title, description);
-        return new JSONObject().put("title", title.trim()).put("description", description).put("privacyStatus", "PRIVATE");
+        if (videoIds.size() > MAX_QUEUE_SONGS) throw new IllegalArgumentException("Queue exceeds request limit");
+        JSONObject body = new JSONObject().put("title", title.trim()).put("description", description).put("privacyStatus", "PRIVATE");
+        if (!videoIds.isEmpty()) {
+            for (String id : videoIds) if (!isVideoId(id)) throw new IllegalArgumentException("Invalid recording");
+            body.put("videoIds", new JSONArray(videoIds));
+        }
+        return body;
     }
+
+    static List<String> queueIds(List<MusicApi.Track> queue) {
+        Set<String> distinct = new LinkedHashSet<>();
+        for (MusicApi.Track track : queue) {
+            if (isVideoId(track.id)) distinct.add(track.id);
+            if (distinct.size() > MAX_QUEUE_SONGS) throw new IllegalArgumentException("Queue exceeds request limit");
+        }
+        return new ArrayList<>(distinct);
+    }
+
+    private static boolean isVideoId(String id) { return id.matches("[A-Za-z0-9_-]{11}"); }
 
     static JSONObject update(String id, String title, String description) throws JSONException {
         if (!isPlaylistId(id) || title == null && description == null) throw new IllegalArgumentException("Invalid playlist edit");
@@ -32,7 +54,7 @@ final class PlaylistEdits {
     }
 
     static JSONObject remove(String id, String videoId, String entryId) throws JSONException {
-        if (!videoId.matches("[A-Za-z0-9_-]{11}")) throw new IllegalArgumentException("Invalid recording");
+        if (!isVideoId(videoId)) throw new IllegalArgumentException("Invalid recording");
         return entryMutation(id, entryId, "ACTION_REMOVE_VIDEO", new JSONObject().put("removedVideoId", videoId));
     }
 

@@ -53,6 +53,43 @@ public final class PlaylistEditsTest {
         assertEquals("", Browse.collectionHeader(page(false, "PLowned"), "VLPLowned").editablePlaylistId);
     }
 
+    @Test public void duplicateSongsMoveAndRemoveByDistinctProviderEntryIds() throws Exception {
+        JSONObject sortOption = new JSONObject().put("selected", true).put("serviceEndpoint", new JSONObject()
+                .put("playlistEditEndpoint", new JSONObject().put("actions", new JSONArray()
+                        .put(new JSONObject().put("playlistVideoOrder", 0)))));
+        JSONObject sort = new JSONObject().put("musicSideAlignedItemRenderer", new JSONObject().put("startItems", new JSONArray()
+                .put(new JSONObject().put("sortFilterSubMenuRenderer", new JSONObject().put("subMenuItems", new JSONArray().put(sortOption))))));
+        JSONObject shelf = new JSONObject().put("header", sort).put("contents", new JSONArray()
+                .put(entry("abcdefghijk", "set-first")).put(entry("abcdefghijk", "set-second"))
+                .put(entry("12345678901", "set-third")));
+        JSONObject response = new JSONObject().put("sectionListRenderer", new JSONObject().put("contents",
+                new JSONArray().put(new JSONObject().put("musicPlaylistShelfRenderer", shelf))));
+        Browse.Shelf parsed = Browse.collectionShelves(response, false).get(0);
+        assertTrue(parsed.manualOrder);
+        assertEquals(parsed.cards.get(0).track.id, parsed.cards.get(1).track.id);
+        assertEquals("set-third", Browse.moveSuccessor(parsed, parsed.cards.get(0), 1));
+        assertEquals("set-first", Browse.moveSuccessor(parsed, parsed.cards.get(1), -1));
+        assertNull(Browse.moveSuccessor(parsed, parsed.cards.get(1), 1));
+        sortOption.put("selected", false);
+        Browse.Shelf sorted = Browse.collectionShelves(response, false).get(0);
+        assertNull(Browse.moveSuccessor(sorted, sorted.cards.get(0), 1));
+
+        JSONObject removed = PlaylistEdits.remove("PLowned", "abcdefghijk", "set-second").getJSONArray("actions").getJSONObject(0);
+        assertEquals("set-second", removed.getString("setVideoId"));
+        JSONObject moved = PlaylistEdits.move("PLowned", "set-first", "set-third").getJSONArray("actions").getJSONObject(0);
+        assertEquals("set-third", moved.getString("movedSetVideoIdSuccessor"));
+        assertThrows(IllegalArgumentException.class, () -> PlaylistEdits.remove("PLowned", "abcdefghijk", ""));
+    }
+
+    @Test public void deletionMustBeAcknowledgedForTheSamePlaylist() throws Exception {
+        JSONObject response = new JSONObject().put("command", new JSONObject().put("commandExecutorCommand",
+                new JSONObject().put("commands", new JSONArray().put(new JSONObject().put("handlePlaylistDeletionCommand",
+                        new JSONObject().put("playlistId", "PLowned"))))));
+        assertTrue(PlaylistEdits.confirmsDeletion("PLowned", response));
+        assertFalse(PlaylistEdits.confirmsDeletion("PLother", response));
+        assertFalse(PlaylistEdits.confirmsDeletion("PLowned", new JSONObject().put("status", "STATUS_SUCCEEDED")));
+    }
+
     @Test public void visibleEditControlRequiresAnOwnedHeaderAndDoesNotSubmitInvalidText() throws Exception {
         Bundle state = new Bundle();
         state.putString("page", "Account");
@@ -63,6 +100,7 @@ public final class PlaylistEditsTest {
             assertNull(AdaptiveUiTest.text(header(screen, Browse.collectionHeader(page(false, "PLowned"), "VLPLowned")), "Edit playlist"));
             View edit = AdaptiveUiTest.text(header(screen, Browse.collectionHeader(page(true, "PLowned"), "VLPLowned")), "Edit playlist");
             assertNotNull(edit);
+            assertNotNull(AdaptiveUiTest.text(header(screen, Browse.collectionHeader(page(true, "PLowned"), "VLPLowned")), "Delete playlist"));
             assertTrue(edit.performClick());
             shadowOf(Looper.getMainLooper()).idle();
             AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
@@ -95,5 +133,13 @@ public final class PlaylistEditsTest {
         JSONObject tab = new JSONObject().put("tabRenderer", new JSONObject().put("content", sections));
         return new JSONObject().put("contents", new JSONObject().put("twoColumnBrowseResultsRenderer",
                 new JSONObject().put("tabs", new JSONArray().put(tab))));
+    }
+
+    private static JSONObject entry(String videoId, String setId) throws Exception {
+        JSONObject title = new JSONObject().put("runs", new JSONArray().put(new JSONObject().put("text", "Song")));
+        JSONObject column = new JSONObject().put("musicResponsiveListItemFlexColumnRenderer", new JSONObject().put("text", title));
+        return new JSONObject().put("musicResponsiveListItemRenderer", new JSONObject()
+                .put("playlistItemData", new JSONObject().put("videoId", videoId).put("playlistSetVideoId", setId))
+                .put("flexColumns", new JSONArray().put(column)));
     }
 }

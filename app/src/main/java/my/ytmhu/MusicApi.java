@@ -402,10 +402,21 @@ final class MusicApi {
     }
 
     void updatePlaylist(String id, String title, String description) throws Exception {
+        editPlaylistEntries(PlaylistEdits.update(id, title, description));
+    }
+
+    void editPlaylistEntries(JSONObject request) throws Exception {
         if (!hasSession(cookies)) throw new IOException("Sign in to edit a playlist.");
-        JSONObject response = web("browse/edit_playlist", PlaylistEdits.update(id, title, description));
+        JSONObject response = web("browse/edit_playlist", request);
         checkWrite(response);
         if (!response.optString("status").contains("SUCCEEDED")) throw new IOException("YouTube did not confirm the edit.");
+    }
+
+    void deletePlaylist(String id) throws Exception {
+        if (!hasSession(cookies) || !PlaylistEdits.isPlaylistId(id)) throw new IOException("Playlist unavailable for deletion.");
+        JSONObject response = web("playlist/delete", new JSONObject().put("playlistId", id));
+        checkWrite(response);
+        if (!PlaylistEdits.confirmsDeletion(id, response)) throw new IOException("YouTube did not confirm deletion.");
     }
 
     private static void checkWrite(JSONObject result) throws IOException {

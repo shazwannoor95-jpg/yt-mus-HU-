@@ -66,14 +66,20 @@ final class Browse {
 
     static final class Card {
         final String title, subtitle, image, browseId;
+        final String playlistEntry;
         final MusicApi.Track track;
 
         Card(String title, String subtitle, String image, String browseId, MusicApi.Track track) {
+            this(title, subtitle, image, browseId, track, "");
+        }
+
+        Card(String title, String subtitle, String image, String browseId, MusicApi.Track track, String playlistEntry) {
             this.title = title;
             this.subtitle = subtitle;
             this.image = image;
             this.browseId = browseId;
             this.track = track;
+            this.playlistEntry = playlistEntry;
         }
     }
 
@@ -81,16 +87,22 @@ final class Browse {
         final String title, cursor;
         final List<Card> cards;
         final boolean preferArtwork;
+        final boolean manualOrder;
 
         Shelf(String title, List<Card> cards, boolean preferArtwork) {
             this(title, cards, preferArtwork, "");
         }
 
         Shelf(String title, List<Card> cards, boolean preferArtwork, String cursor) {
+            this(title, cards, preferArtwork, cursor, false);
+        }
+
+        Shelf(String title, List<Card> cards, boolean preferArtwork, String cursor, boolean manualOrder) {
             this.title = title;
             this.cards = cards;
             this.preferArtwork = preferArtwork;
             this.cursor = cursor;
+            this.manualOrder = manualOrder;
         }
     }
 
@@ -378,7 +390,7 @@ final class Browse {
         if (remaining > 0) cards.addAll(next.cards.subList(0, Math.min(remaining, next.cards.size())));
         String cursor = cards.size() < MAX_COLLECTION_TRACKS && !current.cursor.equals(next.cursor)
                 ? next.cursor : "";
-        return new Shelf(current.title, cards, current.preferArtwork, cursor);
+        return new Shelf(current.title, cards, current.preferArtwork, cursor, current.manualOrder);
     }
 
     private static String cursor(JSONObject shelf, JSONArray rows) {
@@ -429,9 +441,32 @@ final class Browse {
             }
             String next = list != null && listLimit == MAX_COLLECTION_TRACKS && cards.size() < limit
                     ? cursor(renderer, contents) : "";
-            if (!cards.isEmpty() || !next.isEmpty()) out.add(new Shelf(title, cards, artwork, next));
+            if (!cards.isEmpty() || !next.isEmpty()) out.add(new Shelf(title, cards, artwork, next, list != null && manualOrder(list)));
         }
         return out;
+    }
+
+    private static boolean manualOrder(JSONObject shelf) {
+        JSONObject header = child(child(shelf, "header"), "musicSideAlignedItemRenderer");
+        JSONObject menu = child(item(array(header, "startItems"), 0), "sortFilterSubMenuRenderer");
+        JSONArray items = array(menu, "subMenuItems");
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject choice = item(items, i);
+            if (!choice.optBoolean("selected")) continue;
+            JSONObject endpoint = child(child(choice, "serviceEndpoint"), "playlistEditEndpoint");
+            if (item(array(endpoint, "actions"), 0).optInt("playlistVideoOrder", -1) == 0) return true;
+        }
+        return false;
+    }
+
+    static String moveSuccessor(Shelf shelf, Card card, int direction) {
+        if (!shelf.manualOrder || card.playlistEntry.isEmpty() || Math.abs(direction) != 1) return null;
+        int index = shelf.cards.indexOf(card);
+        if (index < 0 || index + direction < 0 || index + direction >= shelf.cards.size()) return null;
+        int successorIndex = direction < 0 ? index - 1 : index + 2;
+        if (successorIndex == shelf.cards.size()) return null;
+        String successor = shelf.cards.get(successorIndex).playlistEntry;
+        return successor.isEmpty() || successor.equals(card.playlistEntry) ? null : successor;
     }
 
     private static List<Card> readCards(JSONArray contents, boolean hideExplicit, int limit) {
@@ -465,7 +500,10 @@ final class Browse {
         if (row != null) {
             MusicApi.Track track = MusicApi.track(row);
             String art = image(row.optJSONObject("thumbnail"));
-            if (track != null) return new Card(track.title, track.artist, art, "", track);
+            if (track != null) {
+                String entryId = child(row, "playlistItemData").optString("playlistSetVideoId");
+                return new Card(track.title, track.artist, art, "", track, PlaylistEdits.isEntryId(entryId) ? entryId : "");
+            }
             JSONObject nav = row.optJSONObject("navigationEndpoint");
             String browseId = nav == null ? "" : child(nav, "browseEndpoint").optString("browseId");
             if (browseId.isEmpty()) {

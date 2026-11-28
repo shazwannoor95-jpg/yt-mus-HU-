@@ -106,6 +106,7 @@ public final class MainActivity extends Activity {
     private String page = "Home";
     private Browse.Search searchType = Browse.Search.All;
     private Browse.Library libraryTab = Browse.Library.Playlists;
+    private boolean playlistWritePending;
     private String collectionId = "";
     private String collectionTitle = "";
     private Browse.Card collectionCard;
@@ -1711,10 +1712,11 @@ public final class MainActivity extends Activity {
         }
         row.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
         block.addView(row);
-        if (header != null && !account.isEmpty() && !header.editablePlaylistId.isEmpty()) {
-            Button edit = button("Edit playlist", () -> showPlaylistEditor(header));
-            if (viewport.width >= 680) row.addView(edit, spacedWidth(-2, Viewport.TOUCH));
-            else block.addView(edit, new LinearLayout.LayoutParams(-2, dp(Viewport.TOUCH)));
+        if (editablePlaylist(content)) {
+            block.addView(chipRow(actions -> {
+                actions.addView(button("Edit playlist", () -> showPlaylistEditor(header)), spacedWidth(-2, Viewport.TOUCH));
+                actions.addView(button("Delete playlist", () -> confirmPlaylistDeletion(content)), spacedWidth(-2, Viewport.TOUCH));
+            }));
         }
         return block;
     }
@@ -1764,50 +1766,100 @@ public final class MainActivity extends Activity {
     }
 
     private void submitPlaylistEdit(AlertDialog dialog, String id, String title, String description) {
-        if (!requireAccount()) return;
-        String session = GoogleSignIn.cookies();
-        if (!MusicApi.hasSession(session)) {
-            toast("The current account isn't available for this change.");
-            return;
-        }
-        String selectedAccount = account;
         boolean create = id.isEmpty();
         Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
         Button cancel = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
         save.setEnabled(false);
         cancel.setEnabled(false);
         dialog.setCancelable(false);
+        writePlaylist(() -> {
+            if (create) return api.createPlaylist(title, description);
+            api.updatePlaylist(id, title, description);
+            return id;
+        }, savedId -> {
+            dialog.dismiss();
+            String destination = refreshPlaylistCache(savedId);
+            if (create && "Library".equals(page)) openTrackCollection(destination, title);
+            else if (destination.equals(collectionId) && "Collection".equals(page)) {
+                if (title != null) collectionTitle = title;
+                loadPage(true);
+            }
+            toast(create ? "Private playlist created." : "Playlist updated.");
+        }, () -> {
+            if (!dialog.isShowing()) return;
+            save.setEnabled(true);
+            cancel.setEnabled(true);
+            dialog.setCancelable(true);
+        });
+    }
+
+    private boolean editablePlaylist(BrowsePage content) {
+        return !account.isEmpty() && content.header != null && !content.header.editablePlaylistId.isEmpty()
+                && ("VL" + content.header.editablePlaylistId).equals(collectionId);
+    }
+
+    private void confirmPlaylistDeletion(BrowsePage content) {
+        if (!editablePlaylist(content) || pages.get(browseKey) != content) return;
+        String id = content.header.editablePlaylistId;
+        new AlertDialog.Builder(this).setTitle("Delete playlist?")
+                .setMessage("Delete “" + content.header.title + "” from YouTube Music?")
+                .setNegativeButton("Cancel", null).setPositiveButton("Delete", (dialog, which) -> {
+                    if (!editablePlaylist(content) || pages.get(browseKey) != content) return;
+                    writePlaylist(() -> { api.deletePlaylist(id); return id; }, deletedId -> {
+                        String deleted = refreshPlaylistCache(deletedId);
+                        if ("Collection".equals(page) && deleted.equals(collectionId)) {
+                            libraryTab = Browse.Library.Playlists;
+                            navigate("Library");
+                        }
+                        toast("Playlist deleted.");
+                    }, () -> {});
+                }).show();
+    }
+
+    private void writePlaylist(java.util.concurrent.Callable<String> change, java.util.function.Consumer<String> saved, Runnable failed) {
+        if (playlistWritePending || !requireAccount()) {
+            if (playlistWritePending) toast("A playlist change is already being saved.");
+            failed.run();
+            return;
+        }
+        String session = GoogleSignIn.cookies();
+        if (!MusicApi.hasSession(session)) {
+            toast("The current account isn't available for this change.");
+            failed.run();
+            return;
+        }
+        String selectedAccount = account;
+        playlistWritePending = true;
         network.execute(() -> {
             try {
                 if (!session.equals(GoogleSignIn.cookies())) throw new java.io.IOException("Account changed before write");
                 api.setSession(session);
-                String savedId = id;
-                if (create) savedId = api.createPlaylist(title, description);
-                else api.updatePlaylist(id, title, description);
-                String result = "VL" + savedId;
+                String id = change.call();
                 runOnUiThread(() -> {
+                    playlistWritePending = false;
                     if (isDestroyed()) return;
-                    dialog.dismiss();
-                    if (refreshingAccount || !selectedAccount.equals(account) || !session.equals(GoogleSignIn.cookies())) return;
-                    pages.keySet().removeIf(key -> key.startsWith("Library\n") || key.endsWith("\n" + result));
-                    loadSidebarPlaylists();
-                    if (create && "Library".equals(page)) openTrackCollection(result, title);
-                    else if (result.equals(collectionId) && "Collection".equals(page)) {
-                        if (title != null) collectionTitle = title;
-                        loadPage(true);
+                    if (refreshingAccount || !selectedAccount.equals(account) || !session.equals(GoogleSignIn.cookies())) {
+                        failed.run();
+                        return;
                     }
-                    toast(create ? "Private playlist created." : "Playlist updated.");
+                    saved.accept(id);
                 });
             } catch (Exception unavailable) {
                 runOnUiThread(() -> {
-                    if (isDestroyed() || !dialog.isShowing()) return;
-                    save.setEnabled(true);
-                    cancel.setEnabled(true);
-                    dialog.setCancelable(true);
+                    playlistWritePending = false;
+                    if (isDestroyed()) return;
+                    failed.run();
                     toast("YouTube didn't confirm the change. Check Library before retrying.");
                 });
             }
         });
+    }
+
+    private String refreshPlaylistCache(String id) {
+        String destination = "VL" + id;
+        pages.keySet().removeIf(key -> key.startsWith("Library\n") || key.endsWith("\n" + destination));
+        loadSidebarPlaylists();
+        return destination;
     }
 
     private int mainTrackShelf(BrowsePage content) {
@@ -1866,7 +1918,9 @@ public final class MainActivity extends Activity {
         if (cards.isEmpty()) results.add(() -> label("No matching songs.", viewport.songSp, MUTED));
         for (int i = 0; i < cards.size(); i++) {
             int index = i;
-            results.add(() -> songRow(cards.get(index), tracks, index));
+            Browse.Card card = cards.get(i);
+            boolean reorder = order == CollectionTracks.Order.ORIGINAL && content.filter.isEmpty() && !prefs.flag("hideExplicit", false);
+            results.add(() -> songRow(card, tracks, index, menu -> addPlaylistEntryActions(menu, content, shelf, card, reorder)));
         }
         if (playlist && !shelf.cursor.isEmpty()) {
             results.add(() -> {
@@ -1876,6 +1930,33 @@ public final class MainActivity extends Activity {
                 return more;
             });
         }
+    }
+
+    private void addPlaylistEntryActions(PopupMenu menu, BrowsePage content, Browse.Shelf shelf, Browse.Card card, boolean reorder) {
+        if (!editablePlaylist(content) || card.playlistEntry.isEmpty() || playlistWritePending) return;
+        String id = content.header.editablePlaylistId;
+        addAction(menu, "Remove from playlist", () -> new AlertDialog.Builder(this).setTitle("Remove song?")
+                .setMessage("Remove this playlist entry for “" + card.title + "”?").setNegativeButton("Cancel", null)
+                .setPositiveButton("Remove", (dialog, which) -> changePlaylistEntry(content, shelf,
+                        () -> PlaylistEdits.remove(id, card.track.id, card.playlistEntry))).show());
+        if (!reorder) return;
+        for (int direction : new int[]{-1, 1}) {
+            String before = Browse.moveSuccessor(shelf, card, direction);
+            if (before != null) addAction(menu, direction < 0 ? "Move up in playlist" : "Move down in playlist",
+                    () -> changePlaylistEntry(content, shelf, () -> PlaylistEdits.move(id, card.playlistEntry, before)));
+        }
+    }
+
+    private void changePlaylistEntry(BrowsePage content, Browse.Shelf shelf, java.util.concurrent.Callable<JSONObject> request) {
+        if (!editablePlaylist(content) || pages.get(browseKey) != content || !content.shelves.contains(shelf)) return;
+        writePlaylist(() -> {
+            api.editPlaylistEntries(request.call());
+            return content.header.editablePlaylistId;
+        }, id -> {
+            String destination = refreshPlaylistCache(id);
+            if ("Collection".equals(page) && destination.equals(collectionId)) loadPage(true);
+            toast("Playlist updated.");
+        }, () -> {});
     }
 
     private void showCollectionFilter(BrowsePage content) {
@@ -1967,6 +2048,10 @@ public final class MainActivity extends Activity {
     }
 
     private View songRow(Browse.Card card, List<MusicApi.Track> tracks, int index) {
+        return songRow(card, tracks, index, null);
+    }
+
+    private View songRow(Browse.Card card, List<MusicApi.Track> tracks, int index, java.util.function.Consumer<PopupMenu> playlistActions) {
         MusicApi.Track track = tracks.get(index);
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1977,7 +2062,7 @@ public final class MainActivity extends Activity {
         row.setFocusable(true);
         row.setOnClickListener(view -> playTracks(tracks, index));
         row.setOnLongClickListener(view -> {
-            showSongMenu(view, track, -1);
+            showSongMenu(view, track, -1, playlistActions);
             return true;
         });
         row.addView(cover(card.image), new LinearLayout.LayoutParams(dp(40), dp(40)));
@@ -1986,13 +2071,17 @@ public final class MainActivity extends Activity {
         text.addView(label(card.title, viewport.songSp, INK));
         text.addView(label(card.subtitle, viewport.metadataSp, MUTED));
         row.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
-        addTrackOverflow(row, track);
+        addTrackOverflow(row, track, playlistActions);
         return row;
     }
 
     private void addTrackOverflow(LinearLayout row, MusicApi.Track track) {
+        addTrackOverflow(row, track, null);
+    }
+
+    private void addTrackOverflow(LinearLayout row, MusicApi.Track track, java.util.function.Consumer<PopupMenu> playlistActions) {
         transport(row, Icons.MORE, "Actions for " + track.title, null, Viewport.TOUCH)
-                .setOnClickListener(anchor -> showSongMenu(anchor, track, -1));
+                .setOnClickListener(anchor -> showSongMenu(anchor, track, -1, playlistActions));
     }
 
     private void openCollection(Browse.Card card) {
@@ -2093,7 +2182,12 @@ public final class MainActivity extends Activity {
     }
 
     private void showSongMenu(View anchor, MusicApi.Track track, int queueIndex) {
+        showSongMenu(anchor, track, queueIndex, null);
+    }
+
+    private void showSongMenu(View anchor, MusicApi.Track track, int queueIndex, java.util.function.Consumer<PopupMenu> playlistActions) {
         PopupMenu popup = new PopupMenu(this, anchor);
+        if (playlistActions != null) playlistActions.accept(popup);
         addSongActions(popup, track, queueIndex);
         popup.show();
     }

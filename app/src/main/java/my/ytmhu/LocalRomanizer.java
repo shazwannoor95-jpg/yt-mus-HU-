@@ -79,10 +79,12 @@ final class LocalRomanizer {
         private JapaneseDictionary.Tokenizer tokenizer;
         private boolean dictionarySlot;
 
-        Batch(Context context, JapaneseDictionary dictionary) {
+        Batch(Context context, JapaneseDictionary dictionary) { this(context, dictionary, false); }
+
+        Batch(Context context, JapaneseDictionary dictionary, boolean bundled) {
             this.context = context;
             this.dictionary = dictionary.installed() ? dictionary.archive : null;
-            dictionaryState = this.dictionary == null ? DictionaryState.MISSING : DictionaryState.READY;
+            dictionaryState = this.dictionary == null && !bundled ? DictionaryState.MISSING : DictionaryState.READY;
         }
 
         DictionaryState dictionaryState() { return dictionaryState; }
@@ -156,7 +158,8 @@ final class LocalRomanizer {
                             close();
                             return Hepburn.convert(normalized);
                         }
-                        tokenizer = new JapaneseDictionary.Tokenizer(dictionary);
+                        tokenizer = dictionary != null ? new JapaneseDictionary.Tokenizer(dictionary)
+                                : new JapaneseDictionary.Tokenizer(context);
                     }
                     return JapaneseReading.render(tokenizer.tokenize(normalized));
                 } catch (IOException | RuntimeException error) {

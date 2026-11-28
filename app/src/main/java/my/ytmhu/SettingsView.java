@@ -202,11 +202,11 @@ final class SettingsView extends LinearLayout {
                 new String[]{"Theme default", "Regular", "Bold"}, new String[]{"theme", "regular", "bold"});
         toggle("Lyrics", "Lyrics look", "Quick line changes", "Jump to the current line instead of scrolling smoothly.", "quickLyrics", false);
         toggle("Lyrics", "Romanization & Translation", "Romanization",
-                "Show source readings or local romanization. Missing readings may be requested from Unison.", "lyricRoman", false);
+                "Show source readings or local romanization. Missing readings may be requested from Unison.", "lyricRoman", true);
         add("Lyrics", "Romanization & Translation", "Japanese dictionary", "Optional offline kanji readings", () -> {
-            dictionaryStatus = label(host.dictionaryStatus(), viewport.metadataSp, muted, false);
+            dictionaryStatus = label("Included in the APK · loaded only when needed", viewport.metadataSp, muted, false);
             contents.addView(dictionaryStatus);
-            Button manage = button("Manage");
+            Button manage = button("Manage existing copy");
             manage.setOnClickListener(view -> host.run("japanese-dictionary"));
             row("Japanese dictionary", null, manage);
         });
@@ -216,10 +216,10 @@ final class SettingsView extends LinearLayout {
         range("Lyrics", "Romanization & Translation", "Romanization size", null,
                 "lyricRomanSize", 75, 50, 125, 5, value -> value + "%");
         toggle("Lyrics", "Romanization & Translation", "Translation",
-                "Use supplied translations, Unison or the optional Cloud Translation fallback.", "lyricTranslation", false);
-        choice("Lyrics", "Romanization & Translation", "Translate into", null, "lyricTarget", "en",
-                new String[]{"English", "Bahasa Melayu", "Indonesia", "日本語", "한국어", "简体中文", "Русский"},
-                new String[]{"en", "ms", "id", "ja", "ko", "zh-CN", "ru"});
+                "Use supplied translations, Unison or the optional Cloud Translation fallback.", "lyricTranslation", true);
+        choice("Lyrics", "Romanization & Translation", "Translate into", null, "lyricTarget", "auto",
+                new String[]{"Device language", "English", "Bahasa Melayu", "Indonesia", "日本語", "한국어", "简体中文", "Русский"},
+                new String[]{"auto", "en", "ms", "id", "ja", "ko", "zh-CN", "ru"});
         add("Lyrics", "Romanization & Translation", "Google Cloud Translation fallback",
                 "Optional billed service using your own API key.", () -> {
             LyricCloudKey key = new LyricCloudKey(getContext());
@@ -232,12 +232,14 @@ final class SettingsView extends LinearLayout {
         toggle("Lyrics", "Lyrics timing", "Lyrics at the screen’s refresh rate",
                 "Use faster line timing during playback when the effective profile allows it.", "lyricRefresh", false);
         range("Lyrics", "Lyrics timing", "Timing offset", "Positive values show lyrics later.", "lyricsOffset", 0, -5000, 5000, 100, SettingsView::milliseconds);
+        range("Lyrics", "Lyrics timing", "Word trim", "Adjust karaoke timing within the active line.",
+                "lyricsWordTrim", 0, -2000, 2000, 50, SettingsView::milliseconds);
         range("Lyrics", "Lyrics timing", "Line-synced trim", "Extra offset for line-synced sources.", "lineTrim", 0, -2000, 2000, 100, SettingsView::milliseconds);
         toggle("Lyrics", "Lyrics sources", "LRCLIB", "Line-synced and plain text.", "lrclib", true);
         toggle("Lyrics", "Lyrics sources", "YouTube Music", "Plain text.", "ytLyrics", true);
-        toggle("Lyrics", "Lyrics sources", "Unison", "Line timing and translations supplied with the lyrics when available.", "unisonLyrics", false);
-        choice("Lyrics", "Lyrics sources", "Source priority", "Matched timed lyrics take precedence over plain lyrics.", "lyricsFirst", "lrclib",
-                new String[]{"LRCLIB first", "YouTube Music first", "Unison first"}, new String[]{"lrclib", "youtube", "unison"});
+        toggle("Lyrics", "Lyrics sources", "Unison", "Line timing and translations supplied with the lyrics when available.", "unisonLyrics", true);
+        choice("Lyrics", "Lyrics sources", "Source priority", "Matched timed lyrics take precedence over plain lyrics.", "lyricsFirst", "auto",
+                new String[]{"Automatic", "LRCLIB first", "YouTube Music first", "Unison first"}, new String[]{"auto", "lrclib", "youtube", "unison"});
 
         choice("Appearance", "Background", "Frosted glass", "Use blurred album artwork behind translucent panels.", "glass",
                 "theme", new String[]{"Theme default", "On", "Off"}, new String[]{"theme", "on", "off"});
@@ -305,6 +307,18 @@ final class SettingsView extends LinearLayout {
         action("About", "About", "Upstream ytm-rs", "Desktop project, releases and credits.", "Open GitHub", "upstream");
     }
 
+    static String lyricTarget(AppSettings prefs) {
+        String chosen = prefs.text("lyricTarget", "auto");
+        if (!"auto".equals(chosen)) return chosen;
+        String language = Locale.getDefault().getLanguage();
+        switch (language) {
+            case "zh": return "zh-CN";
+            case "in": return "id";
+            case "ms": case "id": case "ja": case "ko": case "ru": return language;
+            default: return "en";
+        }
+    }
+
     private void manageLyricCloud(LyricCloudKey key) {
         EditText input = new EditText(getContext());
         input.setSingleLine();
@@ -338,7 +352,7 @@ final class SettingsView extends LinearLayout {
     }
 
     void updateDictionary() {
-        if (dictionaryStatus != null) dictionaryStatus.setText(host.dictionaryStatus());
+        if (dictionaryStatus != null) dictionaryStatus.setText("Included in the APK · loaded only when needed");
     }
 
     void updatePerformance() {

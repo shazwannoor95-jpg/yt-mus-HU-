@@ -52,11 +52,41 @@ final class TtmlLyrics {
                 if (begin < 0) continue;
                 String key = attribute(line, "key");
                 if (key.isEmpty()) key = attribute(line, "id");
-                lines.add(new Lyrics.Line(begin, line.getTextContent().trim(), roman.get(key), translations.get(key)));
+                int end = millis(attribute(line, "end"));
+                StringBuilder text = new StringBuilder();
+                List<Lyrics.Word> words = new ArrayList<>();
+                appendText(line, text, words);
+                String trimmed = text.toString().trim();
+                int lead = text.indexOf(trimmed);
+                List<Lyrics.Word> aligned = new ArrayList<>();
+                for (Lyrics.Word word : words) {
+                    int from = word.from - lead;
+                    int to = word.to - lead;
+                    if (from >= 0 && to <= trimmed.length() && word.start >= begin
+                            && (end < begin || word.end <= end)
+                            && (aligned.isEmpty() || aligned.get(aligned.size() - 1).end <= word.start)) {
+                        aligned.add(new Lyrics.Word(word.start, word.end, from, to));
+                    }
+                }
+                lines.add(new Lyrics.Line(begin, end > begin ? end : -1, trimmed, roman.get(key), translations.get(key), aligned));
             }
         }
         lines.sort(Comparator.comparingInt(line -> line.millis));
         return new Lyrics(lines, "", "Unison", attribute(root, "lang"));
+    }
+
+    private static void appendText(Element element, StringBuilder text, List<Lyrics.Word> words) {
+        int from = text.length();
+        int count = words.size();
+        for (org.w3c.dom.Node child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child instanceof Element) appendText((Element) child, text, words);
+            else if (child.getNodeType() == org.w3c.dom.Node.TEXT_NODE
+                    || child.getNodeType() == org.w3c.dom.Node.CDATA_SECTION_NODE) text.append(child.getNodeValue());
+        }
+        if (!"span".equals(element.getLocalName()) || words.size() != count || count >= 256 || text.length() <= from) return;
+        int start = millis(attribute(element, "begin"));
+        int end = millis(attribute(element, "end"));
+        if (start >= 0 && end > start) words.add(new Lyrics.Word(start, end, from, text.length()));
     }
 
     private static String attribute(Element e, String local) {
@@ -72,7 +102,8 @@ final class TtmlLyrics {
         try {
             double seconds;
             if (time.endsWith("ms")) return bounded(Double.parseDouble(time.substring(0, time.length() - 2)));
-            if (time.endsWith("s")) seconds = Double.parseDouble(time.substring(0, time.length() - 1));
+            if (time.matches("[0-9]+(?:\\.[0-9]+)?")) seconds = Double.parseDouble(time);
+            else if (time.endsWith("s")) seconds = Double.parseDouble(time.substring(0, time.length() - 1));
             else {
                 if (!time.matches("(?:[0-9]{1,2}:){1,2}[0-5][0-9](?:\\.[0-9]+)?")) return -1;
                 seconds = 0;

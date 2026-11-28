@@ -173,6 +173,9 @@ final class NowPlayingView extends LinearLayout {
 
     boolean lyricsVisible() { return lyricsMode; }
     boolean hasTimedLyrics() { return lyrics != null && lyrics.timed(); }
+    boolean hasActiveWordTiming() {
+        return activeLine >= 0 && activeLine < lines.size() && lines.get(activeLine) instanceof KaraokeLineView;
+    }
 
     void setProfile(PerformancePolicy.Profile next) {
         if (profile == next) return;
@@ -298,8 +301,8 @@ final class NowPlayingView extends LinearLayout {
 
     private void showLyricsResult() {
         readingProvider = translationProvider = "";
-        boolean roman = prefs.flag("lyricRoman", false);
-        boolean translate = prefs.flag("lyricTranslation", false);
+        boolean roman = prefs.flag("lyricRoman", true);
+        boolean translate = prefs.flag("lyricTranslation", true);
         if (!lyrics.timed() && !lyrics.plain.trim().isEmpty()) {
             rows.addView(text("Synced lyrics unavailable — showing plain lyrics.", 13, MUTED));
         }
@@ -309,7 +312,8 @@ final class NowPlayingView extends LinearLayout {
             List<Lyrics.Line> display = lyrics.displayLines();
             for (Lyrics.Line line : display) {
                 LinearLayout group = column();
-                TextView view = lyricsLine(line.text, line.millis < 0 ? FOREGROUND : INACTIVE_LYRIC);
+                int color = line.millis < 0 ? FOREGROUND : INACTIVE_LYRIC;
+                TextView view = line.words.isEmpty() ? lyricsLine(line.text, color) : karaokeLine(line, color);
                 int padding = dp(Math.round(8 * prefs.number("lyricSpacing", 100) / 100f));
                 group.setPadding(0, padding / 2, 0, padding - padding / 2);
                 group.addView(view);
@@ -331,7 +335,7 @@ final class NowPlayingView extends LinearLayout {
                 romanStatus = roman ? alternateStatus() : null;
                 translationStatus = translate ? alternateStatus() : null;
                 showExtras(display, new org.json.JSONObject(), Collections.emptyList(), roman, translate,
-                        prefs.text("lyricTarget", "en"));
+                        SettingsView.lyricTarget(prefs));
                 loadExtras(display, roman, translate);
             }
             syncPosition();
@@ -362,12 +366,12 @@ final class NowPlayingView extends LinearLayout {
         return !closed && getVisibility() == VISIBLE && lyricsMode && original == lyrics && extrasRequest == request;
     }
 
-    void clearRomanizationCache() { romanizer.clear(); }
+    void clearRomanizationCache() { romanizer.clear(); Lyrics.trimCache(); }
 
     private void loadExtras(List<Lyrics.Line> display, boolean roman, boolean translate) {
         cancelExtras();
         Lyrics original = lyrics;
-        String target = prefs.text("lyricTarget", "en");
+        String target = SettingsView.lyricTarget(prefs);
         String hanPreference = prefs.text("lyricHanLanguage", "auto");
         String title = track == null ? "" : track.title;
         LyricExtras request = new LyricExtras(getContext());
@@ -378,7 +382,7 @@ final class NowPlayingView extends LinearLayout {
             List<LocalRomanizer.Reading> local = new ArrayList<>();
             LocalRomanizer.DictionaryState dictionaryState = LocalRomanizer.DictionaryState.MISSING;
             if (roman) {
-                try (LocalRomanizer.Batch batch = romanizer.new Batch(getContext(), new JapaneseDictionary(getContext()))) {
+                try (LocalRomanizer.Batch batch = romanizer.new Batch(getContext(), new JapaneseDictionary(getContext()), true)) {
                     for (Lyrics.Line line : display) {
                         if (Thread.currentThread().isInterrupted()) return;
                         local.add(LyricExtras.clean(line.roman, line.text).isEmpty() ? batch.read(line.text, language) : LocalRomanizer.Reading.ORIGINAL);
@@ -569,29 +573,40 @@ final class NowPlayingView extends LinearLayout {
 
     void tick(int position) {
         if (!lyricsMode || !hasTimedLyrics() || lines.isEmpty()) return;
-        int index = lyrics.activeAt(position - prefs.lyricOffset());
+        int time = position - prefs.lyricOffset();
+        int index = lyrics.activeAt(time);
         boolean followExpired = !draggingLyrics && followPausedUntil > 0 && SystemClock.uptimeMillis() >= followPausedUntil;
         if (activeLine == index) {
+            updateWord(time);
             if (followExpired) resumeFollow();
             return;
         }
         if (followExpired) clearFollowPause();
         if (activeLine >= 0) {
             TextView last = lines.get(activeLine);
+            if (last instanceof KaraokeLineView) ((KaraokeLineView) last).position(-1, false);
             if (activeLine < alternates.size()) for (TextView extra : alternates.get(activeLine)) extra.setTextColor(INACTIVE_LYRIC);
             last.setTextColor(INACTIVE_LYRIC);
             last.setTypeface(last.getTypeface(), "bold".equals(prefs.text("lyricsWeight", "theme")) ? Typeface.BOLD : Typeface.NORMAL);
         }
         activeLine = index;
+        updateWord(time);
         if (index >= 0) {
             TextView line = lines.get(index);
             if (index < alternates.size()) for (TextView extra : alternates.get(index)) extra.setTextColor(FOREGROUND);
             line.setTextColor(activeLyricColour());
             line.setTypeface(line.getTypeface(), "regular".equals(prefs.text("lyricsWeight", "theme")) ? Typeface.NORMAL : Typeface.BOLD);
             followActive(index, line);
-        } else if (following()) {
+        } else if (following() && time < lyrics.lines.get(0).millis) {
             ++scrollRevision;
             scroll.scrollTo(0, 0);
+        }
+    }
+
+    private void updateWord(int time) {
+        if (hasActiveWordTiming()) {
+            ((KaraokeLineView) lines.get(activeLine)).position(time - prefs.number("lyricsWordTrim", 0),
+                    profile.ordinal() >= PerformancePolicy.Profile.BALANCED.ordinal());
         }
     }
 
@@ -630,7 +645,7 @@ final class NowPlayingView extends LinearLayout {
                     || activeLine != index || !(line.getParent() instanceof View)) return;
             View group = (View) line.getParent();
             if (group.getParent() != rows) return;
-            int top = Math.max(0, group.getTop() - scroll.getHeight() / 3);
+            int top = Math.max(0, group.getTop() - (scroll.getHeight() - group.getHeight()) / 2);
             if (prefs.flag("quickLyrics", false) || profile.ordinal() <= PerformancePolicy.Profile.LITE.ordinal()) {
                 scroll.scrollTo(0, top);
             } else {
@@ -664,8 +679,10 @@ final class NowPlayingView extends LinearLayout {
         String lineTime = timed && activeLine >= 0 && activeLine < timestamps ? lyrics.lines.get(activeLine).millis + " ms" : "none";
         return "YTM " + BuildVersion.VERSION + " lyrics\nProvider: " + provider
                 + "\nTiming: " + (groups == 0 ? "unavailable" : timed ? "timed" : "plain")
+                + "\nActive group timing: " + (hasActiveWordTiming() ? "word/syllable spans" : timed ? "line" : "none")
                 + "\nGroups: " + groups + "\nValid timestamps: " + timestamps
                 + "\nPlayback position: " + position + " ms\nApplied offset: " + (timed ? prefs.lyricOffset() : 0) + " ms"
+                + "\nWord trim: " + prefs.number("lyricsWordTrim", 0) + " ms"
                 + "\nActive index (zero-based): " + activeLine + "\nActive timestamp: " + lineTime
                 + "\nRomanization: " + diagnosticProvider("lyricRoman", readingProvider)
                 + "\nTranslation: " + diagnosticProvider("lyricTranslation", translationProvider)
@@ -674,7 +691,7 @@ final class NowPlayingView extends LinearLayout {
     }
 
     private String diagnosticProvider(String key, String provider) {
-        return !prefs.flag(key, false) ? "off" : provider.isEmpty() ? "pending or unavailable" : provider;
+        return !prefs.flag(key, true) ? "off" : provider.isEmpty() ? "pending or unavailable" : provider;
     }
 
     private void copyDiagnostics() {
@@ -752,6 +769,18 @@ final class NowPlayingView extends LinearLayout {
         closed = true;
         cancelExtras();
         network.shutdownNow();
+    }
+
+    private TextView karaokeLine(Lyrics.Line line, int color) {
+        TextView view = new KaraokeLineView(getContext(), line.words, appearance.accent);
+        view.setText(line.text);
+        view.setTextSize(appearance.lyricsSize * prefs.number("lyricsSize", 100) / 100);
+        view.setTextColor(color);
+        view.setTypeface(appearance.font);
+        view.setPadding(dp(8), dp(4), dp(6), dp(4));
+        if ("classic".equals(prefs.text("lyricsStyle", "theme"))) view.setGravity(Gravity.CENTER);
+        if ("bold".equals(prefs.text("lyricsWeight", "theme"))) view.setTypeface(view.getTypeface(), Typeface.BOLD);
+        return view;
     }
 
     private TextView lyricsLine(String line, int color) {

@@ -117,25 +117,35 @@ final class JapaneseDictionary {
         Tokenizer(File archive) throws IOException {
             // Read only dictionary data. The downloaded JAR is never placed on a classloader.
             try (ZipFile zip = new ZipFile(archive)) {
-                configure(new TokenizerBase.Builder() {
-                    {
-                        totalFeatures = 9;
-                        readingFeature = 7;
-                        partOfSpeechFeature = 0;
-                        tokenFactory = JapaneseToken::new;
-                        resolver = name -> {
-                            if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException();
-                            ZipEntry entry = zip.getEntry("com/atilika/kuromoji/ipadic/" + name);
-                            if (entry == null) throw new IOException("Missing Japanese dictionary data.");
-                            return zip.getInputStream(entry);
-                        };
-                    }
-
-                    @Override public <T extends TokenizerBase> T build() {
-                        throw new UnsupportedOperationException();
-                    }
+                load(name -> {
+                    ZipEntry entry = zip.getEntry("com/atilika/kuromoji/ipadic/" + name);
+                    if (entry == null) throw new IOException("Missing Japanese dictionary data.");
+                    return zip.getInputStream(entry);
                 });
             }
+        }
+
+        Tokenizer(Context context) {
+            load(name -> context.getAssets().open("ipadic/" + name));
+        }
+
+        private void load(com.atilika.kuromoji.util.ResourceResolver source) {
+            configure(new TokenizerBase.Builder() {
+                {
+                    totalFeatures = 9;
+                    readingFeature = 7;
+                    partOfSpeechFeature = 0;
+                    tokenFactory = JapaneseToken::new;
+                    resolver = name -> {
+                        if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException();
+                        return source.resolve(name);
+                    };
+                }
+
+                @Override public <T extends TokenizerBase> T build() {
+                    throw new UnsupportedOperationException();
+                }
+            });
         }
 
         @Override public List<JapaneseToken> tokenize(String text) { return createTokenList(text); }

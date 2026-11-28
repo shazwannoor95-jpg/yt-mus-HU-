@@ -151,7 +151,7 @@ public final class MainActivity extends Activity {
             boolean lyricsVisible = expanded.getVisibility() == View.VISIBLE && expanded.lyricsVisible()
                     && expanded.hasTimedLyrics();
             if (lyricsVisible && playback != null && !lyricFramesRunning) expanded.syncPosition();
-            main.postDelayed(this, lyricsVisible ? 250 : performance.profile().clockMs);
+            main.postDelayed(this, lyricsVisible ? (expanded.hasActiveWordTiming() ? 100 : 250) : performance.profile().clockMs);
         }
     };
 
@@ -162,7 +162,7 @@ public final class MainActivity extends Activity {
     private void syncLyricFrames() {
         boolean active = bound && playback != null && playback.playing()
                 && expanded.getVisibility() == View.VISIBLE && expanded.lyricsVisible() && expanded.hasTimedLyrics()
-                && prefs.flag("lyricRefresh", false) && performance.profile().ordinal() >= PerformancePolicy.Profile.BALANCED.ordinal();
+                && (prefs.flag("lyricRefresh", false) || expanded.hasActiveWordTiming()) && performance.profile().ordinal() >= PerformancePolicy.Profile.BALANCED.ordinal();
         if (active == lyricFramesRunning) return;
         lyricFramesRunning = active;
         android.view.Choreographer choreographer = android.view.Choreographer.getInstance();
@@ -1058,7 +1058,7 @@ public final class MainActivity extends Activity {
             case "lyricRoman": case "lyricRomanSize": case "lyricTranslation": case "lyricTranslationSize": case "lyricTarget": case "lyricHanLanguage":
                 expanded.refreshLyricAppearance();
                 break;
-            case "lyricsOffset": case "lineTrim":
+            case "lyricsOffset": case "lineTrim": case "lyricsWordTrim":
                 expanded.syncPosition();
                 break;
             case "lrclib": case "ytLyrics": case "unisonLyrics": case "lyricsFirst":

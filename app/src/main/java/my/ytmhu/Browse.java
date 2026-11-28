@@ -145,6 +145,81 @@ final class Browse {
         }
     }
 
+    static final class MoodGroup {
+        final String title;
+        final List<Mood> choices;
+
+        MoodGroup(String title, List<Mood> choices) {
+            this.title = title;
+            this.choices = choices;
+        }
+    }
+
+    static List<MoodGroup> genreGroups(JSONObject page) {
+        List<MoodGroup> groups = new ArrayList<>();
+        JSONObject sectionList = find(page, "sectionListRenderer", 0);
+        if (sectionList == null) return groups;
+        JSONArray sections = array(sectionList, "contents");
+        for (int i = 0; i < Math.min(sections.length(), 16); i++) {
+            JSONObject grid = child(item(sections, i), "gridRenderer");
+            JSONObject header = child(child(grid, "header"), "gridHeaderRenderer");
+            String title = displayText(header.optJSONObject("title"));
+            if (title.isEmpty()) continue;
+            List<Mood> choices = new ArrayList<>();
+            JSONArray rows = array(grid, "items");
+            for (int j = 0; j < Math.min(rows.length(), 48); j++) {
+                JSONObject button = child(item(rows, j), "musicNavigationButtonRenderer");
+                JSONObject route = child(child(button, "clickCommand"), "browseEndpoint");
+                if (!"FEmusic_moods_and_genres_category".equals(route.optString("browseId"))) continue;
+                String params = route.optString("params");
+                String label = displayText(button.optJSONObject("buttonText"));
+                if (!label.isEmpty() && params.matches("[A-Za-z0-9_+/=%-]{1,4096}")) choices.add(new Mood(label, params));
+            }
+            if (!choices.isEmpty()) groups.add(new MoodGroup(title, choices));
+        }
+        return groups;
+    }
+
+    static String genreTitle(JSONObject page) {
+        return displayText(child(child(page, "header"), "musicHeaderRenderer").optJSONObject("title"));
+    }
+
+    static final class Suggestion {
+        final String title;
+        final Card card;
+
+        Suggestion(String title, Card card) {
+            this.title = title;
+            this.card = card;
+        }
+
+        @Override public String toString() { return title; }
+    }
+
+    static List<Suggestion> searchSuggestions(JSONObject page, boolean hideExplicit) {
+        List<Suggestion> terms = new ArrayList<>(), hits = new ArrayList<>();
+        Set<String> seenTerms = new LinkedHashSet<>(), seenHits = new LinkedHashSet<>();
+        JSONArray sections = array(page, "contents");
+        for (int i = 0; i < Math.min(sections.length(), 6); i++) {
+            JSONArray rows = array(child(item(sections, i), "searchSuggestionsSectionRenderer"), "contents");
+            for (int j = 0; j < Math.min(rows.length(), 40); j++) {
+                JSONObject row = item(rows, j);
+                if (terms.size() < 5) {
+                    String term = displayText(child(row, "searchSuggestionRenderer").optJSONObject("suggestion")).trim();
+                    if (!term.isEmpty() && term.length() <= 120 && seenTerms.add(term)) terms.add(new Suggestion(term, null));
+                }
+                if (hits.size() >= 3 || !row.has("musicResponsiveListItemRenderer")) continue;
+                Card result = card(row);
+                if (result == null || (hideExplicit && result.track != null && result.track.explicit)) continue;
+                if (result.track == null && !artistId(result.browseId) && !MusicApi.AlbumCredit.isBrowseId(result.browseId)) continue;
+                String id = result.track == null ? result.browseId : result.track.id;
+                if (seenHits.add(id)) hits.add(new Suggestion(result.title, result));
+            }
+        }
+        terms.addAll(hits);
+        return terms;
+    }
+
     static List<Mood> moods(JSONObject page) {
         List<Mood> out = new ArrayList<>();
         JSONObject cloud = find(page, "chipCloudRenderer", 0);

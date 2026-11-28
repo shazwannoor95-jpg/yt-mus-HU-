@@ -29,6 +29,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.AutoCompleteTextView;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
@@ -111,6 +112,7 @@ public final class MainActivity extends Activity {
     private String mood = "";
     private Dialog signInDialog;
     private EditText query;
+    private SearchSuggestions suggestions;
     private PageRows scroll;
     private final List<Supplier<View>> results = new ArrayList<>();
     private LinearLayout sidebarPlaylists;
@@ -128,6 +130,8 @@ public final class MainActivity extends Activity {
         final List<Browse.Mood> moods;
         final List<MusicApi.Track> tracks;
         final Browse.CollectionHeader header;
+        List<Browse.MoodGroup> genres = Collections.emptyList();
+        String genreTitle = "";
         String filter = "";
         boolean loadingMore;
         final long loaded = android.os.SystemClock.uptimeMillis();
@@ -317,13 +321,21 @@ public final class MainActivity extends Activity {
         musicSearchBar = searchBar;
         searchBar.setGravity(Gravity.CENTER_VERTICAL);
         addBrowseControls(searchBar);
-        query = new EditText(this);
+        AutoCompleteTextView searchInput = new AutoCompleteTextView(this) {
+            @Override protected void performFiltering(CharSequence text, int keyCode) {
+                // The remote list is already ranked for the current input.
+            }
+        };
+        query = searchInput;
         query.setSingleLine();
         query.setTextSize(viewport.songSp);
         query.setTypeface(appearance.font);
         query.setHint("Search songs, albums, artists");
         query.setPadding(dp(16), 0, dp(12), 0);
         query.setBackground(shape(appearance.panel(appearance.control, 146), appearance.searchRadius));
+        searchInput.setDropDownBackgroundDrawable(shape(appearance.panel(appearance.surface, 251), appearance.searchRadius));
+        suggestions = new SearchSuggestions(searchInput, prefs, appearance,
+                new MusicApi(prefs)::searchSuggestions, this::selectSearchSuggestion);
         query.setImeOptions(EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         query.setOnEditorActionListener((view, action, event) -> {
             if (action != EditorInfo.IME_ACTION_SEARCH) return false;
@@ -700,6 +712,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onStop() {
+        suggestions.clear();
         main.removeCallbacks(clock);
         performance.stop();
         if (playback != null) playback.changed = null;
@@ -740,6 +753,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onDestroy() {
+        suggestions.close();
         if (trackDetailsTask != null) trackDetailsTask.cancel(true);
         ++generation;
         if (signInDialog != null && signInDialog.isShowing()) signInDialog.dismiss();
@@ -800,6 +814,7 @@ public final class MainActivity extends Activity {
     }
 
     private void search() {
+        suggestions.clear();
         if (query.getText().toString().trim().isEmpty()) {
             showRecentSearches(query);
             return;
@@ -808,6 +823,18 @@ public final class MainActivity extends Activity {
         getSystemService(InputMethodManager.class).hideSoftInputFromWindow(query.getWindowToken(), 0);
         searchType = Browse.Search.All;
         navigate("Search");
+    }
+
+    private void selectSearchSuggestion(Browse.Suggestion suggestion) {
+        Browse.Card card = suggestion.card;
+        if (card == null) {
+            query.setText(suggestion.title);
+            search();
+            return;
+        }
+        getSystemService(InputMethodManager.class).hideSoftInputFromWindow(query.getWindowToken(), 0);
+        if (card.track != null) playTracks(Collections.singletonList(card.track), 0);
+        else openCollection(card);
     }
 
     private void showRecentSearches(View anchor) {
@@ -980,6 +1007,7 @@ public final class MainActivity extends Activity {
     }
 
     private void loadPage(boolean refresh, String continuation) {
+        suggestions.clear();
         if (!restoringBrowseHistory && restoreHistoryScroll) {
             restoreHistoryScroll = false;
             browseRow = browseOffset = 0;
@@ -1035,7 +1063,7 @@ public final class MainActivity extends Activity {
         boolean hideExplicit = prefs.flag("hideExplicit", false);
         String key = (collectionPage ? "Collection" : active) + "\n" + !cookies.isEmpty() + "\n" + hideExplicit;
         if ("Search".equals(active)) key += "\n" + type + "\n" + input;
-        if ("Home".equals(active)) key += "\n" + selectedMood;
+        if ("Home".equals(active) || "Genre".equals(active)) key += "\n" + selectedMood;
         if (collectionPage) key += "\n" + selectedCollection;
         if (libraryPage) key += "\n" + selectedTab.name();
         final String destination = key;
@@ -1097,6 +1125,8 @@ public final class MainActivity extends Activity {
                         JSONObject request = new JSONObject();
                         switch (active) {
                             case "Explore": request.put("browseId", "FEmusic_explore"); break;
+                            case "Genres": request.put("browseId", "FEmusic_moods_and_genres"); break;
+                            case "Genre": request.put("browseId", "FEmusic_moods_and_genres_category").put("params", selectedMood); break;
                             case "Collection": case "Discography": case "Related artists":
                                 request.put("browseId", selectedCollection); break;
                             default:
@@ -1115,6 +1145,8 @@ public final class MainActivity extends Activity {
                     } else {
                         loaded = new BrowsePage(Browse.shelves(data, hideExplicit),
                                 "Home".equals(active) ? Browse.moods(data) : Collections.emptyList(), null);
+                        if ("Genres".equals(active)) loaded.genres = Browse.genreGroups(data);
+                        else if ("Genre".equals(active)) loaded.genreTitle = Browse.genreTitle(data);
                     }
                 }
                 runOnUiThread(() -> {
@@ -1534,6 +1566,11 @@ public final class MainActivity extends Activity {
             return;
         }
         if ("Search".equals(page)) showSearchFilters();
+        if ("Genres".equals(page)) {
+            showGenres(content);
+            return;
+        }
+        if ("Genre".equals(page)) heading(content.genreTitle.isEmpty() ? "Genre or mood" : content.genreTitle);
         if (!content.moods.isEmpty()) {
             results.add(() -> chipRow(row -> {
                 for (Browse.Mood value : content.moods) {
@@ -1547,7 +1584,10 @@ public final class MainActivity extends Activity {
                 }
             }));
         }
-        if ("Explore".equals(page)) heading("Explore");
+        if ("Explore".equals(page)) {
+            heading("Explore");
+            results.add(() -> button("Genres & moods", () -> navigate("Genres")));
+        }
         boolean collection = isCollectionPage(page);
         if (collection) {
             results.add(() -> collectionHeader(content));
@@ -1564,6 +1604,21 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < content.shelves.size(); i++) {
             if (i == mainTracks) addCollectionTracks(content, i);
             else addShelf(content.shelves.get(i), content.shelfStart(i));
+        }
+    }
+
+    private void showGenres(BrowsePage content) {
+        heading("Genres & moods");
+        if (content.genres.isEmpty()) results.add(() -> label("No categories returned.", viewport.songSp, MUTED));
+        for (Browse.MoodGroup group : content.genres) {
+            heading(group.title);
+            for (Browse.Mood category : group.choices) {
+                results.add(() -> button(category.title, () -> {
+                    page = "Genre";
+                    mood = category.params;
+                    loadPage();
+                }));
+            }
         }
     }
 

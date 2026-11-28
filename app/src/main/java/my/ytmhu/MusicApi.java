@@ -338,6 +338,10 @@ final class MusicApi {
         return web("search", body);
     }
 
+    JSONObject searchSuggestions(String input) throws Exception {
+        return web("music/get_search_suggestions", new JSONObject().put("input", input));
+    }
+
     String plainLyrics(String videoId) throws Exception {
         JSONObject page = web("next", new JSONObject().put("videoId", videoId));
         JSONObject results = find(page, "watchNextTabbedResultsRenderer", 0);

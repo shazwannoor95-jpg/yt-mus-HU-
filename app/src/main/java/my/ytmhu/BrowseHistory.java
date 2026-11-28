@@ -28,6 +28,8 @@ final class BrowseHistory {
             switch (page) {
                 case "Home": return new Route(page, "", "", "", mood, Browse.Search.All);
                 case "Explore": return new Route(page, "", "", "", "", Browse.Search.All);
+                case "Genres": return new Route(page, "", "", "", "", Browse.Search.All);
+                case "Genre": return new Route(page, "", "", "", mood, Browse.Search.All);
                 case "Search": return new Route(page, "", "", query, "", scope);
                 case "Discography": case "Related artists":
                     return Browse.artistId(id) ? new Route(page, id, title, "", "", Browse.Search.All) : null;
